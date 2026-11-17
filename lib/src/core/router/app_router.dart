@@ -1,0 +1,161 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
+
+import '../../../screens/activity_screen.dart';
+import '../../../screens/dispatch_screen.dart';
+import '../../../screens/emergency_home_screen.dart';
+import '../../../screens/fault_details_screen.dart';
+import '../../../screens/location_confirm_screen.dart';
+import '../../../screens/location_permission_screen.dart';
+import '../../../screens/login_screen.dart';
+import '../../../screens/otp_verification_screen.dart';
+import '../../../screens/profile_screen.dart';
+import '../../../screens/profile_setup_screen.dart';
+import '../../../screens/sos_screen.dart';
+import '../../../screens/splash_screen.dart';
+import '../../../screens/vehicle_select_screen.dart';
+
+/// Centralized route paths for ROADIX
+abstract class AppRoutes {
+  static const String root = '/';
+  static const String splash = '/splash';
+  static const String login = '/login';
+  static const String otp = '/otp';
+  static const String profileSetup = '/profile-setup';
+  static const String home = '/home';
+  static const String locationPermission = '/location-permission';
+  static const String locationConfirm = '/location-confirm';
+  static const String vehicleSelect = '/vehicle-select';
+  static const String faultDetails = '/fault-details';
+  static const String dispatch = '/dispatch';
+  static const String activity = '/activity';
+  static const String profile = '/profile';
+  static const String sos = '/sos';
+}
+
+/// Global GoRouter provider
+final appRouterProvider = Provider<GoRouter>((ref) {
+  return GoRouter(
+    initialLocation: AppRoutes.splash,
+    debugLogDiagnostics: false,
+    routes: [
+      GoRoute(
+        path: AppRoutes.root,
+        redirect: (_, _) => AppRoutes.splash,
+      ),
+      GoRoute(
+        path: AppRoutes.splash,
+        builder: (context, state) => const SplashScreen(),
+      ),
+      GoRoute(
+        path: AppRoutes.login,
+        builder: (context, state) => const LoginScreen(),
+      ),
+      GoRoute(
+        path: AppRoutes.otp,
+        builder: (context, state) {
+          final phone = (state.extra as String?) ??
+              state.uri.queryParameters['phone'] ??
+              '';
+          return OtpVerificationScreen(phoneNumber: phone);
+        },
+      ),
+      GoRoute(
+        path: AppRoutes.profileSetup,
+        builder: (context, state) {
+          final phone = (state.extra as String?) ??
+              state.uri.queryParameters['phone'] ??
+              '';
+          return ProfileSetupScreen(phoneNumber: phone);
+        },
+      ),
+      GoRoute(
+        path: AppRoutes.home,
+        builder: (context, state) => const EmergencyHomeScreen(),
+      ),
+      GoRoute(
+        path: AppRoutes.locationPermission,
+        builder: (context, state) {
+          final fault = (state.extra as String?) ??
+              state.uri.queryParameters['fault'] ??
+              'General Breakdown';
+          return LocationPermissionScreen(selectedFault: fault);
+        },
+      ),
+      GoRoute(
+        path: AppRoutes.locationConfirm,
+        builder: (context, state) {
+          final fault = (state.extra as String?) ??
+              state.uri.queryParameters['fault'] ??
+              'General Breakdown';
+          final lat = double.tryParse(state.uri.queryParameters['lat'] ?? '') ??
+              23.8759;
+          final lng = double.tryParse(state.uri.queryParameters['lng'] ?? '') ??
+              90.3795;
+          return LocationConfirmScreen(
+            selectedFault: fault,
+            initialLat: lat,
+            initialLng: lng,
+          );
+        },
+      ),
+      GoRoute(
+        path: AppRoutes.vehicleSelect,
+        builder: (context, state) {
+          final fault = (state.extra as String?) ??
+              state.uri.queryParameters['fault'] ??
+              'General Breakdown';
+          return VehicleSelectScreen(selectedFault: fault);
+        },
+      ),
+      GoRoute(
+        path: AppRoutes.faultDetails,
+        builder: (context, state) {
+          final fault = state.uri.queryParameters['fault'] ?? 'General';
+          final vehicle = state.uri.queryParameters['vehicle'] ?? 'Car';
+          final plate = state.uri.queryParameters['plate'] ?? 'DHAKA-METRO';
+          return FaultDetailsScreen(
+            selectedFault: fault,
+            vehicleType: vehicle,
+            licensePlate: plate,
+          );
+        },
+      ),
+      GoRoute(
+        path: AppRoutes.dispatch,
+        builder: (context, state) {
+          final fault = state.uri.queryParameters['fault'] ?? 'General';
+          final vehicle = state.uri.queryParameters['vehicle'] ?? 'Car';
+          final plate = state.uri.queryParameters['plate'] ?? 'DHAKA-METRO';
+          final isHighPriority =
+              state.uri.queryParameters['priority'] == 'true';
+          return DispatchScreen(
+            selectedFault: fault,
+            vehicleType: vehicle,
+            licensePlate: plate,
+            symptoms: const [],
+            isHighPriority: isHighPriority,
+          );
+        },
+      ),
+      GoRoute(
+        path: AppRoutes.activity,
+        builder: (context, state) => const ActivityScreen(),
+      ),
+      GoRoute(
+        path: AppRoutes.profile,
+        builder: (context, state) => const ProfileScreen(),
+      ),
+      GoRoute(
+        path: AppRoutes.sos,
+        builder: (context, state) => const SosScreen(),
+      ),
+    ],
+    errorBuilder: (context, state) => Scaffold(
+      body: Center(
+        child: Text('Route not found: ${state.uri.path}'),
+      ),
+    ),
+  );
+});

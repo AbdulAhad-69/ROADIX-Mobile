@@ -1,30 +1,27 @@
-// This is a basic Flutter widget test.
-//
-// To perform an interaction with a widget in your test, use the WidgetTester
-// utility in the flutter_test package. For example, you can send tap and scroll
-// gestures. You can also use WidgetTester to find child widgets in the widget
-// tree, read text, and verify that the values of widget properties are correct.
-
-import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-
-import 'package:roadix_mobile/main.dart';
+import 'package:roadix_mobile/src/core/router/app_router.dart';
 
 void main() {
-  testWidgets('Counter increments smoke test', (WidgetTester tester) async {
-    // Build our app and trigger a frame.
-    await tester.pumpWidget(const MyApp());
-
-    // Verify that our counter starts at 0.
-    expect(find.text('0'), findsOneWidget);
-    expect(find.text('1'), findsNothing);
-
-    // Tap the '+' icon and trigger a frame.
-    await tester.tap(find.byIcon(Icons.add));
-    await tester.pump();
-
-    // Verify that our counter has incremented.
-    expect(find.text('0'), findsNothing);
-    expect(find.text('1'), findsOneWidget);
+  group('AppRouter Route Definition Smoke Tests', () {
+    test('route path constants are defined and unique', () {
+      final routes = [
+        AppRoutes.root,
+        AppRoutes.splash,
+        AppRoutes.login,
+        AppRoutes.otp,
+        AppRoutes.profileSetup,
+        AppRoutes.home,
+        AppRoutes.locationPermission,
+        AppRoutes.locationConfirm,
+        AppRoutes.vehicleSelect,
+        AppRoutes.faultDetails,
+        AppRoutes.dispatch,
+        AppRoutes.activity,
+        AppRoutes.profile,
+        AppRoutes.sos,
+      ];
+      final uniqueRoutes = routes.toSet();
+      expect(uniqueRoutes.length, equals(routes.length));
+    });
   });
 }

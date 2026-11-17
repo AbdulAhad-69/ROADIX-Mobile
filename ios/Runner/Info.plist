@@ -24,6 +24,10 @@
 	<string>????</string>
 	<key>CFBundleVersion</key>
 	<string>$(FLUTTER_BUILD_NUMBER)</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>ROADIX needs your location to dispatch nearby mechanics to your exact breakdown location.</string>
+	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+	<string>ROADIX needs your location to track mechanic arrival and roadside emergency progress.</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
 	<key>UIApplicationSceneManifest</key>

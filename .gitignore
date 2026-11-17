@@ -4,6 +4,8 @@
 *.pyc
 *.swp
 .DS_Store
+Thumbs.db
+Desktop.ini
 .atom/
 .build/
 .buildlog/
@@ -12,37 +14,65 @@
 .swiftpm/
 migrate_working_dir/
 
-# IntelliJ related
+# IntelliJ & IDE-related
 *.iml
 *.ipr
 *.iws
 .idea/
-
-# The .vscode folder contains launch configuration and tasks you configure in
-# VS Code which you may wish to be included in version control, so this line
-# is commented out by default.
-#.vscode/
+.vscode/
 
 # Flutter/Dart/Pub related
 **/doc/api/
 **/ios/Flutter/.last_build_id
 .dart_tool/
+.flutter-plugins
 .flutter-plugins-dependencies
 .pub-cache/
 .pub/
 /build/
 /coverage/
 
-# Symbolication related
+# Android & Gradle
+android/.gradle/
+android/app/debug/
+android/app/profile/
+android/app/release/
+android/local.properties
+android/key.properties
+*.keystore
+*.jks
+
+# iOS & CocoaPods
+ios/Pods/
+ios/.symlinks/
+ios/Flutter/ephemeral/
+ios/Flutter/Generated.xcconfig
+ios/Flutter/flutter_export_environment.sh
+ios/ServiceDefinitions.json
+
+# Local environment & secrets
+.env
+.env.*
+!.env.example
+
+# Supabase local environment
+.supabase/
+
+# Symbolication & Obfuscation
 app.*.symbols
-
-# Obfuscation related
 app.*.map.json
-
-# Android Studio will place build artifacts here
-/android/app/debug
-/android/app/profile
-/android/app/release
 
 # Widget Preview related
 .widget_preview/
+
+# Local AI agent configuration and Ponytail skill files
+.agents/rules/AGENTS.md
+.agents/rules/ponytail.md
+
+.agents/skills/plugin.json
+.agents/skills/ponytail/SKILL.md
+.agents/skills/ponytail-audit/SKILL.md
+.agents/skills/ponytail-debt/SKILL.md
+.agents/skills/ponytail-gain/SKILL.md
+.agents/skills/ponytail-help/SKILL.md
+.agents/skills/ponytail-review/SKILL.md
