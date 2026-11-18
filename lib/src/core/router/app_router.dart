@@ -106,19 +106,40 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           final fault = (state.extra as String?) ??
               state.uri.queryParameters['fault'] ??
               'General Breakdown';
-          return VehicleSelectScreen(selectedFault: fault);
+          final lat = double.tryParse(state.uri.queryParameters['lat'] ?? '') ??
+              23.8759;
+          final lng = double.tryParse(state.uri.queryParameters['lng'] ?? '') ??
+              90.3795;
+          final address = state.uri.queryParameters['address'] ??
+              'Dhaka Region • Roadside Position';
+          return VehicleSelectScreen(
+            selectedFault: fault,
+            breakdownLat: lat,
+            breakdownLng: lng,
+            breakdownAddress: address,
+          );
         },
       ),
       GoRoute(
         path: AppRoutes.faultDetails,
         builder: (context, state) {
           final fault = state.uri.queryParameters['fault'] ?? 'General';
-          final vehicle = state.uri.queryParameters['vehicle'] ?? 'Car';
+          final rawVehicle = state.uri.queryParameters['vehicle'] ?? 'Passenger Car';
+          final vehicle = VehicleSelectScreen.mapUiCategoryToSrs(rawVehicle);
           final plate = state.uri.queryParameters['plate'] ?? 'DHAKA-METRO';
+          final lat = double.tryParse(state.uri.queryParameters['lat'] ?? '') ??
+              23.8759;
+          final lng = double.tryParse(state.uri.queryParameters['lng'] ?? '') ??
+              90.3795;
+          final address = state.uri.queryParameters['address'] ??
+              'Dhaka Region • Roadside Position';
           return FaultDetailsScreen(
             selectedFault: fault,
             vehicleType: vehicle,
             licensePlate: plate,
+            breakdownLat: lat,
+            breakdownLng: lng,
+            breakdownAddress: address,
           );
         },
       ),
@@ -126,16 +147,30 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         path: AppRoutes.dispatch,
         builder: (context, state) {
           final fault = state.uri.queryParameters['fault'] ?? 'General';
-          final vehicle = state.uri.queryParameters['vehicle'] ?? 'Car';
+          final rawVehicle = state.uri.queryParameters['vehicle'] ?? 'Passenger Car';
+          final vehicle = VehicleSelectScreen.mapUiCategoryToSrs(rawVehicle);
           final plate = state.uri.queryParameters['plate'] ?? 'DHAKA-METRO';
           final isHighPriority =
               state.uri.queryParameters['priority'] == 'true';
+          final lat = double.tryParse(state.uri.queryParameters['lat'] ?? '') ??
+              23.8759;
+          final lng = double.tryParse(state.uri.queryParameters['lng'] ?? '') ??
+              90.3795;
+          final address = state.uri.queryParameters['address'] ??
+              'Dhaka Region • Roadside Position';
+          final notes = state.uri.queryParameters['notes'] ?? '';
+          final requestId = state.uri.queryParameters['requestId'];
           return DispatchScreen(
             selectedFault: fault,
             vehicleType: vehicle,
             licensePlate: plate,
             symptoms: const [],
             isHighPriority: isHighPriority,
+            breakdownLat: lat,
+            breakdownLng: lng,
+            breakdownAddress: address,
+            diagnosticNotes: notes,
+            existingRequestId: requestId,
           );
         },
       ),

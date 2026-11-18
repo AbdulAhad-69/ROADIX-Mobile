@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../theme/app_colors.dart';
 import '../services/supabase_service.dart';
 import 'login_screen.dart';
+import 'mechanic_home_screen.dart';
 import '../widgets/edit_profile_sheet.dart';
 import '../widgets/vehicle_editor_sheet.dart';
 import '../widgets/contact_editor_sheet.dart';
@@ -95,7 +96,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         ? {
             'model': vehicle['model']?.toString() ?? '',
             'plate': vehicle['plate']?.toString() ?? '',
-            'type': vehicle['type']?.toString() ?? 'Sedan',
+            'type': vehicle['type']?.toString() ?? 'Passenger Car',
             'fuel': vehicle['fuel']?.toString() ?? 'Octane',
           }
         : null;
@@ -683,17 +684,88 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 ),
               ),
 
+              const SizedBox(height: 20),
+
+              // Mechanic Workshop Mode Switcher Card
+              InkWell(
+                onTap: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute(builder: (_) => const MechanicHomeScreen()),
+                  );
+                },
+                borderRadius: BorderRadius.circular(14),
+                child: Container(
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF8FAFC),
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: AppColors.slateBorder),
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Row(
+                        children: [
+                          Container(
+                            width: 36,
+                            height: 36,
+                            decoration: BoxDecoration(
+                              color: AppColors.caliperCrimson.withAlpha(20),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: const Icon(
+                              Icons.build,
+                              color: AppColors.caliperCrimson,
+                              size: 18,
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          const Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Technician Console',
+                                style: TextStyle(
+                                  color: AppColors.chassisText,
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                              Text(
+                                'On-duty toggle, specializations & offers',
+                                style: TextStyle(
+                                  color: AppColors.slateMuted,
+                                  fontSize: 10,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                      const Icon(
+                        Icons.chevron_right,
+                        color: AppColors.slateMuted,
+                        size: 20,
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+
               const SizedBox(height: 28),
 
               // Log Out Action
               SizedBox(
                 width: double.infinity,
                 child: TextButton.icon(
-                  onPressed: () {
-                    Navigator.of(context).pushAndRemoveUntil(
-                      MaterialPageRoute(builder: (_) => const LoginScreen()),
-                      (route) => false,
-                    );
+                  onPressed: () async {
+                    await _db.signOut();
+                    if (context.mounted) {
+                      Navigator.of(context).pushAndRemoveUntil(
+                        MaterialPageRoute(builder: (_) => const LoginScreen()),
+                        (route) => false,
+                      );
+                    }
                   },
                   icon: const Icon(
                     Icons.logout,

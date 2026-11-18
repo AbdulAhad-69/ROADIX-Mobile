@@ -133,7 +133,7 @@ class _NotificationsBottomSheetState extends State<NotificationsBottomSheet> {
             child: ListView.separated(
               padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
               itemCount: _alerts.length,
-              separatorBuilder: (_, __) => const SizedBox(height: 10),
+              separatorBuilder: (_, _) => const SizedBox(height: 10),
               itemBuilder: (context, idx) {
                 final alert = _alerts[idx];
                 final bool isUnread = !(alert['isRead'] as bool);

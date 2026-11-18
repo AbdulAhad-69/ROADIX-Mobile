@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../services/supabase_service.dart';
 import '../theme/app_colors.dart';
 import 'emergency_home_screen.dart';
 
@@ -19,10 +20,15 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
   final TextEditingController _plateController =
       TextEditingController(text: 'Dhaka Metro GA-11-2034');
 
-  String _selectedVehicleType = 'Sedan';
+  String _selectedVehicleType = 'Passenger Car';
   String _selectedFuelType = 'Octane';
+  bool _isSaving = false;
 
-  final List<String> _vehicleTypes = ['Sedan', 'SUV', 'Motorcycle', 'Commercial'];
+  final List<String> _vehicleTypes = [
+    'Passenger Car',
+    'Motorcycle',
+    'Light Commercial',
+  ];
   final List<String> _fuelTypes = ['Octane', 'Petrol', 'Diesel', 'CNG', 'EV'];
 
   @override
@@ -33,11 +39,46 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
     super.dispose();
   }
 
-  void _finishSetup() {
-    Navigator.of(context).pushAndRemoveUntil(
-      MaterialPageRoute(builder: (_) => const EmergencyHomeScreen()),
-      (route) => false,
-    );
+  Future<void> _finishSetup() async {
+    setState(() => _isSaving = true);
+    try {
+      final name = _nameController.text.trim();
+      final model = _modelController.text.trim();
+      final plate = _plateController.text.trim();
+
+      await SupabaseService().createOrUpdateProfile(
+        fullName: name.isNotEmpty ? name : 'Motorist',
+        phone: widget.phoneNumber,
+      );
+
+      if (model.isNotEmpty && plate.isNotEmpty) {
+        try {
+          await SupabaseService().addVehicle(
+            model: model,
+            plate: plate,
+            type: _selectedVehicleType,
+            fuel: _selectedFuelType,
+          );
+        } catch (_) {}
+      }
+
+      if (mounted) {
+        Navigator.of(context).pushAndRemoveUntil(
+          MaterialPageRoute(builder: (_) => const EmergencyHomeScreen()),
+          (route) => false,
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isSaving = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(e.toString().replaceAll('Exception: ', '')),
+            backgroundColor: AppColors.caliperCrimson,
+          ),
+        );
+      }
+    }
   }
 
   @override
@@ -270,23 +311,33 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
                 width: double.infinity,
                 height: 50,
                 child: ElevatedButton(
-                  onPressed: _finishSetup,
+                  onPressed: _isSaving ? null : _finishSetup,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: AppColors.caliperCrimson,
+                    disabledBackgroundColor: const Color(0xFFFCA5A5),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(12),
                     ),
                     elevation: 3,
                   ),
-                  child: const Text(
-                    'COMPLETE & ENTER ROADIX',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 13,
-                      fontWeight: FontWeight.w800,
-                      letterSpacing: 0.5,
-                    ),
-                  ),
+                  child: _isSaving
+                      ? const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(
+                            color: Colors.white,
+                            strokeWidth: 2,
+                          ),
+                        )
+                      : const Text(
+                          'COMPLETE & ENTER ROADIX',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 13,
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: 0.5,
+                          ),
+                        ),
                 ),
               ),
               const SizedBox(height: 16),

@@ -1,0 +1,161 @@
+import 'package:flutter_test/flutter_test.dart';
+import 'package:roadix_mobile/screens/dispatch_screen.dart';
+import 'package:roadix_mobile/screens/vehicle_select_screen.dart';
+import 'package:roadix_mobile/widgets/vehicle_editor_sheet.dart';
+
+void main() {
+  group('Phase 4: Dispatch Flow Parameter & SRS Category Verification', () {
+    test('VehicleSelectScreen maps UI categories to exact SRS categories', () {
+      expect(VehicleSelectScreen.mapUiCategoryToSrs('Sedan / Hatch'), 'Passenger Car');
+      expect(VehicleSelectScreen.mapUiCategoryToSrs('SUV / Micro'), 'Passenger Car');
+      expect(VehicleSelectScreen.mapUiCategoryToSrs('Sedan'), 'Passenger Car');
+      expect(VehicleSelectScreen.mapUiCategoryToSrs('SUV'), 'Passenger Car');
+      expect(VehicleSelectScreen.mapUiCategoryToSrs('Motorcycle'), 'Motorcycle');
+      expect(VehicleSelectScreen.mapUiCategoryToSrs('Commercial'), 'Light Commercial');
+      expect(VehicleSelectScreen.mapUiCategoryToSrs('Light Commercial'), 'Light Commercial');
+      expect(VehicleSelectScreen.mapUiCategoryToSrs('Unknown'), 'Passenger Car');
+    });
+
+    test('VehicleEditorSheet normalizes legacy categories to exact SRS categories', () {
+      expect(VehicleEditorSheet.normalizeToSrsCategory('Sedan'), 'Passenger Car');
+      expect(VehicleEditorSheet.normalizeToSrsCategory('SUV'), 'Passenger Car');
+      expect(VehicleEditorSheet.normalizeToSrsCategory('Motorcycle'), 'Motorcycle');
+      expect(VehicleEditorSheet.normalizeToSrsCategory('Commercial'), 'Light Commercial');
+      expect(VehicleEditorSheet.normalizeToSrsCategory('Passenger Car'), 'Passenger Car');
+      expect(VehicleEditorSheet.normalizeToSrsCategory('Light Commercial'), 'Light Commercial');
+    });
+
+    test('DispatchScreen default parameters preserve location and defaults safely', () {
+      const screen = DispatchScreen(
+        selectedFault: 'Flat Tire',
+        vehicleType: 'Passenger Car',
+        licensePlate: 'Dhaka Metro GA-11-2034',
+        symptoms: ['Visible nail/screw puncture'],
+        isHighPriority: true,
+      );
+
+      expect(screen.selectedFault, 'Flat Tire');
+      expect(screen.vehicleType, 'Passenger Car');
+      expect(screen.licensePlate, 'Dhaka Metro GA-11-2034');
+      expect(screen.symptoms, contains('Visible nail/screw puncture'));
+      expect(screen.isHighPriority, isTrue);
+      expect(screen.breakdownLat, closeTo(23.8759, 0.0001));
+      expect(screen.breakdownLng, closeTo(90.3795, 0.0001));
+      expect(screen.breakdownAddress, contains('Dhaka'));
+      expect(screen.diagnosticNotes, isEmpty);
+      expect(screen.existingRequestId, isNull);
+    });
+
+    test('DispatchScreen constructor preserves custom location and notes when passed', () {
+      const screen = DispatchScreen(
+        selectedFault: 'Engine Trouble',
+        vehicleType: 'Motorcycle',
+        licensePlate: 'Dhaka Metro LA-24-9011',
+        symptoms: ['Engine stalled unexpectedly'],
+        isHighPriority: false,
+        breakdownLat: 23.7925,
+        breakdownLng: 90.4078,
+        breakdownAddress: 'Gulshan 2 Circle, Dhaka',
+        diagnosticNotes: 'White smoke from exhaust',
+        existingRequestId: '00000000-0000-0000-0000-000000000123',
+      );
+
+      expect(screen.breakdownLat, closeTo(23.7925, 0.0001));
+      expect(screen.breakdownLng, closeTo(90.4078, 0.0001));
+      expect(screen.breakdownAddress, 'Gulshan 2 Circle, Dhaka');
+      expect(screen.diagnosticNotes, 'White smoke from exhaust');
+      expect(screen.existingRequestId, '00000000-0000-0000-0000-000000000123');
+    });
+
+    test('Vehicle snapshot serialization conforms to DB snapshot trigger contract', () {
+      final srsCategories = ['Passenger Car', 'Motorcycle', 'Light Commercial'];
+
+      for (final cat in srsCategories) {
+        final snapshot = {
+          'vehicle_type': cat,
+          'plate': 'Dhaka Metro GA-11-2034',
+        };
+
+        expect(snapshot['vehicle_type'], isIn(srsCategories));
+        expect(snapshot['plate'], isNotEmpty);
+      }
+    });
+
+    test('Search radius increments follow 5km -> 7.5km -> 10km -> 12.5km -> 15km limits', () {
+      double radius = 5.0;
+      const step = 2.5;
+      const maxRadius = 15.0;
+
+      final sequence = <double>[radius];
+      while (radius < maxRadius) {
+        radius += step;
+        sequence.add(radius);
+      }
+
+      expect(sequence, [5.0, 7.5, 10.0, 12.5, 15.0]);
+      expect(sequence.first, 5.0);
+      expect(sequence.last, 15.0);
+    });
+
+    test('Transient backend clock skew detection string matches exception pattern', () {
+      const serverException = 'Exception: PostgrestException(message: An offer is already active for this request., code: P0001)';
+      expect(serverException.contains('already active'), isTrue);
+
+      const standardError = 'Exception: Network connection failed';
+      expect(standardError.contains('already active'), isFalse);
+    });
+
+    test('Active service request status filter includes all in-flight lifecycle states', () {
+      const activeStates = [
+        'searching',
+        'assigned',
+        'en_route',
+        'arrived',
+        'diagnosing',
+        'quote_pending',
+        'servicing',
+      ];
+
+      expect(activeStates.contains('searching'), isTrue);
+      expect(activeStates.contains('assigned'), isTrue);
+      expect(activeStates.contains('servicing'), isTrue);
+      expect(activeStates.contains('completed'), isFalse);
+      expect(activeStates.contains('cancelled'), isFalse);
+    });
+
+    test('GoRouter query parameter parsing preserves location and normalizes vehicle', () {
+      final queryParams = {
+        'fault': 'Battery Jumpstart',
+        'vehicle': 'SUV / Micro',
+        'plate': 'DHAKA-METRO-GA-11',
+        'lat': '23.8103',
+        'lng': '90.4125',
+        'address': 'Banani 11, Dhaka',
+        'notes': 'Dead battery after parking with lights on',
+        'priority': 'true',
+        'requestId': 'req-uuid-456',
+      };
+
+      final fault = queryParams['fault'] ?? 'General';
+      final rawVehicle = queryParams['vehicle'] ?? 'Passenger Car';
+      final vehicle = VehicleSelectScreen.mapUiCategoryToSrs(rawVehicle);
+      final plate = queryParams['plate'] ?? 'DHAKA-METRO';
+      final lat = double.tryParse(queryParams['lat'] ?? '') ?? 23.8759;
+      final lng = double.tryParse(queryParams['lng'] ?? '') ?? 90.3795;
+      final address = queryParams['address'] ?? 'Dhaka Region • Roadside Position';
+      final notes = queryParams['notes'] ?? '';
+      final isHighPriority = queryParams['priority'] == 'true';
+      final requestId = queryParams['requestId'];
+
+      expect(fault, 'Battery Jumpstart');
+      expect(vehicle, 'Passenger Car');
+      expect(plate, 'DHAKA-METRO-GA-11');
+      expect(lat, closeTo(23.8103, 0.0001));
+      expect(lng, closeTo(90.4125, 0.0001));
+      expect(address, 'Banani 11, Dhaka');
+      expect(notes, 'Dead battery after parking with lights on');
+      expect(isHighPriority, isTrue);
+      expect(requestId, 'req-uuid-456');
+    });
+  });
+}

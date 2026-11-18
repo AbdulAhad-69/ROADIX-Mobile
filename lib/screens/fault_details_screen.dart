@@ -6,12 +6,18 @@ class FaultDetailsScreen extends StatefulWidget {
   final String selectedFault;
   final String vehicleType;
   final String licensePlate;
+  final double breakdownLat;
+  final double breakdownLng;
+  final String breakdownAddress;
 
   const FaultDetailsScreen({
     super.key,
     required this.selectedFault,
     required this.vehicleType,
     required this.licensePlate,
+    this.breakdownLat = 23.8759,
+    this.breakdownLng = 90.3795,
+    this.breakdownAddress = 'Dhaka Region • Roadside Position',
   });
 
   @override
@@ -328,7 +334,7 @@ class _FaultDetailsScreenState extends State<FaultDetailsScreen> {
                               ),
                               Switch.adaptive(
                                 value: _isInLiveLane,
-                                activeColor: AppColors.caliperCrimson,
+                                activeTrackColor: AppColors.caliperCrimson,
                                 onChanged: (v) => setState(() => _isInLiveLane = v),
                               ),
                             ],
@@ -356,7 +362,7 @@ class _FaultDetailsScreenState extends State<FaultDetailsScreen> {
                               ),
                               Switch.adaptive(
                                 value: _hazardsWorking,
-                                activeColor: AppColors.caliperCrimson,
+                                activeTrackColor: AppColors.caliperCrimson,
                                 onChanged: (v) => setState(() => _hazardsWorking = v),
                               ),
                             ],
@@ -430,6 +436,10 @@ class _FaultDetailsScreenState extends State<FaultDetailsScreen> {
                               licensePlate: widget.licensePlate,
                               symptoms: _selectedSymptoms.toList(),
                               isHighPriority: _isInLiveLane,
+                              breakdownLat: widget.breakdownLat,
+                              breakdownLng: widget.breakdownLng,
+                              breakdownAddress: widget.breakdownAddress,
+                              diagnosticNotes: _notesController.text.trim(),
                             ),
                           ),
                         );

@@ -195,7 +195,7 @@ class _SearchBottomSheetState extends State<SearchBottomSheet> {
                 scrollDirection: Axis.horizontal,
                 padding: const EdgeInsets.symmetric(horizontal: 20),
                 itemCount: _categories.length,
-                separatorBuilder: (_, __) => const SizedBox(width: 8),
+                separatorBuilder: (_, _) => const SizedBox(width: 8),
                 itemBuilder: (context, idx) {
                   final cat = _categories[idx];
                   final isSelected = _selectedCategory == cat;
@@ -247,7 +247,7 @@ class _SearchBottomSheetState extends State<SearchBottomSheet> {
                   : ListView.separated(
                       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
                       itemCount: _filteredFacilities.length,
-                      separatorBuilder: (_, __) => const SizedBox(height: 10),
+                      separatorBuilder: (_, _) => const SizedBox(height: 10),
                       itemBuilder: (context, idx) {
                         final item = _filteredFacilities[idx];
                         return Container(

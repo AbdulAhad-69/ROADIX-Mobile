@@ -13,6 +13,25 @@ class VehicleEditorSheet extends StatefulWidget {
     this.onDelete,
   });
 
+  static String normalizeToSrsCategory(String? type) {
+    if (type == null) return 'Passenger Car';
+    switch (type.trim().toLowerCase()) {
+      case 'sedan':
+      case 'suv':
+      case 'passenger car':
+      case 'sedan / hatch':
+      case 'suv / micro':
+        return 'Passenger Car';
+      case 'motorcycle':
+        return 'Motorcycle';
+      case 'commercial':
+      case 'light commercial':
+        return 'Light Commercial';
+      default:
+        return 'Passenger Car';
+    }
+  }
+
   @override
   State<VehicleEditorSheet> createState() => _VehicleEditorSheetState();
 }
@@ -23,7 +42,11 @@ class _VehicleEditorSheetState extends State<VehicleEditorSheet> {
   late String _selectedType;
   late String _selectedFuel;
 
-  final List<String> _vehicleTypes = ['Sedan', 'SUV', 'Motorcycle', 'Commercial'];
+  final List<String> _vehicleTypes = [
+    'Passenger Car',
+    'Motorcycle',
+    'Light Commercial',
+  ];
   final List<String> _fuelTypes = ['Octane', 'Petrol', 'Diesel', 'CNG', 'EV'];
 
   bool get _isEditing => widget.initialVehicle != null;
@@ -33,7 +56,7 @@ class _VehicleEditorSheetState extends State<VehicleEditorSheet> {
     super.initState();
     _modelController = TextEditingController(text: widget.initialVehicle?['model'] ?? '');
     _plateController = TextEditingController(text: widget.initialVehicle?['plate'] ?? '');
-    _selectedType = widget.initialVehicle?['type'] ?? 'Sedan';
+    _selectedType = VehicleEditorSheet.normalizeToSrsCategory(widget.initialVehicle?['type']);
     _selectedFuel = widget.initialVehicle?['fuel'] ?? 'Octane';
   }
 
@@ -61,7 +84,7 @@ class _VehicleEditorSheetState extends State<VehicleEditorSheet> {
     widget.onSave({
       'model': model,
       'plate': plate,
-      'type': _selectedType,
+      'type': VehicleEditorSheet.normalizeToSrsCategory(_selectedType),
       'fuel': _selectedFuel,
     });
     Navigator.pop(context);

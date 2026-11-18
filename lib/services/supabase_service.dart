@@ -1,4 +1,5 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../src/core/utils/phone_utils.dart';
 
 class SupabaseService {
   static final SupabaseService _instance = SupabaseService._internal();
@@ -10,7 +11,96 @@ class SupabaseService {
   // We use our seeded demo profile ID as the active session fallback
   static const String defaultProfileId = 'a0000000-0000-0000-0000-000000000001';
 
-  String get currentProfileId => defaultProfileId;
+  String? get currentUserId => _client.auth.currentUser?.id;
+  String get currentProfileId => _client.auth.currentUser?.id ?? defaultProfileId;
+  User? get currentUser => _client.auth.currentUser;
+  Session? get currentSession => _client.auth.currentSession;
+  bool get isAuthenticated => _client.auth.currentUser != null;
+
+  // ==========================================
+  // AUTHENTICATION (PHONE OTP & OAUTH)
+  // ==========================================
+
+  Future<void> sendPhoneOtp(String rawPhone) async {
+    final normalized = PhoneUtils.normalize(rawPhone);
+    if (!PhoneUtils.isValidBangladeshPhone(normalized)) {
+      throw const FormatException(
+        'Invalid Bangladesh mobile number. Please enter a valid 11-digit number starting with 01.',
+      );
+    }
+    await _client.auth.signInWithOtp(
+      phone: normalized,
+    );
+  }
+
+  Future<AuthResponse> verifyPhoneOtp({
+    required String rawPhone,
+    required String token,
+  }) async {
+    final normalized = PhoneUtils.normalize(rawPhone);
+    return await _client.auth.verifyOTP(
+      phone: normalized,
+      token: token.trim(),
+      type: OtpType.sms,
+    );
+  }
+
+  Future<void> resendPhoneOtp(String rawPhone) async {
+    final normalized = PhoneUtils.normalize(rawPhone);
+    await _client.auth.resend(
+      phone: normalized,
+      type: OtpType.sms,
+    );
+  }
+
+  Future<bool> signInWithGoogle() async {
+    return await _client.auth.signInWithOAuth(
+      OAuthProvider.google,
+      redirectTo: 'io.supabase.roadix://login-callback',
+    );
+  }
+
+  Future<bool> signInWithApple() async {
+    return await _client.auth.signInWithOAuth(
+      OAuthProvider.apple,
+      redirectTo: 'io.supabase.roadix://login-callback',
+    );
+  }
+
+  Future<void> signOut() async {
+    await _client.auth.signOut();
+  }
+
+  Future<String?> getUserRole() async {
+    try {
+      final res = await _client
+          .from('profiles')
+          .select('role')
+          .eq('id', currentProfileId)
+          .maybeSingle();
+      return res?['role'] as String?;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<void> createOrUpdateProfile({
+    required String fullName,
+    String? phone,
+    String role = 'motorist',
+  }) async {
+    final uid = currentProfileId;
+    final normalizedPhone =
+        phone != null && phone.isNotEmpty ? PhoneUtils.normalize(phone) : null;
+    await _client.from('profiles').upsert({
+      'id': uid,
+      'full_name': fullName,
+      if (normalizedPhone != null && normalizedPhone.isNotEmpty)
+        'phone': normalizedPhone,
+      'role': role,
+      'updated_at': DateTime.now().toUtc().toIso8601String(),
+    });
+  }
 
   // ==========================================
   // 1. MOTORIST PROFILE
@@ -168,5 +258,407 @@ class SupabaseService {
         .from('wallets')
         .update({'is_primary': true})
         .eq('id', walletId);
+  }
+
+  // ==========================================
+  // 5. EMERGENCY DISPATCH & SERVICE REQUESTS (PHASE 4)
+  // ==========================================
+
+  Future<Map<String, dynamic>> createServiceRequest({
+    required double breakdownLat,
+    required double breakdownLng,
+    required String breakdownAddress,
+    required String vehicleType,
+    required String licensePlate,
+    required String faultType,
+    List<String> symptoms = const [],
+    String diagnosticNotes = '',
+    List<String> photoUrls = const [],
+    bool isHighPriority = false,
+  }) async {
+    final snapshot = {
+      'vehicle_type': vehicleType,
+      'plate': licensePlate,
+    };
+    final response = await _client.rpc(
+      'create_service_request',
+      params: {
+        'p_breakdown_lat': breakdownLat,
+        'p_breakdown_lng': breakdownLng,
+        'p_breakdown_address': breakdownAddress,
+        'p_vehicle_snapshot': snapshot,
+        'p_fault_type': faultType,
+        'p_symptoms': symptoms,
+        'p_diagnostic_notes': diagnosticNotes,
+        'p_photo_urls': photoUrls,
+        'p_is_high_priority': isHighPriority,
+      },
+    );
+    return Map<String, dynamic>.from(response as Map);
+  }
+
+  Future<Map<String, dynamic>> dispatchNextCandidate(String requestId) async {
+    final response = await _client.rpc(
+      'dispatch_next_candidate',
+      params: {'p_request_id': requestId},
+    );
+    return Map<String, dynamic>.from(response as Map);
+  }
+
+  Future<double> expandDispatchRadius(String requestId) async {
+    final response = await _client.rpc(
+      'expand_dispatch_radius',
+      params: {'p_request_id': requestId},
+    );
+    return (response as num).toDouble();
+  }
+
+  Future<Map<String, dynamic>?> getServiceRequest(String requestId) async {
+    try {
+      final response = await _client
+          .from('service_requests')
+          .select()
+          .eq('id', requestId)
+          .maybeSingle();
+      return response;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<Map<String, dynamic>?> getActiveServiceRequest() async {
+    try {
+      final userId = _client.auth.currentUser?.id ?? currentProfileId;
+      final response = await _client
+          .from('service_requests')
+          .select()
+          .eq('motorist_id', userId)
+          .inFilter('status', [
+            'searching',
+            'assigned',
+            'en_route',
+            'arrived',
+            'diagnosing',
+            'quote_pending',
+            'servicing',
+          ])
+          .order('created_at', ascending: false)
+          .limit(1)
+          .maybeSingle();
+      return response;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<void> cancelServiceRequest(
+    String requestId, {
+    String reason = 'Motorist cancelled',
+  }) async {
+    await _client.from('service_requests').update({
+      'status': 'cancelled',
+      'cancellation_reason': reason,
+      'cancelled_at': DateTime.now().toUtc().toIso8601String(),
+    }).eq('id', requestId);
+  }
+
+  Future<Map<String, dynamic>?> getAssignedMechanic(String mechanicId) async {
+    try {
+      final profile = await _client
+          .from('profiles')
+          .select('full_name, phone, avatar_url')
+          .eq('id', mechanicId)
+          .maybeSingle();
+      final mechanic = await _client
+          .from('mechanic_profiles')
+          .select(
+            'workshop_name, workshop_address, rating, total_rescues, specializations, vehicle_specializations',
+          )
+          .eq('profile_id', mechanicId)
+          .maybeSingle();
+      if (profile == null && mechanic == null) return null;
+      return {
+        ...profile ?? {},
+        ...mechanic ?? {},
+      };
+    } catch (_) {
+      return null;
+    }
+  }
+
+  // ==========================================
+  // 6. MECHANIC WORKFLOW & AVAILABILITY
+  // ==========================================
+
+  Future<Map<String, dynamic>?> getMechanicProfile(String profileId) async {
+    try {
+      final response = await _client
+          .from('mechanic_profiles')
+          .select()
+          .eq('profile_id', profileId)
+          .maybeSingle();
+      return response;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<Map<String, dynamic>> ensureMechanicProfile({
+    String? workshopName,
+    String? workshopAddress,
+  }) async {
+    final uid = currentProfileId;
+    final existing = await getMechanicProfile(uid);
+    if (existing != null) return existing;
+
+    final inserted = await _client.from('mechanic_profiles').insert({
+      'profile_id': uid,
+      'workshop_name': workshopName ?? 'ROADIX Rapid Auto Workshop',
+      'workshop_address': workshopAddress ?? 'Mirpur, Dhaka',
+      'is_on_duty': true,
+      'is_verified': true,
+      'rating': 5.0,
+      'total_rescues': 0,
+      'vehicle_specializations': ['Passenger Car', 'Motorcycle'],
+      'specializations': ['Engine Repair', 'Electrical', 'Towing', 'Tire Repair'],
+    }).select().single();
+
+    try {
+      await _client.from('profiles').update({'role': 'mechanic'}).eq('id', uid);
+    } catch (_) {}
+
+    return Map<String, dynamic>.from(inserted);
+  }
+
+  SupabaseClient get client => _client;
+
+  Future<Map<String, dynamic>?> getActiveMechanicRescue(String mechanicId) async {
+    try {
+      final res = await _client
+          .from('service_requests')
+          .select()
+          .eq('mechanic_id', mechanicId)
+          .inFilter('status', [
+            'assigned',
+            'en_route',
+            'arrived',
+            'diagnosing',
+            'quote_pending',
+            'servicing',
+          ])
+          .order('updated_at', ascending: false)
+          .limit(1)
+          .maybeSingle();
+      return res;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Stream<List<Map<String, dynamic>>> streamServiceRequest(String requestId) {
+    return _client
+        .from('service_requests')
+        .stream(primaryKey: ['id'])
+        .eq('id', requestId);
+  }
+
+  Stream<List<Map<String, dynamic>>> streamIncomingOffers(String mechanicId) {
+    return _client
+        .from('dispatch_offers')
+        .stream(primaryKey: ['id'])
+        .eq('mechanic_id', mechanicId);
+  }
+
+  Stream<List<Map<String, dynamic>>> streamQuotations(String requestId) {
+    return _client
+        .from('quotations')
+        .stream(primaryKey: ['id'])
+        .eq('request_id', requestId);
+  }
+
+  Future<void> updateMechanicSpecializations({
+    required List<String> vehicleSpecializations,
+    List<String>? serviceSpecializations,
+  }) async {
+    final uid = currentProfileId;
+    final payload = <String, dynamic>{
+      'vehicle_specializations': vehicleSpecializations,
+      'updated_at': DateTime.now().toUtc().toIso8601String(),
+    };
+    if (serviceSpecializations != null) {
+      payload['specializations'] = serviceSpecializations;
+    }
+    await _client.from('mechanic_profiles').update(payload).eq('profile_id', uid);
+  }
+
+  Future<void> updateMechanicDuty(bool isOnDuty) async {
+    final uid = currentProfileId;
+    await _client.from('mechanic_profiles').update({
+      'is_on_duty': isOnDuty,
+      'updated_at': DateTime.now().toUtc().toIso8601String(),
+    }).eq('profile_id', uid);
+  }
+
+  Future<void> updateMechanicLocation({
+    required double lat,
+    required double lng,
+  }) async {
+    await _client.rpc(
+      'update_mechanic_location',
+      params: {
+        'p_lat': lat,
+        'p_lng': lng,
+      },
+    );
+  }
+
+  Future<List<Map<String, dynamic>>> getIncomingOffers() async {
+    final uid = currentProfileId;
+    final res = await _client
+        .from('dispatch_offers')
+        .select('*, service_requests(*)')
+        .eq('mechanic_id', uid)
+        .eq('status', 'offered')
+        .gt('expires_at', DateTime.now().toUtc().toIso8601String())
+        .order('offered_at', ascending: false);
+    return List<Map<String, dynamic>>.from(res);
+  }
+
+  Future<bool> acceptDispatchOffer({
+    required String requestId,
+    required String offerId,
+  }) async {
+    final response = await _client.rpc(
+      'accept_dispatch_offer',
+      params: {
+        'p_request_id': requestId,
+        'p_offer_id': offerId,
+      },
+    );
+    return response == true;
+  }
+
+  Future<bool> rejectDispatchOffer(String offerId) async {
+    final response = await _client.rpc(
+      'reject_dispatch_offer',
+      params: {
+        'p_offer_id': offerId,
+      },
+    );
+    return response == true;
+  }
+
+  Future<void> updateServiceStatus({
+    required String requestId,
+    required String status,
+  }) async {
+    await _client.from('service_requests').update({
+      'status': status,
+      'updated_at': DateTime.now().toUtc().toIso8601String(),
+    }).eq('id', requestId);
+  }
+
+  // ==========================================
+  // 7. QUOTATIONS & DEVELOPMENT PAYMENT
+  // ==========================================
+
+  Future<Map<String, dynamic>> submitQuotation({
+    required String requestId,
+    required double diagnosticFee,
+    required double laborFee,
+    required double partsFee,
+    Map<String, dynamic> lineItems = const {},
+  }) async {
+    final response = await _client.rpc(
+      'submit_quotation',
+      params: {
+        'p_request_id': requestId,
+        'p_diagnostic_fee': diagnosticFee,
+        'p_labor_fee': laborFee,
+        'p_parts_fee': partsFee,
+        'p_line_items': lineItems,
+      },
+    );
+    return Map<String, dynamic>.from(response as Map);
+  }
+
+  Future<bool> respondToQuotation({
+    required String quotationId,
+    required String decision, // 'accepted' or 'rejected'
+  }) async {
+    final response = await _client.rpc(
+      'respond_to_quotation',
+      params: {
+        'p_quotation_id': quotationId,
+        'p_decision': decision,
+      },
+    );
+    return response == true;
+  }
+
+  Future<Map<String, dynamic>?> getQuotationForRequest(String requestId) async {
+    try {
+      final res = await _client
+          .from('quotations')
+          .select()
+          .eq('request_id', requestId)
+          .order('created_at', ascending: false)
+          .limit(1)
+          .maybeSingle();
+      return res;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Records a development-mode payment transaction.
+  /// Clearly flagged in audit logs and records as simulated test payment.
+  Future<Map<String, dynamic>> recordDevelopmentPayment({
+    required String requestId,
+    required String quotationId,
+    required double amount,
+    required String paymentMethod, // 'bKash', 'Nagad', 'Cash'
+  }) async {
+    final txId = 'DEV-TX-${DateTime.now().millisecondsSinceEpoch}';
+    final res = await _client.from('transactions').insert({
+      'request_id': requestId,
+      'quotation_id': quotationId,
+      'amount': amount,
+      'payment_method': paymentMethod,
+      'status': 'completed',
+      'gateway_transaction_id': txId,
+      'metadata': {
+        'environment': 'development',
+        'is_simulation': true,
+        'note': 'DEVELOPMENT MODE PAYMENT SIMULATION - NO REAL MONEY CHARGED',
+      },
+    }).select().single();
+
+    // Transition request status to completed
+    await updateServiceStatus(requestId: requestId, status: 'completed');
+
+    return Map<String, dynamic>.from(res);
+  }
+
+  // ==========================================
+  // 8. REVIEWS & RATINGS
+  // ==========================================
+
+  Future<void> submitReview({
+    required String requestId,
+    required String mechanicId,
+    required int rating,
+    String? comment,
+  }) async {
+    final payload = <String, dynamic>{
+      'request_id': requestId,
+      'motorist_id': currentProfileId,
+      'mechanic_id': mechanicId,
+      'rating': rating,
+    };
+    if (comment != null && comment.isNotEmpty) {
+      payload['comment'] = comment;
+    }
+    await _client.from('reviews').insert(payload);
   }
 }

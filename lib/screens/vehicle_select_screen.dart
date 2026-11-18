@@ -5,8 +5,35 @@ import 'fault_details_screen.dart';
 
 class VehicleSelectScreen extends StatefulWidget {
   final String selectedFault;
+  final double breakdownLat;
+  final double breakdownLng;
+  final String breakdownAddress;
 
-  const VehicleSelectScreen({super.key, required this.selectedFault});
+  const VehicleSelectScreen({
+    super.key,
+    required this.selectedFault,
+    this.breakdownLat = 23.8759,
+    this.breakdownLng = 90.3795,
+    this.breakdownAddress = 'Dhaka Region • Roadside Position',
+  });
+
+  static String mapUiCategoryToSrs(String uiCategory) {
+    switch (uiCategory) {
+      case 'Sedan / Hatch':
+      case 'SUV / Micro':
+      case 'Sedan':
+      case 'SUV':
+      case 'Passenger Car':
+        return 'Passenger Car';
+      case 'Motorcycle':
+        return 'Motorcycle';
+      case 'Commercial':
+      case 'Light Commercial':
+        return 'Light Commercial';
+      default:
+        return 'Passenger Car';
+    }
+  }
 
   @override
   State<VehicleSelectScreen> createState() => _VehicleSelectScreenState();
@@ -375,8 +402,9 @@ class _VehicleSelectScreenState extends State<VehicleSelectScreen> {
                           label: Text(fuel),
                           selected: isSelected,
                           onSelected: (selected) {
-                            if (selected)
+                            if (selected) {
                               setState(() => _selectedFuelType = fuel);
+                            }
                           },
                           selectedColor: AppColors.caliperCrimson,
                           backgroundColor: AppColors.cardWhite,
@@ -424,10 +452,14 @@ class _VehicleSelectScreenState extends State<VehicleSelectScreen> {
                           MaterialPageRoute(
                             builder: (_) => FaultDetailsScreen(
                               selectedFault: widget.selectedFault,
-                              vehicleType:
-                                  _vehicleCategories[_selectedVehicleTypeIndex]['title']
-                                      as String,
+                              vehicleType: VehicleSelectScreen.mapUiCategoryToSrs(
+                                _vehicleCategories[_selectedVehicleTypeIndex]['title']
+                                    as String,
+                              ),
                               licensePlate: _plateController.text,
+                              breakdownLat: widget.breakdownLat,
+                              breakdownLng: widget.breakdownLng,
+                              breakdownAddress: widget.breakdownAddress,
                             ),
                           ),
                         );

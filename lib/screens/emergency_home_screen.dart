@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
+import '../services/supabase_service.dart';
 import '../theme/app_colors.dart';
-import 'location_permission_screen.dart';
-import 'sos_screen.dart';
 import 'activity_screen.dart';
+import 'dispatch_screen.dart';
+import 'location_permission_screen.dart';
 import 'profile_screen.dart';
+import 'sos_screen.dart';
 import '../widgets/search_bottom_sheet.dart';
 import '../widgets/notifications_bottom_sheet.dart';
 
@@ -20,6 +22,7 @@ class _EmergencyHomeScreenState extends State<EmergencyHomeScreen>
   late Animation<double> _scaleAnimation;
   int _activeNavIndex = 0;
   bool _hasUnreadAlerts = true;
+  Map<String, dynamic>? _activeRescueRequest;
 
   @override
   void initState() {
@@ -32,6 +35,17 @@ class _EmergencyHomeScreenState extends State<EmergencyHomeScreen>
     _scaleAnimation = Tween<double>(begin: 1.0, end: 1.05).animate(
       CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut),
     );
+
+    _checkActiveRescue();
+  }
+
+  Future<void> _checkActiveRescue() async {
+    try {
+      final active = await SupabaseService().getActiveServiceRequest();
+      if (mounted && active != null) {
+        setState(() => _activeRescueRequest = active);
+      }
+    } catch (_) {}
   }
 
   @override
@@ -250,12 +264,15 @@ class _EmergencyHomeScreenState extends State<EmergencyHomeScreen>
     );
   }
 
-  void _startEmergencyTriage(String faultName) {
-    Navigator.of(context).push(
+  Future<void> _startEmergencyTriage(String faultName) async {
+    await Navigator.of(context).push(
       MaterialPageRoute(
         builder: (_) => LocationPermissionScreen(selectedFault: faultName),
       ),
     );
+    if (mounted) {
+      _checkActiveRescue();
+    }
   }
 
   @override
@@ -382,9 +399,9 @@ class _EmergencyHomeScreenState extends State<EmergencyHomeScreen>
                         InkWell(
                           onTap: _openSearchSheet,
                           borderRadius: BorderRadius.circular(20),
-                          child: const Padding(
+                          child: Padding(
                             padding: const EdgeInsets.all(6.0),
-                            child: Icon(
+                            child: const Icon(
                               Icons.search,
                               color: AppColors.chassisText,
                               size: 22,
@@ -433,7 +450,7 @@ class _EmergencyHomeScreenState extends State<EmergencyHomeScreen>
                           color: _activeNavIndex == 0
                               ? AppColors.caliperCrimson
                               : AppColors.slateMuted,
-                          errorBuilder: (_, __, ___) => Icon(
+                          errorBuilder: (_, _, _) => Icon(
                             Icons.alt_route,
                             size: 20,
                             color: _activeNavIndex == 0
@@ -479,6 +496,78 @@ class _EmergencyHomeScreenState extends State<EmergencyHomeScreen>
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const SizedBox(height: 4),
+
+          if (_activeRescueRequest != null) ...[
+            InkWell(
+              onTap: () async {
+                final snapshot = _activeRescueRequest!['vehicle_snapshot']
+                    as Map<String, dynamic>?;
+                await Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => DispatchScreen(
+                      selectedFault: _activeRescueRequest!['fault_type']
+                              as String? ??
+                          'General Breakdown',
+                      vehicleType: snapshot?['vehicle_type'] as String? ??
+                          'Passenger Car',
+                      licensePlate: snapshot?['plate'] as String? ?? '',
+                      symptoms: const [],
+                      isHighPriority:
+                          _activeRescueRequest!['is_high_priority'] == true,
+                      existingRequestId: _activeRescueRequest!['id'] as String?,
+                    ),
+                  ),
+                );
+                if (mounted) {
+                  _checkActiveRescue();
+                }
+              },
+              borderRadius: BorderRadius.circular(12),
+              child: Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                decoration: BoxDecoration(
+                  color: AppColors.crimsonLight,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: AppColors.caliperCrimson),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.radar,
+                        color: AppColors.caliperCrimson, size: 20),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            'ACTIVE RESCUE IN PROGRESS',
+                            style: TextStyle(
+                              color: AppColors.caliperCrimson,
+                              fontSize: 11,
+                              fontWeight: FontWeight.w900,
+                              letterSpacing: 0.5,
+                            ),
+                          ),
+                          Text(
+                            'Status: ${_activeRescueRequest!['status']} • Ref: ${_activeRescueRequest!['request_code'] ?? 'RDX'}',
+                            style: const TextStyle(
+                              color: AppColors.chassisText,
+                              fontSize: 11,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const Icon(Icons.arrow_forward_ios,
+                        color: AppColors.caliperCrimson, size: 14),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 10),
+          ],
 
           // Location Indicator Card
           InkWell(

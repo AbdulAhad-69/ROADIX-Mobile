@@ -406,6 +406,9 @@ class _LocationConfirmScreenState extends State<LocationConfirmScreen> {
                           MaterialPageRoute(
                             builder: (_) => VehicleSelectScreen(
                               selectedFault: widget.selectedFault,
+                              breakdownLat: _currentCenter.latitude,
+                              breakdownLng: _currentCenter.longitude,
+                              breakdownAddress: 'Dhaka Region • Roadside Position',
                             ),
                           ),
                         );

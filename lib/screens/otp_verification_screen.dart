@@ -1,6 +1,8 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import '../services/supabase_service.dart';
 import '../theme/app_colors.dart';
+import 'emergency_home_screen.dart';
 import 'profile_setup_screen.dart';
 
 class OtpVerificationScreen extends StatefulWidget {
@@ -22,6 +24,8 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
 
   int _resendCountdown = 59;
   Timer? _timer;
+  bool _isVerifying = false;
+  String? _errorMessage;
 
   @override
   void initState() {
@@ -53,16 +57,90 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
     super.dispose();
   }
 
-  String get _enteredOtp =>
-      _controllers.map((c) => c.text).join();
+  String get _enteredOtp => _controllers.map((c) => c.text).join();
 
-  void _verifyOtp() {
-    if (_enteredOtp.length == 6) {
-      Navigator.of(context).pushReplacement(
-        MaterialPageRoute(
-          builder: (_) => ProfileSetupScreen(phoneNumber: widget.phoneNumber),
-        ),
+  Future<void> _verifyOtp() async {
+    if (_enteredOtp.length != 6 || _isVerifying) return;
+
+    setState(() {
+      _isVerifying = true;
+      _errorMessage = null;
+    });
+
+    try {
+      await SupabaseService().verifyPhoneOtp(
+        rawPhone: widget.phoneNumber,
+        token: _enteredOtp,
       );
+
+      if (mounted) {
+        // Check if user already has an active profile
+        final profile = await SupabaseService().getProfile();
+        if (!mounted) return;
+        final hasFullName = profile?['full_name'] != null &&
+            (profile!['full_name'] as String).isNotEmpty &&
+            profile['full_name'] != 'Motorist';
+
+        if (hasFullName) {
+          Navigator.of(context).pushAndRemoveUntil(
+            MaterialPageRoute(builder: (_) => const EmergencyHomeScreen()),
+            (route) => false,
+          );
+        } else {
+          Navigator.of(context).pushReplacement(
+            MaterialPageRoute(
+              builder: (_) => ProfileSetupScreen(phoneNumber: widget.phoneNumber),
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _isVerifying = false;
+          _errorMessage = e
+              .toString()
+              .replaceAll('Exception: ', '')
+              .replaceAll('AuthException: ', '');
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              _errorMessage ?? 'Invalid verification code. Please try again.',
+            ),
+            backgroundColor: AppColors.caliperCrimson,
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _handleResend() async {
+    _startCountdown();
+    try {
+      await SupabaseService().resendPhoneOtp(widget.phoneNumber);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('A new 6-digit verification code has been dispatched.'),
+            backgroundColor: AppColors.chassisText,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              e
+                  .toString()
+                  .replaceAll('Exception: ', '')
+                  .replaceAll('AuthException: ', ''),
+            ),
+            backgroundColor: AppColors.caliperCrimson,
+          ),
+        );
+      }
     }
   }
 
@@ -188,7 +266,7 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
                         ),
                       )
                     : TextButton(
-                        onPressed: _startCountdown,
+                        onPressed: _handleResend,
                         child: const Text(
                           'Resend Verification Code',
                           style: TextStyle(
@@ -207,7 +285,8 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
                 width: double.infinity,
                 height: 50,
                 child: ElevatedButton(
-                  onPressed: _enteredOtp.length == 6 ? _verifyOtp : null,
+                  onPressed:
+                      (_enteredOtp.length == 6 && !_isVerifying) ? _verifyOtp : null,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: AppColors.caliperCrimson,
                     disabledBackgroundColor: const Color(0xFFFCA5A5),
@@ -216,15 +295,24 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
                     ),
                     elevation: 3,
                   ),
-                  child: const Text(
-                    'VERIFY & CONTINUE',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 13,
-                      fontWeight: FontWeight.w800,
-                      letterSpacing: 0.5,
-                    ),
-                  ),
+                  child: _isVerifying
+                      ? const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(
+                            color: Colors.white,
+                            strokeWidth: 2,
+                          ),
+                        )
+                      : const Text(
+                          'VERIFY & CONTINUE',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 13,
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: 0.5,
+                          ),
+                        ),
                 ),
               ),
               const SizedBox(height: 20),

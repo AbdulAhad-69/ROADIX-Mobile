@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import '../services/supabase_service.dart';
+import '../src/core/utils/phone_utils.dart';
 import '../theme/app_colors.dart';
 import 'emergency_home_screen.dart';
 import 'otp_verification_screen.dart';
@@ -12,6 +14,8 @@ class LoginScreen extends StatefulWidget {
 
 class _LoginScreenState extends State<LoginScreen> {
   String _phoneNumber = '';
+  bool _isLoading = false;
+  String? _errorMessage;
 
   void _onKeyPress(String digit) {
     if (_phoneNumber.length < 10) {
@@ -30,7 +34,7 @@ class _LoginScreenState extends State<LoginScreen> {
   String get _maskedDisplay {
     if (_phoneNumber.isEmpty) return '••••• ••••••';
     if (_phoneNumber.length <= 5) {
-      return _phoneNumber.padRight(5, '•') + ' ••••••';
+      return '${_phoneNumber.padRight(5, '•')} ••••••';
     }
     final firstPart = _phoneNumber.substring(0, 5);
     final secondPart = _phoneNumber.substring(5).padRight(5, '•');
@@ -43,14 +47,79 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 
-  void _proceedToOtp() {
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => OtpVerificationScreen(
-          phoneNumber: _phoneNumber.isEmpty ? '1712345678' : _phoneNumber,
+  Future<void> _proceedToOtp() async {
+    final rawInput = _phoneNumber.isEmpty ? '1712345678' : _phoneNumber;
+    final normalized = PhoneUtils.normalize(rawInput);
+    if (!PhoneUtils.isValidBangladeshPhone(normalized)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please enter a valid 10-digit mobile number starting with 1.'),
+          backgroundColor: AppColors.caliperCrimson,
         ),
-      ),
-    );
+      );
+      return;
+    }
+
+    setState(() {
+      _isLoading = true;
+      _errorMessage = null;
+    });
+
+    try {
+      await SupabaseService().sendPhoneOtp(normalized);
+      if (mounted) {
+        setState(() => _isLoading = false);
+        Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (_) => OtpVerificationScreen(phoneNumber: normalized),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+          _errorMessage = e
+              .toString()
+              .replaceAll('Exception: ', '')
+              .replaceAll('AuthException: ', '');
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              _errorMessage ?? 'Failed to send OTP code. Please check configuration.',
+            ),
+            backgroundColor: AppColors.caliperCrimson,
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _handleGoogleSignIn() async {
+    setState(() {
+      _isLoading = true;
+      _errorMessage = null;
+    });
+    try {
+      await SupabaseService().signInWithGoogle();
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+          _errorMessage = e
+              .toString()
+              .replaceAll('Exception: ', '')
+              .replaceAll('AuthException: ', '');
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(_errorMessage ?? 'Google Sign-In failed.'),
+            backgroundColor: AppColors.caliperCrimson,
+          ),
+        );
+      }
+    }
   }
 
   @override
@@ -240,7 +309,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
                             // Send OTP Button
                             InkWell(
-                              onTap: _phoneNumber.length >= 10
+                              onTap: (_phoneNumber.length >= 10 && !_isLoading)
                                   ? _proceedToOtp
                                   : null,
                               borderRadius: BorderRadius.circular(12),
@@ -264,14 +333,75 @@ class _LoginScreenState extends State<LoginScreen> {
                                       : [],
                                 ),
                                 alignment: Alignment.center,
-                                child: const Text(
-                                  'Send OTP Code',
-                                  style: TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 13,
-                                    fontWeight: FontWeight.w800,
-                                    letterSpacing: 0.3,
+                                child: _isLoading
+                                    ? const SizedBox(
+                                        width: 20,
+                                        height: 20,
+                                        child: CircularProgressIndicator(
+                                          color: Colors.white,
+                                          strokeWidth: 2,
+                                        ),
+                                      )
+                                    : const Text(
+                                        'Send OTP Code',
+                                        style: TextStyle(
+                                          color: Colors.white,
+                                          fontSize: 13,
+                                          fontWeight: FontWeight.w800,
+                                          letterSpacing: 0.3,
+                                        ),
+                                      ),
+                              ),
+                            ),
+                            const SizedBox(height: 12),
+
+                            // Divider
+                            Row(
+                              children: const [
+                                Expanded(child: Divider(color: AppColors.slateBorder)),
+                                Padding(
+                                  padding: EdgeInsets.symmetric(horizontal: 10),
+                                  child: Text(
+                                    'OR',
+                                    style: TextStyle(
+                                      color: AppColors.slateMuted,
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.w700,
+                                    ),
                                   ),
+                                ),
+                                Expanded(child: Divider(color: AppColors.slateBorder)),
+                              ],
+                            ),
+                            const SizedBox(height: 12),
+
+                            // Continue with Google Button
+                            InkWell(
+                              onTap: _isLoading ? null : _handleGoogleSignIn,
+                              borderRadius: BorderRadius.circular(12),
+                              child: Container(
+                                height: 46,
+                                width: double.infinity,
+                                decoration: BoxDecoration(
+                                  color: AppColors.cardWhite,
+                                  borderRadius: BorderRadius.circular(12),
+                                  border: Border.all(color: AppColors.slateBorder),
+                                ),
+                                child: Row(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: const [
+                                    Icon(Icons.g_mobiledata,
+                                        color: AppColors.chassisText, size: 28),
+                                    SizedBox(width: 4),
+                                    Text(
+                                      'Continue with Google',
+                                      style: TextStyle(
+                                        color: AppColors.chassisText,
+                                        fontSize: 13,
+                                        fontWeight: FontWeight.w700,
+                                      ),
+                                    ),
+                                  ],
                                 ),
                               ),
                             ),
