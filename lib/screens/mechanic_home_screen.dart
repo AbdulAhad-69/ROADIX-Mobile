@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:geolocator/geolocator.dart';
 import '../services/supabase_service.dart';
 import '../theme/app_colors.dart';
 import 'emergency_home_screen.dart';
@@ -18,6 +19,7 @@ class _MechanicHomeScreenState extends State<MechanicHomeScreen> {
   String _profileId = '';
   Map<String, dynamic>? _mechanicProfile;
   bool _isOnDuty = false;
+  bool _isVerified = false;
   List<String> _vehicleSpecializations = [];
 
   // Active Offer & Service Request
@@ -59,6 +61,7 @@ class _MechanicHomeScreenState extends State<MechanicHomeScreen> {
       if (mounted) {
         setState(() {
           _mechanicProfile = profile;
+          _isVerified = profile['is_verified'] as bool? ?? false;
           _isOnDuty = profile['is_on_duty'] as bool? ?? false;
           _vehicleSpecializations = List<String>.from(
             profile['vehicle_specializations'] ?? ['Passenger Car', 'Motorcycle'],
@@ -163,12 +166,31 @@ class _MechanicHomeScreenState extends State<MechanicHomeScreen> {
   // --------------------------------------------------------------------------
 
   Future<void> _toggleDuty(bool value) async {
+    // Non-negotiable product rule: Unverified mechanics cannot go on duty.
+    if (value && !_isVerified) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Verification pending. An administrator must approve your workshop in Web Admin before you can go on duty.'),
+          backgroundColor: AppColors.caliperCrimson,
+          duration: Duration(seconds: 4),
+        ),
+      );
+      return;
+    }
+
     setState(() => _isOnDuty = value);
     try {
       await _db.updateMechanicDuty(value);
       if (value) {
-        // Ping Dhaka central coordinates for on-duty demo
-        await _db.updateMechanicLocation(lat: 23.8103, lng: 90.4125);
+        try {
+          final pos = await Geolocator.getCurrentPosition(
+            locationSettings: const LocationSettings(accuracy: LocationAccuracy.high),
+          );
+          await _db.updateMechanicLocation(lat: pos.latitude, lng: pos.longitude);
+        } catch (_) {
+          // Fallback to roadside coordinates if device GPS permission pending
+          await _db.updateMechanicLocation(lat: 23.8103, lng: 90.4125);
+        }
       }
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(

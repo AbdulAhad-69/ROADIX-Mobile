@@ -11,6 +11,7 @@ SupabaseClient get supabase => Supabase.instance.client;
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await AppConfig.initialize();
 
   // Status bar styling: dark icons on porcelain background
   SystemChrome.setSystemUIOverlayStyle(

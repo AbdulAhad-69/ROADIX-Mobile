@@ -8,18 +8,44 @@ class SupabaseService {
 
   final SupabaseClient _client = Supabase.instance.client;
 
-  // We use our seeded demo profile ID as the active session fallback
-  static const String defaultProfileId = 'a0000000-0000-0000-0000-000000000001';
-
   String? get currentUserId => _client.auth.currentUser?.id;
-  String get currentProfileId => _client.auth.currentUser?.id ?? defaultProfileId;
+  String get currentProfileId => _client.auth.currentUser?.id ?? '';
   User? get currentUser => _client.auth.currentUser;
   Session? get currentSession => _client.auth.currentSession;
   bool get isAuthenticated => _client.auth.currentUser != null;
 
   // ==========================================
-  // AUTHENTICATION (PHONE OTP & OAUTH)
+  // 1. AUTHENTICATION (EMAIL/PASSWORD, GOOGLE & GUEST SOS)
   // ==========================================
+
+  /// Email/Password Sign-In
+  Future<AuthResponse> signInWithEmail({
+    required String email,
+    required String password,
+  }) async {
+    return await _client.auth.signInWithPassword(
+      email: email.trim(),
+      password: password,
+    );
+  }
+
+  /// Email/Password Sign-Up
+  Future<AuthResponse> signUpWithEmail({
+    required String email,
+    required String password,
+    String? fullName,
+  }) async {
+    return await _client.auth.signUp(
+      email: email.trim(),
+      password: password,
+      data: fullName != null ? {'full_name': fullName} : null,
+    );
+  }
+
+  /// Guest SOS: Anonymous session preserves isolated multi-tenancy without OTP delay
+  Future<AuthResponse> signInAnonymously() async {
+    return await _client.auth.signInAnonymously();
+  }
 
   Future<void> sendPhoneOtp(String rawPhone) async {
     final normalized = PhoneUtils.normalize(rawPhone);
@@ -408,19 +434,24 @@ class SupabaseService {
     String? workshopAddress,
   }) async {
     final uid = currentProfileId;
+    if (uid.isEmpty) {
+      throw StateError('Cannot create mechanic profile without active session.');
+    }
     final existing = await getMechanicProfile(uid);
     if (existing != null) return existing;
 
+    // Strict security rule: Verification is an explicit admin action.
+    // Unverified mechanics are NEVER dispatch-eligible and cannot go on-duty.
     final inserted = await _client.from('mechanic_profiles').insert({
       'profile_id': uid,
-      'workshop_name': workshopName ?? 'ROADIX Rapid Auto Workshop',
-      'workshop_address': workshopAddress ?? 'Mirpur, Dhaka',
-      'is_on_duty': true,
-      'is_verified': true,
+      'workshop_name': workshopName ?? 'Independent Auto Workshop',
+      'workshop_address': workshopAddress ?? 'Dhaka, Bangladesh',
+      'is_on_duty': false,
+      'is_verified': false,
       'rating': 5.0,
       'total_rescues': 0,
-      'vehicle_specializations': ['Passenger Car', 'Motorcycle'],
-      'specializations': ['Engine Repair', 'Electrical', 'Towing', 'Tire Repair'],
+      'vehicle_specializations': ['Passenger Car'],
+      'specializations': ['General Automotive Breakdown'],
     }).select().single();
 
     try {

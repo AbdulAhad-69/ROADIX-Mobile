@@ -10,7 +10,11 @@ void main() {
     test('default configuration provides valid backend and tile endpoints', () {
       expect(AppConfig.supabaseUrl, isNotEmpty);
       expect(AppConfig.supabaseAnonKey, isNotEmpty);
-      expect(AppConfig.mapStyleUrl, contains('openfreemap'));
+      expect(
+        AppConfig.mapStyleUrl.contains('geoapify') ||
+            AppConfig.mapStyleUrl.contains('openfreemap'),
+        isTrue,
+      );
       expect(AppConfig.initialSearchRadiusKm, equals(5.0));
       expect(AppConfig.expansionRadiusKm, equals(2.5));
       expect(AppConfig.dispatchTimeoutSeconds, equals(45));

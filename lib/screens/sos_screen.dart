@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../theme/app_colors.dart';
 
 class SosScreen extends StatefulWidget {
@@ -33,16 +34,27 @@ class _SosScreenState extends State<SosScreen> with TickerProviderStateMixin {
 
     _countdownController.addStatusListener((status) {
       if (status == AnimationStatus.dismissed && !_isCancelled) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('🚨 999 Emergency Dispatch Initiated!'),
-              backgroundColor: AppColors.caliperCrimson,
-            ),
-          );
-        }
+        _triggerEmergencyCall();
       }
     });
+  }
+
+  Future<void> _triggerEmergencyCall() async {
+    final uri = Uri.parse('tel:999');
+    try {
+      if (await canLaunchUrl(uri)) {
+        await launchUrl(uri);
+      }
+    } catch (_) {}
+
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('🚨 999 Emergency Dispatch Initiated!'),
+          backgroundColor: AppColors.caliperCrimson,
+        ),
+      );
+    }
   }
 
   void _cancelSos() {
@@ -226,14 +238,7 @@ class _SosScreenState extends State<SosScreen> with TickerProviderStateMixin {
 
                         // 999 Dial Button
                         InkWell(
-                          onTap: () {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content: Text('Connecting to 999 emergency services...'),
-                                backgroundColor: AppColors.caliperCrimson,
-                              ),
-                            );
-                          },
+                          onTap: _triggerEmergencyCall,
                           borderRadius: BorderRadius.circular(46),
                           child: Container(
                             width: 92,

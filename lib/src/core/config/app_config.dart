@@ -1,27 +1,91 @@
+import 'dart:io';
+
 /// Application Configuration
 ///
-/// Reads environment variables configured via `--dart-define` at compile time
-/// and provides safe fallbacks for development.
+/// Dynamically reads environment variables from `.env` or compile-time
+/// `--dart-define` / `--dart-define-from-file=.env` parameters.
 class AppConfig {
   const AppConfig._();
 
+  static final Map<String, String> _fileEnv = {};
+
+  /// Loads configuration from the local `.env` file if accessible
+  static Future<void> initialize() async {
+    try {
+      final file = File('.env');
+      if (await file.exists()) {
+        final lines = await file.readAsLines();
+        for (final line in lines) {
+          final trimmed = line.trim();
+          if (trimmed.isEmpty || trimmed.startsWith('#')) continue;
+          final idx = trimmed.indexOf('=');
+          if (idx > 0) {
+            final key = trimmed.substring(0, idx).trim();
+            final val = trimmed.substring(idx + 1).trim();
+            _fileEnv[key] = val;
+          }
+        }
+      }
+    } catch (_) {}
+  }
+
   /// Supabase project URL
-  static const String supabaseUrl = String.fromEnvironment(
-    'ROADIX_SUPABASE_URL',
-    defaultValue: 'https://rgzmoqpkugpcqfryrjkj.supabase.co',
-  );
+  static String get supabaseUrl {
+    if (_fileEnv.containsKey('EXPO_PUBLIC_SUPABASE_URL')) {
+      return _fileEnv['EXPO_PUBLIC_SUPABASE_URL']!;
+    }
+    if (_fileEnv.containsKey('ROADIX_SUPABASE_URL')) {
+      return _fileEnv['ROADIX_SUPABASE_URL']!;
+    }
+    return const String.fromEnvironment(
+      'EXPO_PUBLIC_SUPABASE_URL',
+      defaultValue: String.fromEnvironment(
+        'ROADIX_SUPABASE_URL',
+        defaultValue: 'https://rgzmoqpkugpcqfryrjkj.supabase.co',
+      ),
+    );
+  }
 
   /// Supabase public anonymous API key
-  static const String supabaseAnonKey = String.fromEnvironment(
-    'ROADIX_SUPABASE_ANON_KEY',
-    defaultValue: 'sb_publishable_Brh5ctiNGrTdmKlVG2sHwA_aFWPlkAt',
-  );
+  static String get supabaseAnonKey {
+    if (_fileEnv.containsKey('EXPO_PUBLIC_SUPABASE_ANON_KEY')) {
+      return _fileEnv['EXPO_PUBLIC_SUPABASE_ANON_KEY']!;
+    }
+    if (_fileEnv.containsKey('ROADIX_SUPABASE_ANON_KEY')) {
+      return _fileEnv['ROADIX_SUPABASE_ANON_KEY']!;
+    }
+    return const String.fromEnvironment(
+      'EXPO_PUBLIC_SUPABASE_ANON_KEY',
+      defaultValue: String.fromEnvironment(
+        'ROADIX_SUPABASE_ANON_KEY',
+        defaultValue:
+            'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJnem1vcXBrdWdwY3FmcnlyamtqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTE5MDg0MjAsImV4cCI6MjEwNzQ4NDQyMH0.7uNmiq7vQPnnSqqOFmlcSFuouSq68gt_xRny2xKYmxI',
+      ),
+    );
+  }
 
-  /// Free vector tile style URL (OpenFreeMap Liberty style)
-  static const String mapStyleUrl = String.fromEnvironment(
-    'ROADIX_MAP_STYLE_URL',
-    defaultValue: 'https://tiles.openfreemap.org/styles/liberty',
-  );
+  /// Geoapify API key for map tiles, routing, and ETA
+  static String get geoapifyApiKey {
+    if (_fileEnv.containsKey('EXPO_PUBLIC_GEOAPIFY_API_KEY')) {
+      return _fileEnv['EXPO_PUBLIC_GEOAPIFY_API_KEY']!;
+    }
+    if (_fileEnv.containsKey('GEOAPIFY_API_KEY')) {
+      return _fileEnv['GEOAPIFY_API_KEY']!;
+    }
+    return const String.fromEnvironment(
+      'EXPO_PUBLIC_GEOAPIFY_API_KEY',
+      defaultValue: 'a27219f443524a94981907686734d6bb',
+    );
+  }
+
+  /// Vector tile style URL (Geoapify OSM Bright Smooth style matching Showroom Porcelain)
+  static String get mapStyleUrl {
+    final key = geoapifyApiKey;
+    if (key.isNotEmpty) {
+      return 'https://maps.geoapify.com/v1/styles/osm-bright-smooth/style.json?apiKey=$key';
+    }
+    return 'https://tiles.openfreemap.org/styles/liberty';
+  }
 
   /// Application title
   static const String appTitle = 'ROADIX';
@@ -45,3 +109,4 @@ class AppConfig {
   /// Whether the application is running in production mode
   static const bool isProduction = bool.fromEnvironment('dart.vm.product');
 }
+

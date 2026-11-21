@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:maplibre_gl/maplibre_gl.dart';
+import '../src/core/config/app_config.dart';
 import '../theme/app_colors.dart';
 import 'vehicle_select_screen.dart';
 
@@ -24,8 +25,7 @@ class LocationConfirmScreen extends StatefulWidget {
 class _LocationConfirmScreenState extends State<LocationConfirmScreen> {
   MapLibreMapController? _mapController;
   late LatLng _currentCenter;
-  static const String _styleUrl =
-      'https://tiles.openfreemap.org/styles/liberty';
+  String get _styleUrl => AppConfig.mapStyleUrl;
 
   @override
   void initState() {
@@ -287,6 +287,28 @@ class _LocationConfirmScreenState extends State<LocationConfirmScreen> {
                           Icons.my_location,
                           color: AppColors.caliperCrimson,
                           size: 20,
+                        ),
+                      ),
+                    ),
+                  ),
+
+                  // OpenStreetMap & Geoapify Required Attribution
+                  Positioned(
+                    bottom: 8,
+                    left: 12,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                      decoration: BoxDecoration(
+                        color: AppColors.cardWhite.withAlpha(220),
+                        borderRadius: BorderRadius.circular(6),
+                        border: Border.all(color: AppColors.slateBorder),
+                      ),
+                      child: const Text(
+                        '© OpenStreetMap contributors • © Geoapify',
+                        style: TextStyle(
+                          color: AppColors.slateMuted,
+                          fontSize: 9,
+                          fontWeight: FontWeight.w600,
                         ),
                       ),
                     ),
