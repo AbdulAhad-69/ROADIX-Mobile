@@ -5,9 +5,12 @@ import '../domain/models/triage_state.dart';
 class TriageController extends StateNotifier<TriageState> {
   TriageController() : super(const TriageState());
 
+  static Map<String, dynamic>? _ephemeralDraft;
+
   /// Step 1: Select fault / emergency category
   void selectFault(String fault) {
     state = state.copyWith(selectedFault: fault);
+    saveDraft();
   }
 
   /// Step 2: Confirm breakdown GPS coordinates & textual address
@@ -21,6 +24,7 @@ class TriageController extends StateNotifier<TriageState> {
       longitude: longitude,
       pickupAddress: address ?? state.pickupAddress,
     );
+    saveDraft();
   }
 
   /// Step 3: Select vehicle type & license plate
@@ -32,6 +36,7 @@ class TriageController extends StateNotifier<TriageState> {
       vehicleType: vehicleType,
       licensePlate: licensePlate ?? state.licensePlate,
     );
+    saveDraft();
   }
 
   /// Step 4: Add diagnostic details, symptoms, hazard flags
@@ -49,16 +54,38 @@ class TriageController extends StateNotifier<TriageState> {
       hazardsWorking: hazardsWorking ?? state.hazardsWorking,
       isHighPriority: isHighPriority ?? state.isHighPriority,
     );
+    saveDraft();
+  }
+
+  /// Saves current triage state to ephemeral draft cache
+  void saveDraft() {
+    _ephemeralDraft = state.toJson();
+  }
+
+  /// Restores triage state from ephemeral draft cache if present
+  bool restoreDraft() {
+    if (_ephemeralDraft != null) {
+      state = TriageState.fromJson(_ephemeralDraft!);
+      return true;
+    }
+    return false;
+  }
+
+  /// Clears draft cache upon request completion or cancellation
+  void clearDraft() {
+    _ephemeralDraft = null;
+    state = const TriageState();
   }
 
   /// Set the active dispatch / service request ID created in backend
   void setActiveRequestId(String id) {
     state = state.copyWith(activeRequestId: id);
+    saveDraft();
   }
 
   /// Reset state when request completes or is cancelled
   void reset() {
-    state = const TriageState();
+    clearDraft();
   }
 }
 

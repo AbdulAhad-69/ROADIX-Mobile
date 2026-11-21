@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import '../theme/app_colors.dart';
 import 'dispatch_screen.dart';
 
@@ -246,6 +247,7 @@ class _FaultDetailsScreenState extends State<FaultDetailsScreen> {
                         padding: const EdgeInsets.only(bottom: 8.0),
                         child: InkWell(
                           onTap: () {
+                            HapticFeedback.selectionClick();
                             setState(() {
                               if (isChecked) {
                                 _selectedSymptoms.remove(symptom);
@@ -254,32 +256,55 @@ class _FaultDetailsScreenState extends State<FaultDetailsScreen> {
                               }
                             });
                           },
-                          borderRadius: BorderRadius.circular(10),
+                          borderRadius: BorderRadius.circular(12),
                           child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
+                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                             decoration: BoxDecoration(
-                              color: isChecked ? AppColors.crimsonLight.withAlpha(120) : AppColors.cardWhite,
-                              borderRadius: BorderRadius.circular(10),
+                              color: isChecked ? AppColors.crimsonLight.withAlpha(140) : AppColors.cardWhite,
+                              borderRadius: BorderRadius.circular(12),
                               border: Border.all(
                                 color: isChecked ? AppColors.caliperCrimson : AppColors.slateBorder,
-                                width: isChecked ? 1.5 : 1.0,
+                                width: isChecked ? 1.6 : 1.0,
                               ),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: isChecked
+                                      ? AppColors.caliperCrimson.withAlpha(14)
+                                      : Colors.black.withAlpha(3),
+                                  blurRadius: 4,
+                                  offset: const Offset(0, 1),
+                                ),
+                              ],
                             ),
                             child: Row(
                               children: [
-                                Icon(
-                                  isChecked ? Icons.check_box : Icons.check_box_outline_blank,
-                                  color: isChecked ? AppColors.caliperCrimson : AppColors.slateMuted,
-                                  size: 18,
+                                Container(
+                                  width: 22,
+                                  height: 22,
+                                  decoration: BoxDecoration(
+                                    color: isChecked ? AppColors.caliperCrimson : Colors.transparent,
+                                    borderRadius: BorderRadius.circular(6),
+                                    border: Border.all(
+                                      color: isChecked ? AppColors.caliperCrimson : AppColors.slateBorder,
+                                      width: 1.5,
+                                    ),
+                                  ),
+                                  child: isChecked
+                                      ? const Icon(
+                                          Icons.check,
+                                          color: Colors.white,
+                                          size: 15,
+                                        )
+                                      : null,
                                 ),
-                                const SizedBox(width: 10),
+                                const SizedBox(width: 12),
                                 Expanded(
                                   child: Text(
                                     symptom,
                                     style: TextStyle(
                                       color: isChecked ? AppColors.chassisText : const Color(0xFF334155),
-                                      fontSize: 12,
-                                      fontWeight: isChecked ? FontWeight.w700 : FontWeight.w500,
+                                      fontSize: 12.5,
+                                      fontWeight: isChecked ? FontWeight.w800 : FontWeight.w500,
                                     ),
                                   ),
                                 ),
@@ -334,11 +359,39 @@ class _FaultDetailsScreenState extends State<FaultDetailsScreen> {
                               ),
                               Switch.adaptive(
                                 value: _isInLiveLane,
-                                activeTrackColor: AppColors.caliperCrimson,
+                                activeTrackColor: AppColors.caliperCrimson.withAlpha(120),
+                                activeThumbColor: AppColors.caliperCrimson,
                                 onChanged: (v) => setState(() => _isInLiveLane = v),
                               ),
                             ],
                           ),
+                          if (_isInLiveLane) ...[
+                            const SizedBox(height: 10),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFFEF2F2),
+                                borderRadius: BorderRadius.circular(10),
+                                border: Border.all(color: AppColors.caliperCrimson),
+                              ),
+                              child: Row(
+                                children: const [
+                                  Icon(Icons.warning_amber_rounded, color: AppColors.caliperCrimson, size: 18),
+                                  SizedBox(width: 8),
+                                  Expanded(
+                                    child: Text(
+                                      'HIGH ROADWAY HAZARD: Priority dispatch queue activated. Mechanics alerted to exercise traffic caution.',
+                                      style: TextStyle(
+                                        color: AppColors.caliperCrimson,
+                                        fontSize: 10.5,
+                                        fontWeight: FontWeight.w700,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
                           const Divider(color: AppColors.slateBorder, height: 16),
                           Row(
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -362,7 +415,8 @@ class _FaultDetailsScreenState extends State<FaultDetailsScreen> {
                               ),
                               Switch.adaptive(
                                 value: _hazardsWorking,
-                                activeTrackColor: AppColors.caliperCrimson,
+                                activeTrackColor: AppColors.caliperCrimson.withAlpha(120),
+                                activeThumbColor: AppColors.caliperCrimson,
                                 onChanged: (v) => setState(() => _hazardsWorking = v),
                               ),
                             ],
@@ -428,6 +482,7 @@ class _FaultDetailsScreenState extends State<FaultDetailsScreen> {
                     height: 50,
                     child: ElevatedButton(
                       onPressed: () {
+                        HapticFeedback.heavyImpact();
                         Navigator.of(context).push(
                           MaterialPageRoute(
                             builder: (_) => DispatchScreen(

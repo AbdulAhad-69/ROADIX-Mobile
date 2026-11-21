@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import '../src/core/utils/phone_utils.dart';
 import '../theme/app_colors.dart';
 
 class SearchBottomSheet extends StatefulWidget {
@@ -322,13 +324,18 @@ class _SearchBottomSheetState extends State<SearchBottomSheet> {
                                 children: [
                                   Expanded(
                                     child: OutlinedButton.icon(
-                                      onPressed: () {
-                                        ScaffoldMessenger.of(context).showSnackBar(
-                                          SnackBar(
-                                            content: Text('Dialing ${item['name']} (${item['phone']})...'),
-                                            backgroundColor: AppColors.chassisText,
-                                          ),
-                                        );
+                                      onPressed: () async {
+                                        HapticFeedback.lightImpact();
+                                        final phone = item['phone'] as String? ?? '999';
+                                        final ok = await PhoneUtils.launchCall(phone);
+                                        if (!ok && context.mounted) {
+                                          ScaffoldMessenger.of(context).showSnackBar(
+                                            SnackBar(
+                                              content: Text('Could not open phone dialer for $phone.'),
+                                              backgroundColor: AppColors.caliperCrimson,
+                                            ),
+                                          );
+                                        }
                                       },
                                       icon: const Icon(Icons.call, size: 14, color: AppColors.chassisText),
                                       label: const Text(

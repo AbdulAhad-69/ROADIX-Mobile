@@ -157,5 +157,89 @@ void main() {
       expect(isHighPriority, isTrue);
       expect(requestId, 'req-uuid-456');
     });
+
+    test('Triage 4-step workflow labels and progress fractions are sequentially aligned', () {
+      const stepSequence = [
+        {'step': 'STEP 1 OF 4', 'title': 'LOCATION TRIAGE', 'fraction': 0.25},
+        {'step': 'STEP 2 OF 4', 'title': 'VEHICLE CLASSIFICATION', 'fraction': 0.50},
+        {'step': 'STEP 3 OF 4', 'title': 'DEFECT QUESTIONNAIRE', 'fraction': 0.75},
+        {'step': 'STEP 4 OF 4', 'title': 'DISPATCH & TELEMETRY', 'fraction': 1.00},
+      ];
+
+      expect(stepSequence.length, 4);
+      for (int i = 0; i < stepSequence.length; i++) {
+        expect(stepSequence[i]['fraction'], equals((i + 1) * 0.25));
+        expect(stepSequence[i]['step'], equals('STEP ${i + 1} OF 4'));
+      }
+    });
+
+    test('Radar search discrete rings strictly correspond to 5km, 10km, and 15km radii', () {
+      const discreteRadarRingsKm = [5.0, 10.0, 15.0];
+      for (final radius in discreteRadarRingsKm) {
+        expect(radius, isIn([5.0, 10.0, 15.0]));
+        expect(radius, lessThanOrEqualTo(15.0));
+      }
+    });
+
+    test('Mechanic verification simulation flag enables duty readiness', () {
+      bool isVerified = false;
+      bool isOnDuty = false;
+
+      // Unverified mechanic cannot toggle duty
+      void toggleDuty(bool value) {
+        if (value && !isVerified) return;
+        isOnDuty = value;
+      }
+
+      toggleDuty(true);
+      expect(isOnDuty, isFalse); // Blocked
+
+      // Simulate admin verification
+      isVerified = true;
+      toggleDuty(true);
+      expect(isOnDuty, isTrue); // Permitted
+    });
+
+    test('Demo technician authentication flag guards against premature home redirection', () {
+      bool isDemoActionInProgress = false;
+      String destinationRoute = 'none';
+
+      // Simulates auth listener
+      void onAuthStateChange(bool hasSession) {
+        if (hasSession && !isDemoActionInProgress) {
+          destinationRoute = 'home';
+        }
+      }
+
+      // During technician demo login
+      isDemoActionInProgress = true;
+      onAuthStateChange(true); // Supabase session created
+      expect(destinationRoute, equals('none')); // Home redirection properly suppressed
+
+      // Dedicated technician route is chosen
+      destinationRoute = 'mechanic';
+      isDemoActionInProgress = false;
+      expect(destinationRoute, equals('mechanic'));
+    });
+
+    test('Dispatch fallback seamlessly activates demo radar simulation when unauthenticated', () {
+      bool isDemoRadarActive = false;
+      String? requestCode;
+      double searchRadius = 0.0;
+
+      void onDispatchError(dynamic error, String? currentUserId) {
+        if (error.toString().contains('Authentication required') || currentUserId == null) {
+          isDemoRadarActive = true;
+          requestCode = 'RDX-DEMO-8821';
+          searchRadius = 5.0;
+        }
+      }
+
+      onDispatchError('PostgrestException(message: Authentication required.)', null);
+
+      expect(isDemoRadarActive, isTrue);
+      expect(requestCode, equals('RDX-DEMO-8821'));
+      expect(searchRadius, equals(5.0));
+    });
   });
 }

@@ -13,12 +13,9 @@ class ProfileSetupScreen extends StatefulWidget {
 }
 
 class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
-  final TextEditingController _nameController =
-      TextEditingController(text: 'Sheikh Abdul Ahad');
-  final TextEditingController _modelController =
-      TextEditingController(text: 'Toyota Allion');
-  final TextEditingController _plateController =
-      TextEditingController(text: 'Dhaka Metro GA-11-2034');
+  final TextEditingController _nameController = TextEditingController();
+  final TextEditingController _modelController = TextEditingController();
+  final TextEditingController _plateController = TextEditingController();
 
   String _selectedVehicleType = 'Passenger Car';
   String _selectedFuelType = 'Octane';

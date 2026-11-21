@@ -86,3 +86,13 @@ Every completed task concludes with an evidence-based report detailing:
 - Problems discovered and how each was resolved.
 - Remaining warnings, limitations, and architectural debt.
 - Any pending user authorization required for the next phase.
+
+## 8. Emulator & Live Device Deployment Verification
+- When an active Android emulator or physical device is detected via `adb devices`:
+  - Do not conclude a UI task solely on source code edits or headless test passes.
+  - Automatically compile and stream the updated binary via `adb install -r <apk_path>` and relaunch `MainActivity`.
+  - Capture and verify visual rendering to guarantee the running screen reflects new UI changes.
+
+## 9. Resilient Local & Demo Testability
+- Every client-side flow (triage wizard, radar dispatch, technician duty toggle) must provide graceful fallback/simulation when remote third-party APIs (SMS OTP gateway, anonymous PostgreSQL RPC) are disabled or unreachable in local test environments.
+- Provide explicit, non-blocking demo access points on `LoginScreen` and `MechanicHomeScreen` to enable end-to-end evaluation without manual credential barriers.

@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:maplibre_gl/maplibre_gl.dart';
+import '../services/geocoding_service.dart';
 import '../src/core/config/app_config.dart';
 import '../theme/app_colors.dart';
 import 'vehicle_select_screen.dart';
@@ -26,11 +28,25 @@ class _LocationConfirmScreenState extends State<LocationConfirmScreen> {
   MapLibreMapController? _mapController;
   late LatLng _currentCenter;
   String get _styleUrl => AppConfig.mapStyleUrl;
+  String _currentAddress = 'Dhaka Region • Roadside Position';
+  bool _isGeocoding = false;
 
   @override
   void initState() {
     super.initState();
     _currentCenter = LatLng(widget.initialLat, widget.initialLng);
+    _fetchAddress(_currentCenter.latitude, _currentCenter.longitude);
+  }
+
+  Future<void> _fetchAddress(double lat, double lng) async {
+    setState(() => _isGeocoding = true);
+    final addr = await GeocodingService.reverseGeocode(lat, lng);
+    if (mounted) {
+      setState(() {
+        _currentAddress = addr;
+        _isGeocoding = false;
+      });
+    }
   }
 
   @override
@@ -203,6 +219,7 @@ class _LocationConfirmScreenState extends State<LocationConfirmScreen> {
                         final pos = _mapController!.cameraPosition?.target;
                         if (pos != null) {
                           setState(() => _currentCenter = pos);
+                          _fetchAddress(pos.latitude, pos.longitude);
                         }
                       }
                     },
@@ -262,6 +279,7 @@ class _LocationConfirmScreenState extends State<LocationConfirmScreen> {
                     right: 14,
                     child: InkWell(
                       onTap: () {
+                        HapticFeedback.lightImpact();
                         _mapController?.animateCamera(
                           CameraUpdate.newLatLng(
                             LatLng(widget.initialLat, widget.initialLng),
@@ -340,7 +358,7 @@ class _LocationConfirmScreenState extends State<LocationConfirmScreen> {
                         ),
                       ),
                       Text(
-                        'Drag map to fine-tune',
+                        'Drag map or tap preset',
                         style: TextStyle(
                           color: AppColors.slateMuted,
                           fontSize: 10.5,
@@ -349,6 +367,19 @@ class _LocationConfirmScreenState extends State<LocationConfirmScreen> {
                     ],
                   ),
                   const SizedBox(height: 6),
+                  SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: Row(
+                      children: [
+                        _buildQuickZoneChip('Airport Rd', 23.8512, 90.4078),
+                        _buildQuickZoneChip('Uttara Sec 7', 23.8732, 90.3980),
+                        _buildQuickZoneChip('Kuril Flyover', 23.8190, 90.4200),
+                        _buildQuickZoneChip('Mirpur 10', 23.8069, 90.3687),
+                        _buildQuickZoneChip('Gulshan 2', 23.7925, 90.4078),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 8),
                   Row(
                     children: [
                       Container(
@@ -370,7 +401,9 @@ class _LocationConfirmScreenState extends State<LocationConfirmScreen> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              'Dhaka Region • Roadside Position',
+                              _currentAddress,
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
                               style: const TextStyle(
                                 color: AppColors.chassisText,
                                 fontSize: 13,
@@ -402,7 +435,7 @@ class _LocationConfirmScreenState extends State<LocationConfirmScreen> {
                                     ),
                                   ),
                                   child: Text(
-                                    '± ${widget.accuracyMeters}m accuracy',
+                                    _isGeocoding ? 'resolving...' : '± ${widget.accuracyMeters}m accuracy',
                                     style: const TextStyle(
                                       color: Color(0xFF059669),
                                       fontSize: 9,
@@ -424,13 +457,14 @@ class _LocationConfirmScreenState extends State<LocationConfirmScreen> {
                     height: 48,
                     child: ElevatedButton(
                       onPressed: () {
+                        HapticFeedback.mediumImpact();
                         Navigator.of(context).push(
                           MaterialPageRoute(
                             builder: (_) => VehicleSelectScreen(
                               selectedFault: widget.selectedFault,
                               breakdownLat: _currentCenter.latitude,
                               breakdownLng: _currentCenter.longitude,
-                              breakdownAddress: 'Dhaka Region • Roadside Position',
+                              breakdownAddress: _currentAddress,
                             ),
                           ),
                         );
@@ -478,6 +512,43 @@ class _LocationConfirmScreenState extends State<LocationConfirmScreen> {
               ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildQuickZoneChip(String label, double lat, double lng) {
+    final bool isSelected = (_currentCenter.latitude - lat).abs() < 0.001 &&
+        (_currentCenter.longitude - lng).abs() < 0.001;
+
+    return Padding(
+      padding: const EdgeInsets.only(right: 6.0),
+      child: InkWell(
+        onTap: () {
+          HapticFeedback.selectionClick();
+          final target = LatLng(lat, lng);
+          setState(() => _currentCenter = target);
+          _mapController?.animateCamera(CameraUpdate.newLatLng(target));
+          _fetchAddress(lat, lng);
+        },
+        borderRadius: BorderRadius.circular(6),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+          decoration: BoxDecoration(
+            color: isSelected ? AppColors.crimsonLight : const Color(0xFFF1F5F9),
+            borderRadius: BorderRadius.circular(6),
+            border: Border.all(
+              color: isSelected ? AppColors.caliperCrimson : AppColors.slateBorder,
+            ),
+          ),
+          child: Text(
+            label,
+            style: TextStyle(
+              color: isSelected ? AppColors.caliperCrimson : AppColors.chassisText,
+              fontSize: 10,
+              fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
+            ),
+          ),
         ),
       ),
     );

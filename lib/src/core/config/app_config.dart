@@ -102,6 +102,55 @@ class AppConfig {
   /// Emergency hotline number for Bangladesh
   static const String emergencyHotline = '999';
 
+  /// SSLCommerz Sandbox Store ID
+  static String get sslcommerzStoreId {
+    if (_fileEnv.containsKey('SSLCOMMERZ_STORE_ID')) {
+      return _fileEnv['SSLCOMMERZ_STORE_ID']!;
+    }
+    return const String.fromEnvironment(
+      'SSLCOMMERZ_STORE_ID',
+      defaultValue: 'roadi6aff1acc0bd78',
+    );
+  }
+
+  /// SSLCommerz Sandbox Store Password
+  static String get sslcommerzStorePassword {
+    if (_fileEnv.containsKey('SSLCOMMERZ_STORE_PASSWD')) {
+      return _fileEnv['SSLCOMMERZ_STORE_PASSWD']!;
+    }
+    return const String.fromEnvironment(
+      'SSLCOMMERZ_STORE_PASSWD',
+      defaultValue: '1MAu3twifTBj',
+    );
+  }
+
+  /// Whether SSLCommerz is running in Sandbox mode
+  static bool get sslcommerzIsSandbox {
+    if (_fileEnv.containsKey('SSLCOMMERZ_IS_SANDBOX')) {
+      return _fileEnv['SSLCOMMERZ_IS_SANDBOX']!.toLowerCase() == 'true';
+    }
+    return const bool.fromEnvironment(
+      'SSLCOMMERZ_IS_SANDBOX',
+      defaultValue: true,
+    );
+  }
+
+  /// SSLCommerz Session Initiation URL
+  static String get sslcommerzSessionUrl => sslcommerzIsSandbox
+      ? 'https://sandbox.sslcommerz.com/gwprocess/v4/api.php'
+      : 'https://securepay.sslcommerz.com/gwprocess/v4/api.php';
+
+  /// Cloudinary Cloud Name for CDN Asset Delivery
+  static String get cloudinaryCloudName {
+    if (_fileEnv.containsKey('CLOUDINARY_CLOUD_NAME')) {
+      return _fileEnv['CLOUDINARY_CLOUD_NAME']!;
+    }
+    return const String.fromEnvironment(
+      'CLOUDINARY_CLOUD_NAME',
+      defaultValue: 'kefzjqi3',
+    );
+  }
+
   /// Validates whether essential backend configuration is set
   static bool get isConfigured =>
       supabaseUrl.isNotEmpty && supabaseAnonKey.isNotEmpty;

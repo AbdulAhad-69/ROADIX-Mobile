@@ -9,6 +9,7 @@ import '../../../screens/fault_details_screen.dart';
 import '../../../screens/location_confirm_screen.dart';
 import '../../../screens/location_permission_screen.dart';
 import '../../../screens/login_screen.dart';
+import '../../../screens/mechanic_home_screen.dart';
 import '../../../screens/otp_verification_screen.dart';
 import '../../../screens/profile_screen.dart';
 import '../../../screens/profile_setup_screen.dart';
@@ -32,6 +33,7 @@ abstract class AppRoutes {
   static const String activity = '/activity';
   static const String profile = '/profile';
   static const String sos = '/sos';
+  static const String mechanic = '/mechanic';
 }
 
 /// Global GoRouter provider
@@ -185,6 +187,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: AppRoutes.sos,
         builder: (context, state) => const SosScreen(),
+      ),
+      GoRoute(
+        path: AppRoutes.mechanic,
+        builder: (context, state) => const MechanicHomeScreen(),
       ),
     ],
     errorBuilder: (context, state) => Scaffold(

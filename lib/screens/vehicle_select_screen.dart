@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
-
+import 'package:flutter/services.dart';
+import '../services/supabase_service.dart';
 import '../theme/app_colors.dart';
+import '../widgets/brand_logo.dart';
+import '../widgets/vehicle_editor_sheet.dart';
 import 'fault_details_screen.dart';
 
 class VehicleSelectScreen extends StatefulWidget {
@@ -40,36 +43,112 @@ class VehicleSelectScreen extends StatefulWidget {
 }
 
 class _VehicleSelectScreenState extends State<VehicleSelectScreen> {
+  final SupabaseService _db = SupabaseService();
   int _selectedVehicleTypeIndex = 1; // Default to Private Car / Sedan
   String _selectedFuelType = 'Octane';
-  final TextEditingController _plateController = TextEditingController(
-    text: 'Dhaka Metro GA-11-2034',
-  );
+  late final TextEditingController _plateController;
+  List<Map<String, dynamic>> _savedVehicles = [];
+  bool _isLoadingGarage = true;
+  String? _selectedSavedVehicleId;
 
   final List<Map<String, dynamic>> _vehicleCategories = [
     {
       'title': 'Motorcycle',
       'subtitle': '2-Wheeler / Scooter',
       'icon': Icons.two_wheeler,
+      'srsType': 'Motorcycle',
     },
     {
       'title': 'Sedan / Hatch',
       'subtitle': 'Private Passenger Car',
       'icon': Icons.directions_car,
+      'srsType': 'Passenger Car',
     },
     {
       'title': 'SUV / Micro',
       'subtitle': '7-Seater / 4x4 Jeep',
       'icon': Icons.directions_car_filled,
+      'srsType': 'Passenger Car',
     },
     {
       'title': 'Commercial',
       'subtitle': 'Pickup / Covered Van',
       'icon': Icons.local_shipping,
+      'srsType': 'Light Commercial',
     },
   ];
 
   final List<String> _fuelTypes = ['Octane', 'Petrol', 'Diesel', 'CNG', 'EV'];
+
+  @override
+  void initState() {
+    super.initState();
+    _plateController = TextEditingController(text: 'Dhaka Metro GA-11-2034');
+    _loadSavedGarage();
+  }
+
+  Future<void> _loadSavedGarage() async {
+    try {
+      final vehicles = await _db.getVehicles();
+      if (mounted) {
+        setState(() {
+          _savedVehicles = vehicles;
+          _isLoadingGarage = false;
+          if (vehicles.isNotEmpty) {
+            final primary = vehicles.firstWhere(
+              (v) => v['is_primary'] == true,
+              orElse: () => vehicles.first,
+            );
+            _applyVehicleToForm(primary);
+          }
+        });
+      }
+    } catch (_) {
+      if (mounted) setState(() => _isLoadingGarage = false);
+    }
+  }
+
+  void _applyVehicleToForm(Map<String, dynamic> car) {
+    _selectedSavedVehicleId = car['id']?.toString();
+    _plateController.text = car['plate']?.toString() ?? '';
+    _selectedFuelType = car['fuel']?.toString() ?? 'Octane';
+
+    final srs = VehicleSelectScreen.mapUiCategoryToSrs(car['type']?.toString() ?? '');
+    final matchIndex = _vehicleCategories.indexWhere((c) => c['srsType'] == srs);
+    if (matchIndex != -1) {
+      _selectedVehicleTypeIndex = matchIndex;
+    }
+  }
+
+  void _openAddVehicleSheet() {
+    HapticFeedback.lightImpact();
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => VehicleEditorSheet(
+        onSave: (savedData) async {
+          await _db.addVehicle(
+            model: savedData['model']!,
+            plate: savedData['plate']!,
+            type: savedData['type']!,
+            fuel: savedData['fuel']!,
+          );
+          await _loadSavedGarage();
+          if (mounted) {
+            final updated = await _db.getVehicles();
+            final newlyAdded = updated.firstWhere(
+              (v) => v['plate'] == savedData['plate'],
+              orElse: () => updated.isNotEmpty ? updated.last : {},
+            );
+            if (newlyAdded.isNotEmpty) {
+              setState(() => _applyVehicleToForm(newlyAdded));
+            }
+          }
+        },
+      ),
+    );
+  }
 
   @override
   void dispose() {
@@ -191,41 +270,102 @@ class _VehicleSelectScreenState extends State<VehicleSelectScreen> {
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      'Helps us assign a technician with the correct tools for "${widget.selectedFault}".',
+                      'Assigns mechanics certified for your vehicle type with exact diagnostic equipment for "${widget.selectedFault}".',
                       style: const TextStyle(
                         color: AppColors.slateMuted,
                         fontSize: 12,
+                        height: 1.35,
                       ),
                     ),
 
                     const SizedBox(height: 20),
 
-                    // Saved Vehicles Chips
-                    const Text(
-                      'SAVED GARAGE',
-                      style: TextStyle(
-                        color: AppColors.slateMuted,
-                        fontSize: 9.5,
-                        fontWeight: FontWeight.w800,
-                        letterSpacing: 0.8,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
+                    // Saved Vehicles Chips from Digital Garage
                     Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        _buildSavedVehicleChip(
-                          'Toyota Allion',
-                          'GA-11-2034',
-                          true,
+                        const Text(
+                          'SAVED DIGITAL GARAGE',
+                          style: TextStyle(
+                            color: AppColors.slateMuted,
+                            fontSize: 9.5,
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: 0.8,
+                          ),
                         ),
-                        const SizedBox(width: 8),
-                        _buildSavedVehicleChip(
-                          'Yamaha FZS',
-                          'LA-24-9011',
-                          false,
+                        InkWell(
+                          onTap: _openAddVehicleSheet,
+                          child: const Text(
+                            '+ Add Vehicle',
+                            style: TextStyle(
+                              color: AppColors.caliperCrimson,
+                              fontSize: 11,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
                         ),
                       ],
                     ),
+                    const SizedBox(height: 8),
+
+                    if (_isLoadingGarage)
+                      const SizedBox(
+                        height: 40,
+                        child: Center(
+                          child: SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.caliperCrimson),
+                          ),
+                        ),
+                      )
+                    else if (_savedVehicles.isNotEmpty)
+                      SingleChildScrollView(
+                        scrollDirection: Axis.horizontal,
+                        child: Row(
+                          children: _savedVehicles.map((car) {
+                            final isSelected = _selectedSavedVehicleId == car['id']?.toString() ||
+                                _plateController.text.trim() == car['plate']?.toString().trim();
+                            return Padding(
+                              padding: const EdgeInsets.only(right: 8.0),
+                              child: _buildSavedVehicleChip(
+                                car['model']?.toString() ?? 'Vehicle',
+                                car['plate']?.toString() ?? '',
+                                isSelected,
+                                () {
+                                  HapticFeedback.selectionClick();
+                                  setState(() => _applyVehicleToForm(car));
+                                },
+                              ),
+                            );
+                          }).toList(),
+                        ),
+                      )
+                    else
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                        decoration: BoxDecoration(
+                          color: AppColors.cardWhite,
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(color: AppColors.slateBorder),
+                        ),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            const Text(
+                              'No saved vehicles in garage yet.',
+                              style: TextStyle(color: AppColors.slateMuted, fontSize: 11.5),
+                            ),
+                            InkWell(
+                              onTap: _openAddVehicleSheet,
+                              child: const Text(
+                                'Save Now',
+                                style: TextStyle(color: AppColors.caliperCrimson, fontSize: 11, fontWeight: FontWeight.bold),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
 
                     const SizedBox(height: 22),
 
@@ -249,21 +389,26 @@ class _VehicleSelectScreenState extends State<VehicleSelectScreen> {
                             crossAxisCount: 2,
                             crossAxisSpacing: 10,
                             mainAxisSpacing: 10,
-                            childAspectRatio: 1.45,
+                            childAspectRatio: 1.35,
                           ),
                       itemBuilder: (context, index) {
                         final bool isSelected =
                             _selectedVehicleTypeIndex == index;
                         final item = _vehicleCategories[index];
                         return InkWell(
-                          onTap: () =>
-                              setState(() => _selectedVehicleTypeIndex = index),
+                          onTap: () {
+                            HapticFeedback.selectionClick();
+                            setState(() {
+                              _selectedVehicleTypeIndex = index;
+                              _selectedSavedVehicleId = null;
+                            });
+                          },
                           borderRadius: BorderRadius.circular(14),
                           child: Container(
                             padding: const EdgeInsets.all(12),
                             decoration: BoxDecoration(
                               color: isSelected
-                                  ? AppColors.crimsonLight.withAlpha(120)
+                                  ? AppColors.crimsonLight.withAlpha(140)
                                   : AppColors.cardWhite,
                               borderRadius: BorderRadius.circular(14),
                               border: Border.all(
@@ -272,6 +417,15 @@ class _VehicleSelectScreenState extends State<VehicleSelectScreen> {
                                     : AppColors.slateBorder,
                                 width: isSelected ? 1.8 : 1.0,
                               ),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: isSelected
+                                      ? AppColors.caliperCrimson.withAlpha(16)
+                                      : Colors.black.withAlpha(3),
+                                  blurRadius: 6,
+                                  offset: const Offset(0, 2),
+                                ),
+                              ],
                             ),
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
@@ -281,19 +435,33 @@ class _VehicleSelectScreenState extends State<VehicleSelectScreen> {
                                   mainAxisAlignment:
                                       MainAxisAlignment.spaceBetween,
                                   children: [
-                                    Icon(
-                                      item['icon'] as IconData,
-                                      color: isSelected
-                                          ? AppColors.caliperCrimson
-                                          : AppColors.slateMuted,
-                                      size: 24,
+                                    VehicleIllustration(
+                                      vehicleType: item['srsCategory'] as String,
+                                      size: 34,
                                     ),
-                                    if (isSelected)
-                                      const Icon(
-                                        Icons.check_circle,
-                                        color: AppColors.caliperCrimson,
-                                        size: 16,
+                                    Container(
+                                      width: 18,
+                                      height: 18,
+                                      decoration: BoxDecoration(
+                                        shape: BoxShape.circle,
+                                        color: isSelected
+                                            ? AppColors.caliperCrimson
+                                            : Colors.transparent,
+                                        border: Border.all(
+                                          color: isSelected
+                                              ? AppColors.caliperCrimson
+                                              : AppColors.slateBorder,
+                                          width: 1.5,
+                                        ),
                                       ),
+                                      child: isSelected
+                                          ? const Icon(
+                                              Icons.check,
+                                              color: Colors.white,
+                                              size: 12,
+                                            )
+                                          : null,
+                                    ),
                                   ],
                                 ),
                                 Column(
@@ -309,6 +477,7 @@ class _VehicleSelectScreenState extends State<VehicleSelectScreen> {
                                         fontWeight: FontWeight.w800,
                                       ),
                                     ),
+                                    const SizedBox(height: 1),
                                     Text(
                                       item['subtitle'] as String,
                                       style: const TextStyle(
@@ -355,6 +524,7 @@ class _VehicleSelectScreenState extends State<VehicleSelectScreen> {
                           fontSize: 12,
                           fontFamily: 'sans-serif',
                         ),
+                        prefixIcon: const Icon(Icons.pin, color: AppColors.slateMuted, size: 18),
                         contentPadding: const EdgeInsets.symmetric(
                           horizontal: 14,
                           vertical: 12,
@@ -403,6 +573,7 @@ class _VehicleSelectScreenState extends State<VehicleSelectScreen> {
                           selected: isSelected,
                           onSelected: (selected) {
                             if (selected) {
+                              HapticFeedback.selectionClick();
                               setState(() => _selectedFuelType = fuel);
                             }
                           },
@@ -448,6 +619,11 @@ class _VehicleSelectScreenState extends State<VehicleSelectScreen> {
                     height: 50,
                     child: ElevatedButton(
                       onPressed: () {
+                        final plate = _plateController.text.trim().isNotEmpty
+                            ? _plateController.text.trim()
+                            : 'Dhaka Metro GA-11-2034';
+
+                        HapticFeedback.mediumImpact();
                         Navigator.of(context).push(
                           MaterialPageRoute(
                             builder: (_) => FaultDetailsScreen(
@@ -456,7 +632,7 @@ class _VehicleSelectScreenState extends State<VehicleSelectScreen> {
                                 _vehicleCategories[_selectedVehicleTypeIndex]['title']
                                     as String,
                               ),
-                              licensePlate: _plateController.text,
+                              licensePlate: plate,
                               breakdownLat: widget.breakdownLat,
                               breakdownLng: widget.breakdownLng,
                               breakdownAddress: widget.breakdownAddress,
@@ -495,7 +671,7 @@ class _VehicleSelectScreenState extends State<VehicleSelectScreen> {
                   ),
                   const SizedBox(height: 6),
                   const Text(
-                    'Step 2 of 4 • Next: Defect Questionnaire',
+                    'Step 2 of 4 • Next: Fault Diagnostics',
                     style: TextStyle(color: AppColors.slateMuted, fontSize: 10),
                   ),
                 ],
@@ -507,9 +683,9 @@ class _VehicleSelectScreenState extends State<VehicleSelectScreen> {
     );
   }
 
-  Widget _buildSavedVehicleChip(String name, String plate, bool isSelected) {
+  Widget _buildSavedVehicleChip(String name, String plate, bool isSelected, VoidCallback onTap) {
     return InkWell(
-      onTap: () => setState(() => _plateController.text = plate),
+      onTap: onTap,
       borderRadius: BorderRadius.circular(10),
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
@@ -520,7 +696,15 @@ class _VehicleSelectScreenState extends State<VehicleSelectScreen> {
             color: isSelected
                 ? AppColors.caliperCrimson
                 : AppColors.slateBorder,
+            width: isSelected ? 1.5 : 1.0,
           ),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withAlpha(2),
+              blurRadius: 2,
+              offset: const Offset(0, 1),
+            ),
+          ],
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,

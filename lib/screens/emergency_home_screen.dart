@@ -1,9 +1,13 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:geolocator/geolocator.dart';
+import '../services/geocoding_service.dart';
 import '../services/supabase_service.dart';
 import '../theme/app_colors.dart';
 import 'activity_screen.dart';
 import 'dispatch_screen.dart';
-import 'location_permission_screen.dart';
+import 'location_confirm_screen.dart';
+import 'mechanic_home_screen.dart';
 import 'profile_screen.dart';
 import 'sos_screen.dart';
 import '../widgets/search_bottom_sheet.dart';
@@ -24,6 +28,14 @@ class _EmergencyHomeScreenState extends State<EmergencyHomeScreen>
   bool _hasUnreadAlerts = true;
   Map<String, dynamic>? _activeRescueRequest;
 
+  // Dynamic user & location telemetry
+  String _userName = 'Motorist';
+  bool _isNidVerified = false;
+  String _currentLocationName = 'Dhaka Region';
+  double _currentLat = 23.8759;
+  double _currentLng = 90.3795;
+  bool _isLoadingLocation = true;
+
   @override
   void initState() {
     super.initState();
@@ -32,17 +44,58 @@ class _EmergencyHomeScreenState extends State<EmergencyHomeScreen>
       duration: const Duration(milliseconds: 3200),
     )..repeat(reverse: true);
 
-    _scaleAnimation = Tween<double>(begin: 1.0, end: 1.05).animate(
+    _scaleAnimation = Tween<double>(begin: 1.0, end: 1.06).animate(
       CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut),
     );
 
     _checkActiveRescue();
+    _loadUserProfile();
+    _detectCurrentLocation();
+  }
+
+  Future<void> _loadUserProfile() async {
+    try {
+      final profile = await SupabaseService().getProfile();
+      if (mounted && profile != null) {
+        setState(() {
+          _userName = profile['full_name'] as String? ?? 'Motorist';
+          _isNidVerified = profile['is_nid_verified'] == true;
+        });
+      }
+    } catch (_) {}
+  }
+
+  Future<void> _detectCurrentLocation() async {
+    try {
+      final pos = await Geolocator.getCurrentPosition(
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.medium,
+          timeLimit: Duration(seconds: 4),
+        ),
+      );
+      final addr = await GeocodingService.reverseGeocode(pos.latitude, pos.longitude);
+      if (mounted) {
+        setState(() {
+          _currentLat = pos.latitude;
+          _currentLng = pos.longitude;
+          _currentLocationName = addr;
+          _isLoadingLocation = false;
+        });
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          _currentLocationName = 'Mirpur / Uttara Corridor, Dhaka';
+          _isLoadingLocation = false;
+        });
+      }
+    }
   }
 
   Future<void> _checkActiveRescue() async {
     try {
       final active = await SupabaseService().getActiveServiceRequest();
-      if (mounted && active != null) {
+      if (mounted) {
         setState(() => _activeRescueRequest = active);
       }
     } catch (_) {}
@@ -55,19 +108,22 @@ class _EmergencyHomeScreenState extends State<EmergencyHomeScreen>
   }
 
   void _openSearchSheet() {
+    HapticFeedback.lightImpact();
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (ctx) => SearchBottomSheet(
         onFacilitySelected: (facilityName, lat, lng) {
-          _startEmergencyTriage(facilityName);
+          Navigator.pop(ctx);
+          _startEmergencyTriage(facilityName, customLat: lat, customLng: lng);
         },
       ),
     );
   }
 
   void _openNotificationsSheet() {
+    HapticFeedback.lightImpact();
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -81,6 +137,7 @@ class _EmergencyHomeScreenState extends State<EmergencyHomeScreen>
   }
 
   void _showSosConfirmationModal() {
+    HapticFeedback.heavyImpact();
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
@@ -88,7 +145,7 @@ class _EmergencyHomeScreenState extends State<EmergencyHomeScreen>
       builder: (ctx) => Container(
         padding: const EdgeInsets.fromLTRB(20, 12, 20, 28),
         decoration: const BoxDecoration(
-          color: AppColors.porcelainBg,
+          color: AppColors.cardWhite,
           borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
         ),
         child: Column(
@@ -104,7 +161,7 @@ class _EmergencyHomeScreenState extends State<EmergencyHomeScreen>
             ),
             const SizedBox(height: 18),
             const Text(
-              'Select Emergency Type',
+              'Select Emergency Action',
               style: TextStyle(
                 color: AppColors.chassisText,
                 fontSize: 18,
@@ -113,7 +170,7 @@ class _EmergencyHomeScreenState extends State<EmergencyHomeScreen>
             ),
             const SizedBox(height: 4),
             const Text(
-              'Choose the service required for your current situation',
+              'Immediate roadside assistance or direct 999 panic dialer',
               style: TextStyle(color: AppColors.slateMuted, fontSize: 11.5),
             ),
             const SizedBox(height: 20),
@@ -121,6 +178,7 @@ class _EmergencyHomeScreenState extends State<EmergencyHomeScreen>
             // Card 1: 999 Police/Medical Panic Dialer
             InkWell(
               onTap: () {
+                HapticFeedback.mediumImpact();
                 Navigator.pop(ctx);
                 Navigator.of(context).push(
                   MaterialPageRoute(builder: (_) => const SosScreen()),
@@ -167,7 +225,7 @@ class _EmergencyHomeScreenState extends State<EmergencyHomeScreen>
                           ),
                           SizedBox(height: 2),
                           Text(
-                            'Immediate life-threatening accidents & security',
+                            'Life-threatening emergencies, crime, highway security',
                             style: TextStyle(
                               color: Color(0xFF991B1B),
                               fontSize: 11,
@@ -192,6 +250,7 @@ class _EmergencyHomeScreenState extends State<EmergencyHomeScreen>
             // Card 2: Roadside Breakdown Assistance Wizard
             InkWell(
               onTap: () {
+                HapticFeedback.mediumImpact();
                 Navigator.pop(ctx);
                 _startEmergencyTriage('General Breakdown');
               },
@@ -264,15 +323,35 @@ class _EmergencyHomeScreenState extends State<EmergencyHomeScreen>
     );
   }
 
-  Future<void> _startEmergencyTriage(String faultName) async {
+  Future<void> _startEmergencyTriage(String faultName, {double? customLat, double? customLng}) async {
+    HapticFeedback.lightImpact();
+    final targetLat = customLat ?? _currentLat;
+    final targetLng = customLng ?? _currentLng;
     await Navigator.of(context).push(
       MaterialPageRoute(
-        builder: (_) => LocationPermissionScreen(selectedFault: faultName),
+        builder: (_) => LocationConfirmScreen(
+          selectedFault: faultName,
+          initialLat: targetLat,
+          initialLng: targetLng,
+        ),
       ),
     );
     if (mounted) {
       _checkActiveRescue();
     }
+  }
+
+  void _openLocationConfirm() {
+    HapticFeedback.selectionClick();
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => LocationConfirmScreen(
+          selectedFault: 'General Breakdown',
+          initialLat: _currentLat,
+          initialLng: _currentLng,
+        ),
+      ),
+    );
   }
 
   @override
@@ -292,78 +371,147 @@ class _EmergencyHomeScreenState extends State<EmergencyHomeScreen>
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    // Top Left: User Photo & Name
-                    Row(
-                      children: [
-                        Container(
-                          width: 40,
-                          height: 40,
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            color: AppColors.cardWhite,
-                            border: Border.all(
-                              color: AppColors.slateBorder,
-                              width: 1.5,
-                            ),
-                            boxShadow: [
-                              BoxShadow(
-                                color: AppColors.chassisText.withAlpha(8),
-                                blurRadius: 4,
-                                offset: const Offset(0, 1),
+                    // Top Left: User Photo & Name (Tapping jumps to Profile tab)
+                    InkWell(
+                      onTap: () {
+                        HapticFeedback.selectionClick();
+                        setState(() => _activeNavIndex = 2);
+                      },
+                      borderRadius: BorderRadius.circular(12),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 2.0, horizontal: 4.0),
+                        child: Row(
+                          children: [
+                            Container(
+                              width: 42,
+                              height: 42,
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                color: AppColors.cardWhite,
+                                border: Border.all(
+                                  color: AppColors.slateBorder,
+                                  width: 1.5,
+                                ),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: AppColors.chassisText.withAlpha(8),
+                                    blurRadius: 4,
+                                    offset: const Offset(0, 1),
+                                  ),
+                                ],
                               ),
-                            ],
-                          ),
-                          child: const Center(
-                            child: CircleAvatar(
-                              radius: 17,
-                              backgroundColor: AppColors.crimsonLight,
-                              child: Icon(
-                                Icons.person,
-                                color: AppColors.caliperCrimson,
-                                size: 22,
-                              ),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 10),
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          mainAxisSize: MainAxisSize.min,
-                          children: const [
-                            Text(
-                              'Welcome back,',
-                              style: TextStyle(
-                                color: AppColors.slateMuted,
-                                fontSize: 11,
-                                fontWeight: FontWeight.w500,
-                                height: 1.1,
+                              child: Center(
+                                child: CircleAvatar(
+                                  radius: 18,
+                                  backgroundColor: AppColors.crimsonLight,
+                                  child: Text(
+                                    _userName.isNotEmpty ? _userName[0].toUpperCase() : 'M',
+                                    style: const TextStyle(
+                                      color: AppColors.caliperCrimson,
+                                      fontWeight: FontWeight.w900,
+                                      fontSize: 16,
+                                    ),
+                                  ),
+                                ),
                               ),
                             ),
-                            SizedBox(height: 2),
-                            Text(
-                              'Sheikh Abdul Ahad',
-                              style: TextStyle(
-                                color: AppColors.chassisText,
-                                fontSize: 14,
-                                fontWeight: FontWeight.w900,
-                                letterSpacing: -0.3,
-                                height: 1.1,
-                              ),
+                            const SizedBox(width: 10),
+                            Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Row(
+                                  children: [
+                                    const Text(
+                                      'Welcome back,',
+                                      style: TextStyle(
+                                        color: AppColors.slateMuted,
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.w500,
+                                        height: 1.1,
+                                      ),
+                                    ),
+                                    if (_isNidVerified) ...[
+                                      const SizedBox(width: 4),
+                                      const Icon(
+                                        Icons.verified,
+                                        color: AppColors.emeraldGps,
+                                        size: 13,
+                                      ),
+                                    ],
+                                  ],
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  _userName,
+                                  style: const TextStyle(
+                                    color: AppColors.chassisText,
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w900,
+                                    letterSpacing: -0.3,
+                                    height: 1.1,
+                                  ),
+                                ),
+                              ],
                             ),
                           ],
                         ),
-                      ],
+                      ),
                     ),
 
-                    // Top Right: Notifications & Search
+                    // Top Right: Technician Console Mode Switch, Notifications & Search
                     Row(
                       children: [
+                        // Technician Console Mode Switcher Pill
+                        InkWell(
+                          onTap: () {
+                            HapticFeedback.selectionClick();
+                            Navigator.of(context).push(
+                              MaterialPageRoute(
+                                builder: (_) => const MechanicHomeScreen(),
+                              ),
+                            );
+                          },
+                          borderRadius: BorderRadius.circular(16),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF0F172A),
+                              borderRadius: BorderRadius.circular(16),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withAlpha(20),
+                                  blurRadius: 4,
+                                  offset: const Offset(0, 1),
+                                ),
+                              ],
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: const [
+                                Icon(Icons.engineering_outlined, color: Colors.white, size: 13),
+                                SizedBox(width: 4),
+                                Text(
+                                  'Tech Console',
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 10.5,
+                                    fontWeight: FontWeight.w800,
+                                    letterSpacing: 0.2,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 6),
+
                         // Notification Bell
                         InkWell(
                           onTap: _openNotificationsSheet,
                           borderRadius: BorderRadius.circular(20),
                           child: Padding(
-                            padding: const EdgeInsets.all(6.0),
+                            padding: const EdgeInsets.all(8.0),
                             child: Stack(
                               clipBehavior: Clip.none,
                               children: [
@@ -377,14 +525,14 @@ class _EmergencyHomeScreenState extends State<EmergencyHomeScreen>
                                     top: 1,
                                     right: 1,
                                     child: Container(
-                                      width: 7,
-                                      height: 7,
+                                      width: 8,
+                                      height: 8,
                                       decoration: BoxDecoration(
                                         color: AppColors.caliperCrimson,
                                         shape: BoxShape.circle,
                                         border: Border.all(
                                           color: AppColors.porcelainBg,
-                                          width: 1.2,
+                                          width: 1.5,
                                         ),
                                       ),
                                     ),
@@ -399,9 +547,9 @@ class _EmergencyHomeScreenState extends State<EmergencyHomeScreen>
                         InkWell(
                           onTap: _openSearchSheet,
                           borderRadius: BorderRadius.circular(20),
-                          child: Padding(
-                            padding: const EdgeInsets.all(6.0),
-                            child: const Icon(
+                          child: const Padding(
+                            padding: EdgeInsets.all(8.0),
+                            child: Icon(
                               Icons.search,
                               color: AppColors.chassisText,
                               size: 22,
@@ -420,25 +568,35 @@ class _EmergencyHomeScreenState extends State<EmergencyHomeScreen>
                 index: _activeNavIndex,
                 children: [
                   _buildHomeContent(),
-                  const ActivityScreen(),
-                  const ProfileScreen(),
+                  const ActivityScreen(showBackButton: false),
+                  const ProfileScreen(showBackButton: false),
                 ],
               ),
             ),
 
-            // 3-Tab Bottom Navigation Bar (Logo as Home icon)
+            // Modern 3-Tab Bottom Navigation Bar
             Container(
-              height: 60,
-              decoration: const BoxDecoration(
+              height: 62,
+              decoration: BoxDecoration(
                 color: AppColors.cardWhite,
-                border: Border(top: BorderSide(color: AppColors.slateBorder)),
+                border: const Border(top: BorderSide(color: AppColors.slateBorder)),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withAlpha(6),
+                    blurRadius: 10,
+                    offset: const Offset(0, -2),
+                  ),
+                ],
               ),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceAround,
                 children: [
                   // Tab 0: Home (ROADIX Emblem)
                   InkWell(
-                    onTap: () => setState(() => _activeNavIndex = 0),
+                    onTap: () {
+                      HapticFeedback.selectionClick();
+                      setState(() => _activeNavIndex = 0);
+                    },
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
@@ -452,20 +610,20 @@ class _EmergencyHomeScreenState extends State<EmergencyHomeScreen>
                               : AppColors.slateMuted,
                           errorBuilder: (_, _, _) => Icon(
                             Icons.alt_route,
-                            size: 20,
+                            size: 22,
                             color: _activeNavIndex == 0
                                 ? AppColors.caliperCrimson
                                 : AppColors.slateMuted,
                           ),
                         ),
-                        const SizedBox(height: 2),
+                        const SizedBox(height: 3),
                         Text(
                           'Home',
                           style: TextStyle(
                             fontSize: 10,
                             fontWeight: _activeNavIndex == 0
                                 ? FontWeight.w800
-                                : FontWeight.w500,
+                                : FontWeight.w600,
                             color: _activeNavIndex == 0
                                 ? AppColors.caliperCrimson
                                 : AppColors.slateMuted,
@@ -490,16 +648,23 @@ class _EmergencyHomeScreenState extends State<EmergencyHomeScreen>
   }
 
   Widget _buildHomeContent() {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 20.0),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
+    return LayoutBuilder(
+      builder: (context, constraints) => SingleChildScrollView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.symmetric(horizontal: 20.0),
+        child: ConstrainedBox(
+          constraints: BoxConstraints(minHeight: constraints.maxHeight),
+          child: IntrinsicHeight(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
           const SizedBox(height: 4),
 
+          // Active Rescue Banner (Real-time in-flight recovery)
           if (_activeRescueRequest != null) ...[
             InkWell(
               onTap: () async {
+                HapticFeedback.selectionClick();
                 final snapshot = _activeRescueRequest!['vehicle_snapshot']
                     as Map<String, dynamic>?;
                 await Navigator.of(context).push(
@@ -522,20 +687,32 @@ class _EmergencyHomeScreenState extends State<EmergencyHomeScreen>
                   _checkActiveRescue();
                 }
               },
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: BorderRadius.circular(14),
               child: Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                 decoration: BoxDecoration(
                   color: AppColors.crimsonLight,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: AppColors.caliperCrimson),
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: AppColors.caliperCrimson, width: 1.5),
+                  boxShadow: [
+                    BoxShadow(
+                      color: AppColors.caliperCrimson.withAlpha(20),
+                      blurRadius: 8,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
                 ),
                 child: Row(
                   children: [
-                    const Icon(Icons.radar,
-                        color: AppColors.caliperCrimson, size: 20),
-                    const SizedBox(width: 10),
+                    Container(
+                      padding: const EdgeInsets.all(6),
+                      decoration: const BoxDecoration(
+                        color: AppColors.caliperCrimson,
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(Icons.radar, color: Colors.white, size: 16),
+                    ),
+                    const SizedBox(width: 12),
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -549,12 +726,13 @@ class _EmergencyHomeScreenState extends State<EmergencyHomeScreen>
                               letterSpacing: 0.5,
                             ),
                           ),
+                          const SizedBox(height: 2),
                           Text(
-                            'Status: ${_activeRescueRequest!['status']} • Ref: ${_activeRescueRequest!['request_code'] ?? 'RDX'}',
+                            'Status: ${_activeRescueRequest!['status']?.toString().toUpperCase()} • Ref: ${_activeRescueRequest!['request_code'] ?? 'RDX'}',
                             style: const TextStyle(
                               color: AppColors.chassisText,
-                              fontSize: 11,
-                              fontWeight: FontWeight.w600,
+                              fontSize: 11.5,
+                              fontWeight: FontWeight.w700,
                             ),
                           ),
                         ],
@@ -569,84 +747,98 @@ class _EmergencyHomeScreenState extends State<EmergencyHomeScreen>
             const SizedBox(height: 10),
           ],
 
-          // Location Indicator Card
+          // Dynamic Location Indicator Card
           InkWell(
-            onTap: () => _startEmergencyTriage('General Breakdown'),
-            borderRadius: BorderRadius.circular(12),
+            onTap: _openLocationConfirm,
+            borderRadius: BorderRadius.circular(14),
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
               decoration: BoxDecoration(
                 color: AppColors.cardWhite,
-                borderRadius: BorderRadius.circular(12),
+                borderRadius: BorderRadius.circular(14),
                 border: Border.all(color: AppColors.slateBorder),
+                boxShadow: [
+                  BoxShadow(
+                    color: AppColors.chassisText.withAlpha(4),
+                    blurRadius: 6,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
               ),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Row(
-                    children: [
-                      Container(
-                        width: 30,
-                        height: 30,
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFFEF2F2),
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: const Icon(
-                          Icons.location_on_outlined,
-                          color: AppColors.caliperCrimson,
-                          size: 18,
-                        ),
-                      ),
-                      const SizedBox(width: 10),
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Text(
-                            'YOUR LOCATION',
-                            style: TextStyle(
-                              color: AppColors.slateMuted,
-                              fontSize: 9,
-                              fontWeight: FontWeight.w700,
-                              letterSpacing: 0.8,
-                            ),
+                  Expanded(
+                    child: Row(
+                      children: [
+                        Container(
+                          width: 32,
+                          height: 32,
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFFEF2F2),
+                            borderRadius: BorderRadius.circular(10),
                           ),
-                          const SizedBox(height: 1),
-                          Row(
-                            children: const [
+                          child: const Icon(
+                            Icons.location_on,
+                            color: AppColors.caliperCrimson,
+                            size: 18,
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: const [
+                                  Text(
+                                    'DETECTED LOCATION',
+                                    style: TextStyle(
+                                      color: AppColors.slateMuted,
+                                      fontSize: 9,
+                                      fontWeight: FontWeight.w800,
+                                      letterSpacing: 0.8,
+                                    ),
+                                  ),
+                                  SizedBox(width: 5),
+                                  CircleAvatar(
+                                    radius: 3.5,
+                                    backgroundColor: AppColors.emeraldGps,
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 2),
                               Text(
-                                'Mirpur, Dhaka',
-                                style: TextStyle(
+                                _isLoadingLocation ? 'Locating vehicle...' : _currentLocationName,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
                                   color: AppColors.chassisText,
-                                  fontSize: 13,
+                                  fontSize: 12.5,
                                   fontWeight: FontWeight.w700,
                                 ),
                               ),
-                              SizedBox(width: 6),
-                              CircleAvatar(
-                                radius: 3.5,
-                                backgroundColor: AppColors.emeraldGps,
-                              ),
                             ],
                           ),
-                        ],
-                      ),
-                    ],
+                        ),
+                      ],
+                    ),
                   ),
+                  const SizedBox(width: 8),
                   Row(
                     children: const [
                       Text(
                         'Change',
                         style: TextStyle(
-                          color: AppColors.slateMuted,
-                          fontSize: 11,
-                          fontWeight: FontWeight.w600,
+                          color: AppColors.caliperCrimson,
+                          fontSize: 11.5,
+                          fontWeight: FontWeight.bold,
                         ),
                       ),
                       SizedBox(width: 2),
                       Icon(
                         Icons.chevron_right,
-                        color: AppColors.slateMuted,
+                        color: AppColors.caliperCrimson,
                         size: 16,
                       ),
                     ],
@@ -668,19 +860,19 @@ class _EmergencyHomeScreenState extends State<EmergencyHomeScreen>
               letterSpacing: -0.5,
             ),
           ),
-          const SizedBox(height: 4),
+          const SizedBox(height: 3),
           const Text(
-            'Get connected with a verified mechanic near you, when you need help most.',
+            'Dispatch certified mechanics with specialized tools across Dhaka within minutes.',
             style: TextStyle(
               color: AppColors.slateMuted,
               fontSize: 12,
-              height: 1.4,
+              height: 1.35,
             ),
           ),
 
           const Spacer(),
 
-          // Dominant Centerpiece: Breathing SOS Trigger
+          // Dominant Centerpiece: Multi-Ring Breathing SOS Trigger with Dual-Ring Radial Glow
           Center(
             child: Column(
               mainAxisSize: MainAxisSize.min,
@@ -690,65 +882,130 @@ class _EmergencyHomeScreenState extends State<EmergencyHomeScreen>
                   child: Stack(
                     alignment: Alignment.center,
                     children: [
+                      // Outermost Atmospheric Aura Ring
                       Container(
-                        width: 184,
-                        height: 184,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          border: Border.all(color: AppColors.crimsonBorder),
-                          color: AppColors.crimsonLight.withAlpha(70),
-                        ),
-                      ),
-                      Container(
-                        width: 156,
-                        height: 156,
+                        width: 204,
+                        height: 204,
                         decoration: BoxDecoration(
                           shape: BoxShape.circle,
                           border: Border.all(
-                            color: const Color(0xFFF87171).withAlpha(100),
-                            width: 2,
+                            color: AppColors.caliperCrimson.withAlpha(45),
+                            width: 1.5,
                           ),
-                          color: AppColors.crimsonLight.withAlpha(150),
+                          gradient: RadialGradient(
+                            colors: [
+                              AppColors.caliperCrimson.withAlpha(0),
+                              AppColors.caliperCrimson.withAlpha(30),
+                            ],
+                          ),
                         ),
                       ),
+                      // Middle Tactical Pulse Ring with Accent Dash Border
+                      Container(
+                        width: 172,
+                        height: 172,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          border: Border.all(
+                            color: const Color(0xFFF87171).withAlpha(160),
+                            width: 2,
+                          ),
+                          color: AppColors.crimsonLight.withAlpha(140),
+                        ),
+                      ),
+                      // Inner Glow Foundation with Dual Drop Shadow
+                      Container(
+                        width: 144,
+                        height: 144,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          boxShadow: [
+                            BoxShadow(
+                              color: AppColors.caliperCrimson.withAlpha(140),
+                              blurRadius: 30,
+                              spreadRadius: 2,
+                              offset: const Offset(0, 8),
+                            ),
+                            BoxShadow(
+                              color: Colors.black.withAlpha(50),
+                              blurRadius: 10,
+                              offset: const Offset(0, 4),
+                            ),
+                          ],
+                        ),
+                      ),
+                      // Core High-Impact Action Button
                       InkWell(
                         onTap: _showSosConfirmationModal,
-                        borderRadius: BorderRadius.circular(65),
+                        borderRadius: BorderRadius.circular(68),
                         child: Container(
-                          width: 130,
-                          height: 130,
+                          width: 136,
+                          height: 136,
                           decoration: BoxDecoration(
                             shape: BoxShape.circle,
-                            color: AppColors.caliperCrimson,
-                            boxShadow: [
-                              BoxShadow(
-                                color: AppColors.caliperCrimson.withAlpha(110),
-                                blurRadius: 24,
-                                offset: const Offset(0, 8),
-                              ),
-                            ],
+                            gradient: const RadialGradient(
+                              center: Alignment(-0.25, -0.35),
+                              radius: 0.95,
+                              colors: [
+                                Color(0xFFFF5252),
+                                AppColors.caliperCrimson,
+                                Color(0xFF881337),
+                              ],
+                            ),
+                            border: Border.all(
+                              color: Colors.white.withAlpha(80),
+                              width: 2,
+                            ),
                           ),
                           child: Column(
                             mainAxisAlignment: MainAxisAlignment.center,
-                            children: const [
-                              Text(
+                            children: [
+                              const Text(
                                 'SOS',
                                 style: TextStyle(
                                   color: Colors.white,
-                                  fontSize: 34,
+                                  fontSize: 38,
                                   fontWeight: FontWeight.w900,
                                   letterSpacing: -0.5,
                                   height: 1.0,
+                                  shadows: [
+                                    Shadow(
+                                      color: Colors.black45,
+                                      blurRadius: 8,
+                                      offset: Offset(0, 2),
+                                    ),
+                                  ],
                                 ),
                               ),
-                              SizedBox(height: 2),
-                              Text(
-                                'PRESS',
-                                style: TextStyle(
-                                  color: Colors.white70,
-                                  fontSize: 9,
-                                  fontWeight: FontWeight.w800,
-                                  letterSpacing: 2.0,
+                              const SizedBox(height: 5),
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 8,
+                                  vertical: 2.5,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: Colors.white.withAlpha(35),
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: const [
+                                    Icon(
+                                      Icons.touch_app,
+                                      color: Colors.white,
+                                      size: 10,
+                                    ),
+                                    SizedBox(width: 3),
+                                    Text(
+                                      'PRESS FOR HELP',
+                                      style: TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 8.5,
+                                        fontWeight: FontWeight.w900,
+                                        letterSpacing: 1.2,
+                                      ),
+                                    ),
+                                  ],
                                 ),
                               ),
                             ],
@@ -760,17 +1017,17 @@ class _EmergencyHomeScreenState extends State<EmergencyHomeScreen>
                 ),
                 const SizedBox(height: 14),
                 const Text(
-                  'GET ROADSIDE HELP',
+                  'ROADSIDE EMERGENCY DISPATCH',
                   style: TextStyle(
                     color: AppColors.caliperCrimson,
-                    fontSize: 14,
+                    fontSize: 13,
                     fontWeight: FontWeight.w900,
                     letterSpacing: 0.8,
                   ),
                 ),
                 const SizedBox(height: 2),
                 const Text(
-                  'Tap to choose emergency type',
+                  'Tap button to choose breakdown service',
                   style: TextStyle(
                     color: AppColors.slateMuted,
                     fontSize: 11,
@@ -783,59 +1040,7 @@ class _EmergencyHomeScreenState extends State<EmergencyHomeScreen>
 
           const Spacer(),
 
-          // Dhaka Coverage Note
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-            decoration: BoxDecoration(
-              color: AppColors.cardWhite,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: AppColors.slateBorder),
-            ),
-            child: Row(
-              children: [
-                Container(
-                  width: 26,
-                  height: 26,
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFF1F5F9),
-                    borderRadius: BorderRadius.circular(6),
-                  ),
-                  child: const Icon(
-                    Icons.radar,
-                    color: Color(0xFF475569),
-                    size: 16,
-                  ),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: const [
-                      Text(
-                        'Roadside assistance across Dhaka',
-                        style: TextStyle(
-                          color: AppColors.chassisText,
-                          fontSize: 11,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                      Text(
-                        'Availability depends on nearby verified mechanics.',
-                        style: TextStyle(
-                          color: AppColors.slateMuted,
-                          fontSize: 10,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-
-          const SizedBox(height: 14),
-
-          // Defect Categories
+          // Defect Categories Header & Clean Grid
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: const [
@@ -843,80 +1048,150 @@ class _EmergencyHomeScreenState extends State<EmergencyHomeScreen>
                 'What do you need help with?',
                 style: TextStyle(
                   color: AppColors.chassisText,
-                  fontSize: 12,
-                  fontWeight: FontWeight.w700,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w800,
                 ),
               ),
               Text(
-                'Select to begin triage',
+                'Instant triage',
                 style: TextStyle(
                   color: AppColors.slateMuted,
-                  fontSize: 10,
-                  fontWeight: FontWeight.w500,
+                  fontSize: 10.5,
+                  fontWeight: FontWeight.w600,
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 10),
 
+          // 5-Card Responsive Breakdown Row with Elevated Automotive Styling
           Row(
             children: [
-              _buildCategoryCard('Dead Battery', Icons.battery_charging_full),
-              const SizedBox(width: 6),
-              _buildCategoryCard('Flat Tire', Icons.album_outlined),
-              const SizedBox(width: 6),
-              _buildCategoryCard('Engine Trouble', Icons.warning_amber_rounded),
-              const SizedBox(width: 6),
               _buildCategoryCard(
-                'Out of Fuel',
-                Icons.local_gas_station_outlined,
+                title: 'Battery',
+                badge: 'Jump / 12V',
+                icon: Icons.battery_charging_full,
+                accentColor: const Color(0xFFD97706),
+                fullFault: 'Dead Battery',
               ),
               const SizedBox(width: 6),
-              _buildCategoryCard('Towing', Icons.local_shipping_outlined),
+              _buildCategoryCard(
+                title: 'Flat Tire',
+                badge: 'Puncture',
+                icon: Icons.album_outlined,
+                accentColor: AppColors.caliperCrimson,
+                fullFault: 'Flat Tire',
+              ),
+              const SizedBox(width: 6),
+              _buildCategoryCard(
+                title: 'Engine',
+                badge: 'Thermal',
+                icon: Icons.warning_amber_rounded,
+                accentColor: const Color(0xFFEA580C),
+                fullFault: 'Engine Trouble',
+              ),
+              const SizedBox(width: 6),
+              _buildCategoryCard(
+                title: 'Fuel',
+                badge: '5L Delivery',
+                icon: Icons.local_gas_station_outlined,
+                accentColor: const Color(0xFF0284C7),
+                fullFault: 'Out of Fuel',
+              ),
+              const SizedBox(width: 6),
+              _buildCategoryCard(
+                title: 'Towing',
+                badge: 'Flatbed',
+                icon: Icons.local_shipping_outlined,
+                accentColor: const Color(0xFF4F46E5),
+                fullFault: 'Towing',
+              ),
             ],
           ),
 
           const SizedBox(height: 16),
         ],
       ),
-    );
+    ),
+  ),
+),
+);
   }
 
-  Widget _buildCategoryCard(String title, IconData icon) {
+  Widget _buildCategoryCard({
+    required String title,
+    required String badge,
+    required IconData icon,
+    required Color accentColor,
+    required String fullFault,
+  }) {
     return Expanded(
       child: InkWell(
-        onTap: () => _startEmergencyTriage(title),
-        borderRadius: BorderRadius.circular(10),
+        onTap: () {
+          HapticFeedback.lightImpact();
+          _startEmergencyTriage(fullFault);
+        },
+        borderRadius: BorderRadius.circular(12),
         child: Container(
-          padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 2),
+          padding: const EdgeInsets.symmetric(vertical: 9, horizontal: 3),
           decoration: BoxDecoration(
             color: AppColors.cardWhite,
-            borderRadius: BorderRadius.circular(10),
+            borderRadius: BorderRadius.circular(12),
             border: Border.all(color: AppColors.slateBorder),
+            boxShadow: [
+              BoxShadow(
+                color: accentColor.withAlpha(16),
+                blurRadius: 6,
+                offset: const Offset(0, 2),
+              ),
+            ],
           ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
               Container(
-                width: 28,
-                height: 28,
+                width: 34,
+                height: 34,
                 decoration: BoxDecoration(
-                  color: AppColors.porcelainBg,
-                  borderRadius: BorderRadius.circular(6),
+                  color: accentColor.withAlpha(25),
+                  borderRadius: BorderRadius.circular(10),
                 ),
-                child: Icon(icon, color: AppColors.caliperCrimson, size: 16),
+                child: Icon(icon, color: accentColor, size: 19),
               ),
-              const SizedBox(height: 4),
-              Text(
-                title,
-                textAlign: TextAlign.center,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                  color: AppColors.chassisText,
-                  fontSize: 9,
-                  fontWeight: FontWeight.w600,
-                  height: 1.1,
+              const SizedBox(height: 5),
+              FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Text(
+                  title,
+                  textAlign: TextAlign.center,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: AppColors.chassisText,
+                    fontSize: 10.5,
+                    fontWeight: FontWeight.w800,
+                    height: 1.1,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 3),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1.5),
+                decoration: BoxDecoration(
+                  color: accentColor.withAlpha(20),
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: Text(
+                    badge,
+                    style: TextStyle(
+                      color: accentColor,
+                      fontSize: 7.5,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: 0.1,
+                    ),
+                  ),
                 ),
               ),
             ],
@@ -929,21 +1204,28 @@ class _EmergencyHomeScreenState extends State<EmergencyHomeScreen>
   Widget _buildBottomNavItem(IconData icon, String label, int index) {
     final bool isSelected = _activeNavIndex == index;
     return InkWell(
-      onTap: () => setState(() => _activeNavIndex = index),
+      onTap: () {
+        HapticFeedback.selectionClick();
+        setState(() => _activeNavIndex = index);
+        if (index == 0) {
+          _checkActiveRescue();
+          _loadUserProfile();
+        }
+      },
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           Icon(
             icon,
-            size: 20,
+            size: 22,
             color: isSelected ? AppColors.caliperCrimson : AppColors.slateMuted,
           ),
-          const SizedBox(height: 2),
+          const SizedBox(height: 3),
           Text(
             label,
             style: TextStyle(
               fontSize: 10,
-              fontWeight: isSelected ? FontWeight.w800 : FontWeight.w500,
+              fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
               color: isSelected
                   ? AppColors.caliperCrimson
                   : AppColors.slateMuted,

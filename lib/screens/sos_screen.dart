@@ -1,6 +1,11 @@
 import 'package:flutter/material.dart';
-import 'package:url_launcher/url_launcher.dart';
+import 'package:flutter/services.dart';
+import 'package:geolocator/geolocator.dart';
+import '../services/geocoding_service.dart';
+import '../services/supabase_service.dart';
+import '../src/core/utils/phone_utils.dart';
 import '../theme/app_colors.dart';
+import '../widgets/contact_editor_sheet.dart';
 
 class SosScreen extends StatefulWidget {
   const SosScreen({super.key});
@@ -10,9 +15,17 @@ class SosScreen extends StatefulWidget {
 }
 
 class _SosScreenState extends State<SosScreen> with TickerProviderStateMixin {
+  final SupabaseService _db = SupabaseService();
   late AnimationController _pulseController;
   late AnimationController _countdownController;
   bool _isCancelled = false;
+
+  String _currentAddress = 'Detecting roadside position...';
+  double _currentLat = 23.8759;
+  double _currentLng = 90.3795;
+  int _accuracyMeters = 5;
+  List<Map<String, dynamic>> _contacts = [];
+  bool _isLoadingContacts = true;
 
   @override
   void initState() {
@@ -37,20 +50,63 @@ class _SosScreenState extends State<SosScreen> with TickerProviderStateMixin {
         _triggerEmergencyCall();
       }
     });
+
+    _detectLocation();
+    _loadEmergencyContacts();
+  }
+
+  Future<void> _detectLocation() async {
+    try {
+      final pos = await Geolocator.getCurrentPosition(
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.high,
+          timeLimit: Duration(seconds: 4),
+        ),
+      );
+      final addr = await GeocodingService.reverseGeocode(pos.latitude, pos.longitude);
+      if (mounted) {
+        setState(() {
+          _currentLat = pos.latitude;
+          _currentLng = pos.longitude;
+          _accuracyMeters = pos.accuracy.round();
+          _currentAddress = addr;
+        });
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          _currentAddress = 'Dhaka Sector Highway Corridor';
+        });
+      }
+    }
+  }
+
+  Future<void> _loadEmergencyContacts() async {
+    try {
+      final contacts = await _db.getEmergencyContacts();
+      if (mounted) {
+        setState(() {
+          _contacts = contacts;
+          _isLoadingContacts = false;
+        });
+      }
+    } catch (_) {
+      if (mounted) setState(() => _isLoadingContacts = false);
+    }
   }
 
   Future<void> _triggerEmergencyCall() async {
-    final uri = Uri.parse('tel:999');
-    try {
-      if (await canLaunchUrl(uri)) {
-        await launchUrl(uri);
-      }
-    } catch (_) {}
+    HapticFeedback.heavyImpact();
+    final success = await PhoneUtils.launchCall('999');
 
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('🚨 999 Emergency Dispatch Initiated!'),
+        SnackBar(
+          content: Text(
+            success
+                ? '🚨 999 Emergency Dispatch Initiated!'
+                : '🚨 Could not open dialer automatically. Please dial 999.',
+          ),
           backgroundColor: AppColors.caliperCrimson,
         ),
       );
@@ -58,12 +114,31 @@ class _SosScreenState extends State<SosScreen> with TickerProviderStateMixin {
   }
 
   void _cancelSos() {
+    HapticFeedback.mediumImpact();
     _countdownController.stop();
     setState(() => _isCancelled = true);
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
         content: Text('Emergency call cancelled.'),
         backgroundColor: AppColors.chassisText,
+      ),
+    );
+  }
+
+  void _openAddContactSheet() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => ContactEditorSheet(
+        onSave: (savedData) async {
+          await _db.addEmergencyContact(
+            name: savedData['name']!,
+            phone: savedData['phone']!,
+            relation: savedData['relation']!,
+          );
+          _loadEmergencyContacts();
+        },
       ),
     );
   }
@@ -182,7 +257,7 @@ class _SosScreenState extends State<SosScreen> with TickerProviderStateMixin {
                   Icon(Icons.circle, color: AppColors.caliperCrimson, size: 7),
                   SizedBox(width: 6),
                   Text(
-                    'Alerting Highway Control & Family Contacts',
+                    'Alerting Highway Police & Family Contacts',
                     style: TextStyle(
                       color: AppColors.slateMuted,
                       fontSize: 10,
@@ -335,22 +410,30 @@ class _SosScreenState extends State<SosScreen> with TickerProviderStateMixin {
                   _buildEmergencyServiceCard(
                     icon: Icons.shield_outlined,
                     title: 'CALL HIGHWAY PATROL',
-                    subtitle: 'Toll-Free • 24/7 Response',
-                    onTap: () {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Connecting to Highway Patrol Dispatch...')),
-                      );
+                    subtitle: 'Toll-Free • 24/7 Response (999)',
+                    onTap: () async {
+                      HapticFeedback.lightImpact();
+                      final ok = await PhoneUtils.launchCall('999');
+                      if (!ok && context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('Could not open dialer for Highway Patrol.')),
+                        );
+                      }
                     },
                   ),
                   const SizedBox(height: 8),
                   _buildEmergencyServiceCard(
                     icon: Icons.local_hospital_outlined,
                     title: 'CALL AMBULANCE',
-                    subtitle: 'Critical Medical Response',
-                    onTap: () {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Dispatching nearest emergency ambulance...')),
-                      );
+                    subtitle: 'Critical Medical Response (999)',
+                    onTap: () async {
+                      HapticFeedback.lightImpact();
+                      final ok = await PhoneUtils.launchCall('999');
+                      if (!ok && context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('Could not open dialer for Ambulance.')),
+                        );
+                      }
                     },
                   ),
                 ],
@@ -359,7 +442,7 @@ class _SosScreenState extends State<SosScreen> with TickerProviderStateMixin {
 
             const SizedBox(height: 12),
 
-            // Live GPS Coordinates Card
+            // Live Dynamic GPS Coordinates Card
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 20.0),
               child: Container(
@@ -372,30 +455,32 @@ class _SosScreenState extends State<SosScreen> with TickerProviderStateMixin {
                 child: Row(
                   children: [
                     Container(
-                      width: 30,
-                      height: 30,
+                      width: 32,
+                      height: 32,
                       decoration: BoxDecoration(
                         color: AppColors.crimsonLight,
                         borderRadius: BorderRadius.circular(8),
                       ),
-                      child: const Icon(Icons.location_on, color: AppColors.caliperCrimson, size: 16),
+                      child: const Icon(Icons.location_on, color: AppColors.caliperCrimson, size: 18),
                     ),
                     const SizedBox(width: 10),
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
-                        children: const [
+                        children: [
                           Text(
-                            'Uttara Sector 7, Dhaka',
-                            style: TextStyle(
+                            _currentAddress,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
                               color: AppColors.chassisText,
                               fontSize: 11.5,
                               fontWeight: FontWeight.bold,
                             ),
                           ),
                           Text(
-                            '23.8759° N, 90.3795° E',
-                            style: TextStyle(
+                            '${_currentLat.toStringAsFixed(4)}° N, ${_currentLng.toStringAsFixed(4)}° E',
+                            style: const TextStyle(
                               color: AppColors.slateMuted,
                               fontSize: 9.5,
                               fontFamily: 'monospace',
@@ -411,9 +496,9 @@ class _SosScreenState extends State<SosScreen> with TickerProviderStateMixin {
                         borderRadius: BorderRadius.circular(4),
                         border: Border.all(color: const Color(0xFFA7F3D0)),
                       ),
-                      child: const Text(
-                        '±4m Acc',
-                        style: TextStyle(
+                      child: Text(
+                        '±${_accuracyMeters}m Acc',
+                        style: const TextStyle(
                           color: Color(0xFF059669),
                           fontSize: 8.5,
                           fontFamily: 'monospace',
@@ -428,7 +513,7 @@ class _SosScreenState extends State<SosScreen> with TickerProviderStateMixin {
 
             const SizedBox(height: 12),
 
-            // Emergency Contacts Broadcast Row
+            // Emergency Contacts Broadcast Row (Real contacts from Supabase)
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 20.0),
               child: Column(
@@ -457,9 +542,9 @@ class _SosScreenState extends State<SosScreen> with TickerProviderStateMixin {
                           color: const Color(0xFFECFDF5),
                           borderRadius: BorderRadius.circular(4),
                         ),
-                        child: const Text(
-                          '3 Notified ✓',
-                          style: TextStyle(
+                        child: Text(
+                          '${_contacts.length} Configured ✓',
+                          style: const TextStyle(
                             color: Color(0xFF059669),
                             fontSize: 8.5,
                             fontWeight: FontWeight.bold,
@@ -469,15 +554,51 @@ class _SosScreenState extends State<SosScreen> with TickerProviderStateMixin {
                     ],
                   ),
                   const SizedBox(height: 8),
-                  Row(
-                    children: [
-                      _buildContactPill('Mom', 'P1', const Color(0xFF9F1239)),
-                      const SizedBox(width: 8),
-                      _buildContactPill('Shafin', 'P2', const Color(0xFF1E40AF)),
-                      const SizedBox(width: 8),
-                      _buildContactPill('Shafiur R.', 'P3', const Color(0xFFB45309)),
-                    ],
-                  ),
+                  if (_isLoadingContacts)
+                    const Center(child: SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.caliperCrimson)))
+                  else if (_contacts.isNotEmpty)
+                    SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      child: Row(
+                        children: _contacts.map((c) {
+                          final name = c['name']?.toString() ?? 'Contact';
+                          final phone = c['phone']?.toString() ?? '';
+                          final relation = c['relation']?.toString() ?? 'Family';
+                          return Padding(
+                            padding: const EdgeInsets.only(right: 8.0),
+                            child: _buildContactPill(name, relation, const Color(0xFF9F1239), () {
+                              if (phone.isNotEmpty) {
+                                PhoneUtils.launchCall(phone);
+                              }
+                            }),
+                          );
+                        }).toList(),
+                      ),
+                    )
+                  else
+                    InkWell(
+                      onTap: _openAddContactSheet,
+                      borderRadius: BorderRadius.circular(10),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                        decoration: BoxDecoration(
+                          color: AppColors.cardWhite,
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(color: AppColors.slateBorder),
+                        ),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: const [
+                            Icon(Icons.add, size: 14, color: AppColors.caliperCrimson),
+                            SizedBox(width: 6),
+                            Text(
+                              '+ Add Emergency Contact to alert automatically',
+                              style: TextStyle(color: AppColors.caliperCrimson, fontSize: 11, fontWeight: FontWeight.bold),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
                 ],
               ),
             ),
@@ -545,90 +666,70 @@ class _SosScreenState extends State<SosScreen> with TickerProviderStateMixin {
                 ),
               ],
             ),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-              decoration: BoxDecoration(
-                color: AppColors.crimsonLight,
-                borderRadius: BorderRadius.circular(6),
-                border: Border.all(color: AppColors.crimsonBorder),
-              ),
-              child: const Row(
-                children: [
-                  Text(
-                    'DIRECT',
-                    style: TextStyle(
-                      color: AppColors.caliperCrimson,
-                      fontSize: 8.5,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  SizedBox(width: 2),
-                  Icon(Icons.chevron_right, color: AppColors.caliperCrimson, size: 12),
-                ],
-              ),
-            ),
+            const Icon(Icons.phone, color: AppColors.caliperCrimson, size: 16),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildContactPill(String name, String initials, Color avatarColor) {
-    return Expanded(
+  Widget _buildContactPill(String name, String relation, Color color, VoidCallback onTap) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(10),
       child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
         decoration: BoxDecoration(
           color: AppColors.cardWhite,
           borderRadius: BorderRadius.circular(10),
           border: Border.all(color: AppColors.slateBorder),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withAlpha(2),
+              blurRadius: 2,
+              offset: const Offset(0, 1),
+            ),
+          ],
         ),
-        child: Column(
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
           children: [
-            Stack(
-              alignment: Alignment.bottomRight,
+            CircleAvatar(
+              radius: 10,
+              backgroundColor: color.withAlpha(30),
+              child: Text(
+                name.isNotEmpty ? name[0].toUpperCase() : '?',
+                style: TextStyle(
+                  color: color,
+                  fontSize: 9,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+            ),
+            const SizedBox(width: 6),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
               children: [
-                CircleAvatar(
-                  radius: 13,
-                  backgroundColor: avatarColor,
-                  child: Text(
-                    initials,
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 9,
-                      fontWeight: FontWeight.bold,
-                    ),
+                Text(
+                  name,
+                  style: const TextStyle(
+                    color: AppColors.chassisText,
+                    fontSize: 10,
+                    fontWeight: FontWeight.w700,
                   ),
                 ),
-                Container(
-                  width: 6,
-                  height: 6,
-                  decoration: const BoxDecoration(
-                    color: AppColors.emeraldGps,
-                    shape: BoxShape.circle,
+                Text(
+                  relation,
+                  style: const TextStyle(
+                    color: AppColors.slateMuted,
+                    fontSize: 8,
                   ),
                 ),
               ],
             ),
-            const SizedBox(height: 4),
-            Text(
-              name,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
-                color: AppColors.chassisText,
-                fontSize: 9,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-            const SizedBox(height: 1),
-            const Text(
-              'Sent 11:47',
-              style: TextStyle(
-                color: Color(0xFF059669),
-                fontSize: 7.5,
-                fontFamily: 'monospace',
-              ),
-            ),
+            const SizedBox(width: 6),
+            const Icon(Icons.call, size: 12, color: AppColors.caliperCrimson),
           ],
         ),
       ),

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import '../theme/app_colors.dart';
 
 class NotificationsBottomSheet extends StatefulWidget {
@@ -158,9 +159,20 @@ class _NotificationsBottomSheetState extends State<NotificationsBottomSheet> {
                     badgeBg = const Color(0xFFECFDF5);
                 }
 
-                return Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
+                return InkWell(
+                  onTap: () {
+                    HapticFeedback.selectionClick();
+                    setState(() {
+                      alert['isRead'] = true;
+                    });
+                    if (_alerts.every((a) => a['isRead'] == true)) {
+                      widget.onMarkAllRead?.call();
+                    }
+                  },
+                  borderRadius: BorderRadius.circular(14),
+                  child: Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
                     color: isUnread ? const Color(0xFFFFF7ED) : AppColors.cardWhite,
                     borderRadius: BorderRadius.circular(14),
                     border: Border.all(
@@ -246,8 +258,9 @@ class _NotificationsBottomSheetState extends State<NotificationsBottomSheet> {
                       ),
                     ],
                   ),
-                );
-              },
+                ),
+              );
+            },
             ),
           ),
         ],

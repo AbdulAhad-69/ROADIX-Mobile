@@ -1,3 +1,5 @@
+import 'package:url_launcher/url_launcher.dart';
+
 /// Phone number validation and normalization utilities for Bangladesh (+880)
 class PhoneUtils {
   const PhoneUtils._();
@@ -53,5 +55,28 @@ class PhoneUtils {
       return '$prefix $operatorAndFirst-$rest';
     }
     return raw;
+  }
+
+  /// Creates a canonical telephony Uri (e.g. `tel:999` or `tel:+8801712345678`)
+  static Uri createTelUri(String phoneOrHotline) {
+    final trimmed = phoneOrHotline.trim();
+    if (trimmed == '999') {
+      return Uri.parse('tel:999');
+    }
+    final normalized = normalize(trimmed);
+    return Uri.parse('tel:${normalized.isNotEmpty ? normalized : trimmed}');
+  }
+
+  /// Directly launches the device phone dialer with the target phone or emergency hotline
+  static Future<bool> launchCall(String phoneOrHotline) async {
+    final uri = createTelUri(phoneOrHotline);
+    try {
+      if (await canLaunchUrl(uri)) {
+        return await launchUrl(uri);
+      }
+      return false;
+    } catch (_) {
+      return false;
+    }
   }
 }

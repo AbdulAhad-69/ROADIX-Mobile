@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../services/supabase_service.dart';
 import '../theme/app_colors.dart';
 import 'emergency_home_screen.dart';
+import 'mechanic_home_screen.dart';
 import 'profile_setup_screen.dart';
 
 class OtpVerificationScreen extends StatefulWidget {
@@ -82,8 +83,12 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
             profile['full_name'] != 'Motorist';
 
         if (hasFullName) {
+          final role = profile['role'] as String?;
+          final target = role == 'mechanic'
+              ? const MechanicHomeScreen()
+              : const EmergencyHomeScreen();
           Navigator.of(context).pushAndRemoveUntil(
-            MaterialPageRoute(builder: (_) => const EmergencyHomeScreen()),
+            MaterialPageRoute(builder: (_) => target),
             (route) => false,
           );
         } else {

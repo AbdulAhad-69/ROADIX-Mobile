@@ -5,6 +5,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../theme/app_colors.dart';
 import 'emergency_home_screen.dart';
 import 'login_screen.dart';
+import 'mechanic_home_screen.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -36,10 +37,22 @@ class _SplashScreenState extends State<SplashScreen>
       if (!mounted) return;
       final session = Supabase.instance.client.auth.currentSession;
       if (session != null) {
-        // Active session restored; proceed directly to home
+        String? role;
+        try {
+          final res = await Supabase.instance.client
+              .from('profiles')
+              .select('role')
+              .eq('id', session.user.id)
+              .maybeSingle();
+          role = res?['role'] as String?;
+        } catch (_) {}
+        if (!mounted) return;
+        final targetWidget = role == 'mechanic'
+            ? const MechanicHomeScreen()
+            : const EmergencyHomeScreen();
         Navigator.of(context).pushReplacement(
           PageRouteBuilder(
-            pageBuilder: (_, _, _) => const EmergencyHomeScreen(),
+            pageBuilder: (_, _, _) => targetWidget,
             transitionsBuilder: (_, animation, _, child) =>
                 FadeTransition(opacity: animation, child: child),
             transitionDuration: const Duration(milliseconds: 350),

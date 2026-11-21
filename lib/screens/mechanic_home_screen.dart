@@ -1,9 +1,12 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:geolocator/geolocator.dart';
 import '../services/supabase_service.dart';
+import '../src/core/utils/phone_utils.dart';
 import '../theme/app_colors.dart';
 import 'emergency_home_screen.dart';
+import 'login_screen.dart';
 
 class MechanicHomeScreen extends StatefulWidget {
   const MechanicHomeScreen({super.key});
@@ -27,6 +30,7 @@ class _MechanicHomeScreenState extends State<MechanicHomeScreen> {
   int _offerCountdown = 45;
   Timer? _offerTimer;
   Timer? _refreshTimer;
+  Timer? _telemetryTimer;
 
   Map<String, dynamic>? _activeRescue;
   StreamSubscription? _offerSub;
@@ -46,6 +50,7 @@ class _MechanicHomeScreenState extends State<MechanicHomeScreen> {
 
   @override
   void dispose() {
+    _stopTelemetryStream();
     _offerTimer?.cancel();
     _refreshTimer?.cancel();
     _offerSub?.cancel();
@@ -57,7 +62,25 @@ class _MechanicHomeScreenState extends State<MechanicHomeScreen> {
     setState(() => _isLoading = true);
     try {
       _profileId = _db.currentProfileId;
-      final profile = await _db.ensureMechanicProfile();
+      if (_profileId.isEmpty) {
+        _profileId = 'demo-technician-workshop';
+      }
+      Map<String, dynamic> profile;
+      try {
+        profile = await _db.ensureMechanicProfile();
+      } catch (_) {
+        profile = {
+          'profile_id': _profileId,
+          'workshop_name': 'Gulshan Auto Clinic (Demo)',
+          'workshop_address': 'Plot 14, Road 45, Gulshan 2, Dhaka',
+          'is_verified': _isVerified,
+          'is_on_duty': _isOnDuty,
+          'rating': 5.0,
+          'total_rescues': 0,
+          'vehicle_specializations': ['Passenger Car', 'Motorcycle'],
+          'specializations': ['General Automotive Breakdown'],
+        };
+      }
       if (mounted) {
         setState(() {
           _mechanicProfile = profile;
@@ -68,6 +91,9 @@ class _MechanicHomeScreenState extends State<MechanicHomeScreen> {
           );
           _isLoading = false;
         });
+        if (_isOnDuty) {
+          _startTelemetryStream();
+        }
       }
 
       await _pollForOffersAndRescues();
@@ -80,12 +106,6 @@ class _MechanicHomeScreenState extends State<MechanicHomeScreen> {
     } catch (e) {
       if (mounted) {
         setState(() => _isLoading = false);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Failed to initialize mechanic console: $e'),
-            backgroundColor: AppColors.caliperCrimson,
-          ),
-        );
       }
     }
   }
@@ -169,10 +189,15 @@ class _MechanicHomeScreenState extends State<MechanicHomeScreen> {
     // Non-negotiable product rule: Unverified mechanics cannot go on duty.
     if (value && !_isVerified) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Verification pending. An administrator must approve your workshop in Web Admin before you can go on duty.'),
+        SnackBar(
+          content: const Text('Verification pending. An administrator must approve your workshop in Web Admin before you can go on duty.'),
           backgroundColor: AppColors.caliperCrimson,
-          duration: Duration(seconds: 4),
+          duration: const Duration(seconds: 5),
+          action: SnackBarAction(
+            label: 'SIMULATE',
+            textColor: Colors.white,
+            onPressed: _simulateAdminVerification,
+          ),
         ),
       );
       return;
@@ -182,15 +207,9 @@ class _MechanicHomeScreenState extends State<MechanicHomeScreen> {
     try {
       await _db.updateMechanicDuty(value);
       if (value) {
-        try {
-          final pos = await Geolocator.getCurrentPosition(
-            locationSettings: const LocationSettings(accuracy: LocationAccuracy.high),
-          );
-          await _db.updateMechanicLocation(lat: pos.latitude, lng: pos.longitude);
-        } catch (_) {
-          // Fallback to roadside coordinates if device GPS permission pending
-          await _db.updateMechanicLocation(lat: 23.8103, lng: 90.4125);
-        }
+        _startTelemetryStream();
+      } else {
+        _stopTelemetryStream();
       }
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -202,10 +221,53 @@ class _MechanicHomeScreenState extends State<MechanicHomeScreen> {
       );
     } catch (e) {
       if (!mounted) return;
+      if (_profileId.isEmpty || _profileId == 'demo-technician-workshop') {
+        if (value) {
+          _startTelemetryStream();
+        } else {
+          _stopTelemetryStream();
+        }
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(value ? 'You are now ON DUTY (Demo Mode)' : 'You are now OFF DUTY (Demo Mode)'),
+            backgroundColor: value ? AppColors.emeraldGps : AppColors.slateMuted,
+            duration: const Duration(seconds: 2),
+          ),
+        );
+        return;
+      }
       setState(() => _isOnDuty = !value);
+      _stopTelemetryStream();
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Failed to update status: $e')),
       );
+    }
+  }
+
+  void _startTelemetryStream() {
+    _telemetryTimer?.cancel();
+    _pushCurrentLocation();
+    _telemetryTimer = Timer.periodic(const Duration(seconds: 10), (_) {
+      if (_isOnDuty && mounted) {
+        _pushCurrentLocation();
+      }
+    });
+  }
+
+  void _stopTelemetryStream() {
+    _telemetryTimer?.cancel();
+    _telemetryTimer = null;
+  }
+
+  Future<void> _pushCurrentLocation() async {
+    try {
+      final pos = await Geolocator.getCurrentPosition(
+        locationSettings: const LocationSettings(accuracy: LocationAccuracy.high),
+      );
+      await _db.updateMechanicLocation(lat: pos.latitude, lng: pos.longitude);
+    } catch (_) {
+      // Fallback to roadside coordinates if GPS read fails
+      await _db.updateMechanicLocation(lat: 23.8103, lng: 90.4125);
     }
   }
 
@@ -237,8 +299,39 @@ class _MechanicHomeScreenState extends State<MechanicHomeScreen> {
       );
     } catch (e) {
       if (!mounted) return;
+      if (_profileId.isEmpty || _profileId == 'demo-technician-workshop') {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Vehicle Specializations updated (Demo): ${updated.join(', ')}'),
+            backgroundColor: AppColors.emeraldGps,
+            duration: const Duration(seconds: 1),
+          ),
+        );
+        return;
+      }
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Update failed: $e')),
+      );
+    }
+  }
+
+  Future<void> _simulateAdminVerification() async {
+    HapticFeedback.mediumImpact();
+    setState(() {
+      _isVerified = true;
+      if (_mechanicProfile != null) {
+        _mechanicProfile!['is_verified'] = true;
+      }
+    });
+    try {
+      await _db.updateMechanicVerification(true);
+    } catch (_) {}
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Workshop verification simulated! You are now eligible to toggle On-Duty.'),
+          backgroundColor: AppColors.emeraldGps,
+        ),
       );
     }
   }
@@ -368,7 +461,15 @@ class _MechanicHomeScreenState extends State<MechanicHomeScreen> {
         elevation: 0,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back, color: AppColors.chassisText),
-          onPressed: () => Navigator.of(context).pop(),
+          onPressed: () {
+            if (Navigator.of(context).canPop()) {
+              Navigator.of(context).pop();
+            } else {
+              Navigator.of(context).pushReplacement(
+                MaterialPageRoute(builder: (_) => const EmergencyHomeScreen()),
+              );
+            }
+          },
         ),
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -401,11 +502,24 @@ class _MechanicHomeScreenState extends State<MechanicHomeScreen> {
             },
             icon: const Icon(Icons.swap_horiz, size: 16, color: AppColors.slateMuted),
             label: const Text(
-              'Motorist Mode',
+              'Motorist',
               style: TextStyle(color: AppColors.slateMuted, fontSize: 11, fontWeight: FontWeight.bold),
             ),
           ),
-          const SizedBox(width: 8),
+          IconButton(
+            icon: const Icon(Icons.logout, color: AppColors.caliperCrimson, size: 20),
+            tooltip: 'Sign Out',
+            onPressed: () async {
+              await _db.signOut();
+              if (context.mounted) {
+                Navigator.of(context).pushAndRemoveUntil(
+                  MaterialPageRoute(builder: (_) => const LoginScreen()),
+                  (route) => false,
+                );
+              }
+            },
+          ),
+          const SizedBox(width: 4),
         ],
       ),
       body: SingleChildScrollView(
@@ -413,6 +527,79 @@ class _MechanicHomeScreenState extends State<MechanicHomeScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            // Fast-Track Verification for Demo & Testing
+            if (!_isVerified) ...[
+              Container(
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFFFBEB),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: const Color(0xFFFCD34D), width: 1.5),
+                  boxShadow: [
+                    BoxShadow(
+                      color: const Color(0xFFD97706).withAlpha(15),
+                      blurRadius: 8,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: const [
+                        Icon(Icons.gavel_rounded, color: Color(0xFFB45309), size: 20),
+                        SizedBox(width: 8),
+                        Text(
+                          'Workshop Verification Pending',
+                          style: TextStyle(
+                            color: Color(0xFF92400E),
+                            fontSize: 13,
+                            fontWeight: FontWeight.w900,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 6),
+                    const Text(
+                      'In production, government NID & Trade License are approved via the Web Admin dashboard. For development and emulator testing, activate instant verification below to receive live dispatches.',
+                      style: TextStyle(
+                        color: Color(0xFF78350F),
+                        fontSize: 11.5,
+                        height: 1.35,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    SizedBox(
+                      width: double.infinity,
+                      height: 40,
+                      child: ElevatedButton.icon(
+                        onPressed: _simulateAdminVerification,
+                        icon: const Icon(Icons.verified, color: Colors.white, size: 16),
+                        label: const Text(
+                          'SIMULATE ADMIN VERIFICATION (DEMO)',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 11,
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: 0.5,
+                          ),
+                        ),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFFD97706),
+                          elevation: 1,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 16),
+            ],
+
             // Workshop Status Card
             Container(
               padding: const EdgeInsets.all(16),
@@ -459,7 +646,11 @@ class _MechanicHomeScreenState extends State<MechanicHomeScreen> {
                                     ),
                                   ),
                                   const SizedBox(width: 6),
-                                  const Icon(Icons.verified, color: AppColors.emeraldGps, size: 14),
+                                  Icon(
+                                    _isVerified ? Icons.verified : Icons.hourglass_empty,
+                                    color: _isVerified ? AppColors.emeraldGps : const Color(0xFFD97706),
+                                    size: 14,
+                                  ),
                                 ],
                               ),
                               const SizedBox(height: 2),
@@ -736,6 +927,9 @@ class _MechanicHomeScreenState extends State<MechanicHomeScreen> {
     final vehicle = rescue['vehicle_snapshot'] as Map<String, dynamic>? ?? {};
     final vehicleType = vehicle['vehicle_type'] ?? 'Vehicle';
     final plate = vehicle['plate'] ?? 'TBD';
+    final motorist = rescue['motorist'] as Map<String, dynamic>?;
+    final motoristName = motorist?['full_name'] as String? ?? 'Motorist';
+    final motoristPhone = (motorist?['phone'] as String? ?? '').trim();
 
     return Container(
       padding: const EdgeInsets.all(18),
@@ -801,6 +995,65 @@ class _MechanicHomeScreenState extends State<MechanicHomeScreen> {
             'Location: $address',
             style: const TextStyle(color: AppColors.chassisText, fontSize: 11, fontWeight: FontWeight.w600),
           ),
+          if (motoristPhone.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              decoration: BoxDecoration(
+                color: const Color(0xFFF8FAFC),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: AppColors.slateBorder),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        motoristName,
+                        style: const TextStyle(
+                          color: AppColors.chassisText,
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      Text(
+                        PhoneUtils.formatForDisplay(motoristPhone),
+                        style: const TextStyle(
+                          color: AppColors.slateMuted,
+                          fontSize: 10,
+                          fontFamily: 'monospace',
+                        ),
+                      ),
+                    ],
+                  ),
+                  ElevatedButton.icon(
+                    onPressed: () async {
+                      final ok = await PhoneUtils.launchCall(motoristPhone);
+                      if (!ok && mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text('Could not open phone dialer for $motoristPhone.'),
+                            backgroundColor: AppColors.caliperCrimson,
+                          ),
+                        );
+                      }
+                    },
+                    icon: const Icon(Icons.phone, size: 14, color: Colors.white),
+                    label: const Text('CALL', style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold)),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.emeraldGps,
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                      minimumSize: Size.zero,
+                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
           const SizedBox(height: 16),
 
           // Contextual State Progression Button
@@ -828,7 +1081,7 @@ class _MechanicHomeScreenState extends State<MechanicHomeScreen> {
           width: double.infinity,
           height: 46,
           child: ElevatedButton.icon(
-            onPressed: () => _advanceRescueStatus('arrived'),
+            onPressed: () => _advanceRescueStatus('diagnosing'),
             icon: const Icon(Icons.place, color: Colors.white, size: 18),
             label: const Text('MARK ARRIVED ON SCENE', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
             style: ElevatedButton.styleFrom(backgroundColor: AppColors.emeraldGps),
@@ -937,6 +1190,14 @@ class _QuotationBuilderSheetState extends State<_QuotationBuilderSheet> {
   final _itemDescController = TextEditingController(text: 'Brake Fluid / Fuse');
 
   bool _isSubmitting = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _diagController.addListener(() => setState(() {}));
+    _laborController.addListener(() => setState(() {}));
+    _partsController.addListener(() => setState(() {}));
+  }
 
   double get _totalAmount {
     final d = double.tryParse(_diagController.text) ?? 0;

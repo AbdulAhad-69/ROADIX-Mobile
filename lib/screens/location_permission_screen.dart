@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:geolocator/geolocator.dart';
 import '../theme/app_colors.dart';
+import 'emergency_home_screen.dart';
 import 'location_confirm_screen.dart';
 
 class LocationPermissionScreen extends StatefulWidget {
@@ -16,6 +18,7 @@ class _LocationPermissionScreenState extends State<LocationPermissionScreen> {
   bool _isLoadingGps = false;
 
   Future<void> _requestAndGetLocation() async {
+    HapticFeedback.mediumImpact();
     setState(() => _isLoadingGps = true);
 
     try {
@@ -123,7 +126,17 @@ class _LocationPermissionScreenState extends State<LocationPermissionScreen> {
                 children: [
                   IconButton(
                     icon: const Icon(Icons.arrow_back, color: AppColors.chassisText),
-                    onPressed: () => Navigator.of(context).pop(),
+                    onPressed: () {
+                      if (Navigator.of(context).canPop()) {
+                        Navigator.of(context).pop();
+                      } else {
+                        Navigator.of(context).pushReplacement(
+                          MaterialPageRoute(
+                            builder: (_) => const EmergencyHomeScreen(),
+                          ),
+                        );
+                      }
+                    },
                   ),
                   const Text(
                     'Your Location',
@@ -149,18 +162,19 @@ class _LocationPermissionScreenState extends State<LocationPermissionScreen> {
                       Text(
                         'STEP 1 OF 4',
                         style: TextStyle(
-                          color: AppColors.slateMuted,
+                          color: AppColors.caliperCrimson,
                           fontSize: 10,
-                          fontWeight: FontWeight.w700,
+                          fontWeight: FontWeight.w800,
                           letterSpacing: 0.8,
                         ),
                       ),
                       Text(
-                        'location triage',
+                        'LOCATION TRIAGE',
                         style: TextStyle(
-                          color: AppColors.chassisText,
-                          fontSize: 11,
-                          fontWeight: FontWeight.w500,
+                          color: AppColors.slateMuted,
+                          fontSize: 10,
+                          fontWeight: FontWeight.w600,
+                          letterSpacing: 0.5,
                         ),
                       ),
                     ],
@@ -392,6 +406,7 @@ class _LocationPermissionScreenState extends State<LocationPermissionScreen> {
                     // Manual Option
                     TextButton.icon(
                       onPressed: () {
+                        HapticFeedback.lightImpact();
                         Navigator.of(context).push(
                           MaterialPageRoute(
                             builder: (_) => LocationConfirmScreen(

@@ -1,4 +1,6 @@
+import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../src/core/utils/geometry_utils.dart';
 import '../src/core/utils/phone_utils.dart';
 
 class SupabaseService {
@@ -82,14 +84,14 @@ class SupabaseService {
   Future<bool> signInWithGoogle() async {
     return await _client.auth.signInWithOAuth(
       OAuthProvider.google,
-      redirectTo: 'io.supabase.roadix://login-callback',
+      redirectTo: kIsWeb ? null : 'io.supabase.roadix://login-callback',
     );
   }
 
   Future<bool> signInWithApple() async {
     return await _client.auth.signInWithOAuth(
       OAuthProvider.apple,
-      redirectTo: 'io.supabase.roadix://login-callback',
+      redirectTo: kIsWeb ? null : 'io.supabase.roadix://login-callback',
     );
   }
 
@@ -286,6 +288,10 @@ class SupabaseService {
         .eq('id', walletId);
   }
 
+  Future<void> deleteWallet(String walletId) async {
+    await _client.from('wallets').delete().eq('id', walletId);
+  }
+
   // ==========================================
   // 5. EMERGENCY DISPATCH & SERVICE REQUESTS (PHASE 4)
   // ==========================================
@@ -377,6 +383,30 @@ class SupabaseService {
     }
   }
 
+  Future<List<Map<String, dynamic>>> getServiceRequestHistory() async {
+    try {
+      final userId = _client.auth.currentUser?.id ?? currentProfileId;
+      final response = await _client
+          .from('service_requests')
+          .select('*, quotations(*)')
+          .eq('motorist_id', userId)
+          .order('created_at', ascending: false);
+      return List<Map<String, dynamic>>.from(response);
+    } catch (_) {
+      try {
+        final userId = _client.auth.currentUser?.id ?? currentProfileId;
+        final response = await _client
+            .from('service_requests')
+            .select()
+            .eq('motorist_id', userId)
+            .order('created_at', ascending: false);
+        return List<Map<String, dynamic>>.from(response);
+      } catch (_) {
+        return [];
+      }
+    }
+  }
+
   Future<void> cancelServiceRequest(
     String requestId, {
     String reason = 'Motorist cancelled',
@@ -398,15 +428,33 @@ class SupabaseService {
       final mechanic = await _client
           .from('mechanic_profiles')
           .select(
-            'workshop_name, workshop_address, rating, total_rescues, specializations, vehicle_specializations',
+            'workshop_name, workshop_address, rating, total_rescues, specializations, vehicle_specializations, current_location',
           )
           .eq('profile_id', mechanicId)
           .maybeSingle();
       if (profile == null && mechanic == null) return null;
+      final coords = GeometryUtils.parsePostgisPoint(mechanic?['current_location']);
       return {
         ...profile ?? {},
         ...mechanic ?? {},
+        if (coords != null) ...{
+          'mechanic_lat': coords.$1,
+          'mechanic_lng': coords.$2,
+        },
       };
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<(double lat, double lng)?> getMechanicCoordinates(String mechanicId) async {
+    try {
+      final res = await _client
+          .from('mechanic_profiles')
+          .select('current_location')
+          .eq('profile_id', mechanicId)
+          .maybeSingle();
+      return GeometryUtils.parsePostgisPoint(res?['current_location']);
     } catch (_) {
       return null;
     }
@@ -467,7 +515,7 @@ class SupabaseService {
     try {
       final res = await _client
           .from('service_requests')
-          .select()
+          .select('*, motorist:motorist_id(id, full_name, phone)')
           .eq('mechanic_id', mechanicId)
           .inFilter('status', [
             'assigned',
@@ -479,6 +527,38 @@ class SupabaseService {
           ])
           .order('updated_at', ascending: false)
           .limit(1)
+          .maybeSingle();
+      return res;
+    } catch (_) {
+      try {
+        final fallback = await _client
+            .from('service_requests')
+            .select()
+            .eq('mechanic_id', mechanicId)
+            .inFilter('status', [
+              'assigned',
+              'en_route',
+              'arrived',
+              'diagnosing',
+              'quote_pending',
+              'servicing',
+            ])
+            .order('updated_at', ascending: false)
+            .limit(1)
+            .maybeSingle();
+        return fallback;
+      } catch (_) {
+        return null;
+      }
+    }
+  }
+
+  Future<Map<String, dynamic>?> getMotoristProfile(String motoristId) async {
+    try {
+      final res = await _client
+          .from('profiles')
+          .select('id, full_name, phone, avatar_url')
+          .eq('id', motoristId)
           .maybeSingle();
       return res;
     } catch (_) {
@@ -512,6 +592,7 @@ class SupabaseService {
     List<String>? serviceSpecializations,
   }) async {
     final uid = currentProfileId;
+    if (uid.isEmpty) return;
     final payload = <String, dynamic>{
       'vehicle_specializations': vehicleSpecializations,
       'updated_at': DateTime.now().toUtc().toIso8601String(),
@@ -524,8 +605,18 @@ class SupabaseService {
 
   Future<void> updateMechanicDuty(bool isOnDuty) async {
     final uid = currentProfileId;
+    if (uid.isEmpty) return;
     await _client.from('mechanic_profiles').update({
       'is_on_duty': isOnDuty,
+      'updated_at': DateTime.now().toUtc().toIso8601String(),
+    }).eq('profile_id', uid);
+  }
+
+  Future<void> updateMechanicVerification(bool isVerified) async {
+    final uid = currentProfileId;
+    if (uid.isEmpty) return;
+    await _client.from('mechanic_profiles').update({
+      'is_verified': isVerified,
       'updated_at': DateTime.now().toUtc().toIso8601String(),
     }).eq('profile_id', uid);
   }
@@ -541,6 +632,21 @@ class SupabaseService {
         'p_lng': lng,
       },
     );
+  }
+
+  Future<Map<String, dynamic>?> getLatestOfferForRequest(String requestId) async {
+    try {
+      final res = await _client
+          .from('dispatch_offers')
+          .select()
+          .eq('request_id', requestId)
+          .order('offered_at', ascending: false)
+          .limit(1)
+          .maybeSingle();
+      return res;
+    } catch (_) {
+      return null;
+    }
   }
 
   Future<List<Map<String, dynamic>>> getIncomingOffers() async {
@@ -679,11 +785,13 @@ class SupabaseService {
     required String requestId,
     required String mechanicId,
     required int rating,
+    String? motoristId,
     String? comment,
   }) async {
+    final uid = motoristId ?? currentProfileId;
     final payload = <String, dynamic>{
       'request_id': requestId,
-      'motorist_id': currentProfileId,
+      'motorist_id': uid,
       'mechanic_id': mechanicId,
       'rating': rating,
     };
@@ -691,5 +799,23 @@ class SupabaseService {
       payload['comment'] = comment;
     }
     await _client.from('reviews').insert(payload);
+
+    try {
+      // Recompute and update mechanic's trust rating
+      final reviews = await _client
+          .from('reviews')
+          .select('rating')
+          .eq('mechanic_id', mechanicId);
+      if (reviews.isNotEmpty) {
+        final totalStars = reviews.fold<num>(
+            0, (sum, r) => sum + ((r['rating'] as num?) ?? 5));
+        final avgRating = totalStars / reviews.length;
+        await _client.from('mechanic_profiles').update({
+          'rating': double.parse(avgRating.toStringAsFixed(2)),
+          'total_rescues': reviews.length,
+          'updated_at': DateTime.now().toUtc().toIso8601String(),
+        }).eq('profile_id', mechanicId);
+      }
+    } catch (_) {}
   }
 }

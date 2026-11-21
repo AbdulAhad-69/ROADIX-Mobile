@@ -8,9 +8,12 @@ import '../widgets/edit_profile_sheet.dart';
 import '../widgets/vehicle_editor_sheet.dart';
 import '../widgets/contact_editor_sheet.dart';
 import '../widgets/wallet_editor_sheet.dart';
+import '../widgets/brand_logo.dart';
 
 class ProfileScreen extends StatefulWidget {
-  const ProfileScreen({super.key});
+  final bool showBackButton;
+
+  const ProfileScreen({super.key, this.showBackButton = true});
 
   @override
   State<ProfileScreen> createState() => _ProfileScreenState();
@@ -196,6 +199,18 @@ class _ProfileScreenState extends State<ProfileScreen> {
               },
             )
             .toList(),
+        onAddWallet: (provider, number) async {
+          await _db.addWallet(provider: provider, accountNumber: number);
+          await _loadProfileData();
+        },
+        onDeleteWallet: (walletId) async {
+          await _db.deleteWallet(walletId);
+          await _loadProfileData();
+        },
+        onSetPrimaryWallet: (walletId) async {
+          await _db.setPrimaryWallet(walletId);
+          await _loadProfileData();
+        },
         onWalletsChanged: (updated) async {
           final primary = updated.firstWhere(
             (w) => w['isPrimary'] == true,
@@ -236,19 +251,39 @@ class _ProfileScreenState extends State<ProfileScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text(
-                'Motorist Profile',
-                style: TextStyle(
-                  color: AppColors.chassisText,
-                  fontSize: 22,
-                  fontWeight: FontWeight.w900,
-                  letterSpacing: -0.5,
-                ),
-              ),
-              const SizedBox(height: 2),
-              const Text(
-                'Cloud-synced verification, garage, and emergency dispatch',
-                style: TextStyle(color: AppColors.slateMuted, fontSize: 12),
+              Row(
+                children: [
+                  if (widget.showBackButton && Navigator.of(context).canPop()) ...[
+                    IconButton(
+                      icon: const Icon(Icons.arrow_back, color: AppColors.chassisText),
+                      onPressed: () => Navigator.of(context).pop(),
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(),
+                    ),
+                    const SizedBox(width: 12),
+                  ],
+                  const Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Motorist Profile',
+                          style: TextStyle(
+                            color: AppColors.chassisText,
+                            fontSize: 22,
+                            fontWeight: FontWeight.w900,
+                            letterSpacing: -0.5,
+                          ),
+                        ),
+                        SizedBox(height: 2),
+                        Text(
+                          'Cloud-synced verification, garage, and emergency dispatch',
+                          style: TextStyle(color: AppColors.slateMuted, fontSize: 12),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
               ),
               const SizedBox(height: 16),
 
@@ -400,7 +435,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 )
               else
                 ..._savedGarage.map((car) {
-                  final isMotorcycle = car['type'] == 'Motorcycle';
                   return InkWell(
                     onTap: () => _openVehicleEditor(car),
                     borderRadius: BorderRadius.circular(12),
@@ -414,20 +448,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       ),
                       child: Row(
                         children: [
-                          Container(
-                            width: 32,
-                            height: 32,
-                            decoration: BoxDecoration(
-                              color: AppColors.porcelainBg,
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            child: Icon(
-                              isMotorcycle
-                                  ? Icons.two_wheeler
-                                  : Icons.directions_car,
-                              color: AppColors.caliperCrimson,
-                              size: 18,
-                            ),
+                          VehicleIllustration(
+                            vehicleType: car['type']?.toString() ?? 'Sedan',
+                            size: 32,
                           ),
                           const SizedBox(width: 12),
                           Expanded(
@@ -499,14 +522,49 @@ class _ProfileScreenState extends State<ProfileScreen> {
               ),
               const SizedBox(height: 10),
 
-              Container(
-                decoration: BoxDecoration(
-                  color: AppColors.cardWhite,
-                  borderRadius: BorderRadius.circular(14),
-                  border: Border.all(color: AppColors.slateBorder),
-                ),
-                child: Column(
-                  children: _emergencyContacts.asMap().entries.map((entry) {
+              if (_emergencyContacts.isEmpty)
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: AppColors.cardWhite,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: AppColors.slateBorder),
+                  ),
+                  child: Center(
+                    child: Column(
+                      children: [
+                        const Text(
+                          'No emergency broadcast contacts configured yet.',
+                          style: TextStyle(
+                            color: AppColors.slateMuted,
+                            fontSize: 12,
+                          ),
+                        ),
+                        const SizedBox(height: 6),
+                        InkWell(
+                          onTap: () => _openContactEditor(),
+                          child: const Text(
+                            '+ Add First Family Contact',
+                            style: TextStyle(
+                              color: AppColors.caliperCrimson,
+                              fontSize: 11.5,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                )
+              else
+                Container(
+                  decoration: BoxDecoration(
+                    color: AppColors.cardWhite,
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: AppColors.slateBorder),
+                  ),
+                  child: Column(
+                    children: _emergencyContacts.asMap().entries.map((entry) {
                     final idx = entry.key;
                     final contact = entry.value;
                     final bool isLast = idx == _emergencyContacts.length - 1;
@@ -632,24 +690,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     children: [
                       Row(
                         children: [
-                          Container(
-                            width: 32,
-                            height: 32,
-                            decoration: BoxDecoration(
-                              color: const Color(0xFFE2136E).withAlpha(20),
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            child: Center(
-                              child: Text(
-                                (primaryWallet['provider']?.toString() ?? 'bK')
-                                    .substring(0, 2),
-                                style: const TextStyle(
-                                  color: Color(0xFFE2136E),
-                                  fontWeight: FontWeight.w900,
-                                  fontSize: 12,
-                                ),
-                              ),
-                            ),
+                          BrandLogo(
+                            brand: primaryWallet['provider']?.toString() ?? 'bKash',
+                            size: 32,
                           ),
                           const SizedBox(width: 10),
                           Column(

@@ -65,6 +65,40 @@ class TriageState {
       latitude != 0.0 &&
       longitude != 0.0;
 
+  Map<String, dynamic> toJson() {
+    return {
+      'selectedFault': selectedFault,
+      'latitude': latitude,
+      'longitude': longitude,
+      'pickupAddress': pickupAddress,
+      'vehicleType': vehicleType,
+      'licensePlate': licensePlate,
+      'symptoms': symptoms,
+      'notes': notes,
+      'isHighPriority': isHighPriority,
+      'isInLiveLane': isInLiveLane,
+      'hazardsWorking': hazardsWorking,
+      'activeRequestId': activeRequestId,
+    };
+  }
+
+  factory TriageState.fromJson(Map<String, dynamic> json) {
+    return TriageState(
+      selectedFault: json['selectedFault'] as String?,
+      latitude: (json['latitude'] as num?)?.toDouble() ?? 23.8759,
+      longitude: (json['longitude'] as num?)?.toDouble() ?? 90.3795,
+      pickupAddress: json['pickupAddress'] as String? ?? '',
+      vehicleType: json['vehicleType'] as String?,
+      licensePlate: json['licensePlate'] as String?,
+      symptoms: (json['symptoms'] as List?)?.map((e) => e.toString()).toList() ?? const [],
+      notes: json['notes'] as String? ?? '',
+      isHighPriority: json['isHighPriority'] as bool? ?? false,
+      isInLiveLane: json['isInLiveLane'] as bool? ?? false,
+      hazardsWorking: json['hazardsWorking'] as bool? ?? true,
+      activeRequestId: json['activeRequestId'] as String?,
+    );
+  }
+
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||

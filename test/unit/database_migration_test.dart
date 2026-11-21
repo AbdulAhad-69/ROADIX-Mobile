@@ -33,9 +33,68 @@ void main() {
       expect(content, contains('Dhanmondi Rapid Fix'));
       expect(content, contains('Uttara Highway Rescue'));
       expect(content, contains('Mirpur Motor Works'));
+      expect(content, contains('Mohakhali Auto Engineering'));
+      expect(content, contains('Banani Precision Mechanics'));
+      expect(content, contains('Tejgaon Recovery Hub'));
       expect(content, contains('mechanic_verifications'));
       expect(content, contains('instance_id'));
       expect(content, contains('ST_SetSRID'));
+    });
+
+    test('seed.sql vehicle types strictly conform to vehicles_type_check constraint', () {
+      final content = File('supabase/seed.sql').readAsStringSync();
+      final allowedTypes = {'Passenger Car', 'Motorcycle', 'Light Commercial'};
+      
+      // Match 4th argument (type): INSERT INTO public.vehicles (profile_id, model, plate, type, fuel, is_primary)
+      final vehiclePattern = RegExp(r"INSERT INTO public\.vehicles\s*\([^)]*\)\s*VALUES\s*\(\s*'[^']+'\s*,\s*'[^']+'\s*,\s*'[^']+'\s*,\s*'([^']+)'\s*,\s*'[^']+'\s*,\s*TRUE\s*\)", multiLine: true);
+      final matches = vehiclePattern.allMatches(content);
+      expect(matches, isNotEmpty, reason: 'Expected vehicles to be seeded');
+      for (final m in matches) {
+        expect(allowedTypes, contains(m.group(1)),
+            reason: 'Vehicle type ${m.group(1)} must be one of $allowedTypes');
+      }
+      
+      // Also match explicit type values: 'Passenger Car', 'Motorcycle', 'Light Commercial'
+      expect(content, isNot(contains("'Sedan',")), reason: 'Sedan violates vehicles_type_check constraint');
+      expect(content, isNot(contains("'SUV',")), reason: 'SUV violates vehicles_type_check constraint');
+      expect(content, isNot(contains("'Commercial',")), reason: 'Commercial must be Light Commercial');
+    });
+
+    test('seed.sql covers all 7 required SRS roadside emergency scenarios with transactions and reviews', () {
+      final content = File('supabase/seed.sql').readAsStringSync();
+      
+      // 1. Flat tire
+      expect(content, contains('Flat Tire / Wheel Replacement'));
+      // 2. Dead battery
+      expect(content, contains('Battery Jumpstart / Dead Cell'));
+      // 3. Engine overheating
+      expect(content, contains('Engine Overheating / Coolant'));
+      // 4. Electrical problems
+      expect(content, contains('General Automotive Breakdown'));
+      // 5. Emergency fuel
+      expect(content, contains('Emergency Fuel Run (5 Liters)'));
+      // 6. Mechanical failure / Brake lockup
+      expect(content, contains('Brake Failure / Fluid Leak'));
+      // 7. Towing requirements
+      expect(content, contains('Towing / Flatbed Recovery'));
+
+      // Check all 7 scenarios have quotations, transactions and reviews
+      for (int i = 1; i <= 7; i++) {
+        expect(content, contains('b0000000-0000-0000-0000-00000000000$i'),
+            reason: 'Service request $i must exist');
+        expect(content, contains('c0000000-0000-0000-0000-00000000000$i'),
+            reason: 'Quotation $i must exist');
+      }
+    });
+
+    test('seed.sql defines explicit vehicle_specializations for all 7 verified mechanics', () {
+      final content = File('supabase/seed.sql').readAsStringSync();
+      expect(content, contains('vehicle_specializations'));
+      
+      // Every mechanic_profiles INSERT must include vehicle_specializations
+      final count = RegExp(r"vehicle_specializations").allMatches(content).length;
+      expect(count, greaterThanOrEqualTo(7),
+          reason: 'All 7 mechanics must define vehicle_specializations');
     });
   });
 
