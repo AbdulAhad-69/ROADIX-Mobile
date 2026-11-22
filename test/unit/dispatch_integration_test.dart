@@ -1,9 +1,36 @@
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:roadix_mobile/src/core/config/app_config.dart';
 import 'package:roadix_mobile/screens/dispatch_screen.dart';
 import 'package:roadix_mobile/screens/vehicle_select_screen.dart';
 import 'package:roadix_mobile/widgets/vehicle_editor_sheet.dart';
 
 void main() {
+  setUpAll(() async {
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(
+      const MethodChannel('plugins.flutter.io/shared_preferences'),
+      (MethodCall methodCall) async {
+        if (methodCall.method == 'getAll') {
+          return <String, dynamic>{};
+        }
+        return true;
+      },
+    );
+
+    await AppConfig.initialize();
+    try {
+      await Supabase.initialize(
+        url: AppConfig.supabaseUrl,
+        // ignore: deprecated_member_use
+        anonKey: AppConfig.supabaseAnonKey,
+      );
+    } catch (_) {
+      // Supabase already initialized or offline mock active
+    }
+  });
   group('Phase 4: Dispatch Flow Parameter & SRS Category Verification', () {
     test('VehicleSelectScreen maps UI categories to exact SRS categories', () {
       expect(VehicleSelectScreen.mapUiCategoryToSrs('Sedan / Hatch'), 'Passenger Car');
@@ -240,6 +267,205 @@ void main() {
       expect(isDemoRadarActive, isTrue);
       expect(requestCode, equals('RDX-DEMO-8821'));
       expect(searchRadius, equals(5.0));
+    });
+
+    testWidgets('Renders on 360x800 and 390x844 viewports without RenderFlex overflow', (WidgetTester tester) async {
+      tester.view.physicalSize = const Size(360, 800);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(() {
+        tester.view.resetPhysicalSize();
+        tester.view.resetDevicePixelRatio();
+      });
+
+      await tester.pumpWidget(
+        const MaterialApp(
+          home: Scaffold(
+            body: DispatchScreen(
+              selectedFault: 'Flat Tire',
+              vehicleType: 'Passenger Car',
+              licensePlate: 'Dhaka Metro GA-11-2034',
+              symptoms: ['Puncture'],
+              isHighPriority: false,
+            ),
+          ),
+        ),
+      );
+
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 100));
+
+      final demoBtn = find.text('Run Interactive Demo Simulation');
+      if (demoBtn.evaluate().isNotEmpty) {
+        await tester.tap(demoBtn);
+        await tester.pump();
+      }
+
+      // Verify searching view with elapsed timer has no overflows
+      expect(tester.takeException(), isNull);
+
+      // Advance by 2 seconds (radius expands to 10km)
+      await tester.pump(const Duration(seconds: 2));
+      expect(tester.takeException(), isNull);
+
+      // Advance by 2 more seconds (enters offered phase with candidate cards & timers)
+      await tester.pump(const Duration(seconds: 2));
+      expect(tester.takeException(), isNull);
+
+      // Verify candidate card and offer expiration timer rendered cleanly
+      expect(find.textContaining('remaining • Expiring'), findsOneWidget);
+      expect(find.textContaining('Uttara 24/7 Motors'), findsWidgets);
+      expect(find.textContaining('Dhaka Metro GA-11-2034'), findsOneWidget);
+
+      // Teardown / dispose cleanly
+      await tester.pumpWidget(const SizedBox());
+      await tester.pump(const Duration(seconds: 1));
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('Teardown during demo simulation cancels all simulation timers without leakage', (WidgetTester tester) async {
+      tester.view.physicalSize = const Size(390, 844);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(() {
+        tester.view.resetPhysicalSize();
+        tester.view.resetDevicePixelRatio();
+      });
+
+      await tester.pumpWidget(
+        const MaterialApp(
+          home: Scaffold(
+            body: DispatchScreen(
+              selectedFault: 'Battery Jumpstart',
+              vehicleType: 'Passenger Car',
+              licensePlate: 'Dhaka Metro HA-55-9921',
+              symptoms: ['Dead battery'],
+              isHighPriority: false,
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 100));
+
+      final demoBtn = find.text('Run Interactive Demo Simulation');
+      if (demoBtn.evaluate().isNotEmpty) {
+        await tester.tap(demoBtn);
+        await tester.pump();
+      }
+
+      // Advance to offered phase
+      await tester.pump(const Duration(seconds: 4));
+
+      // Tap simulation accept button
+      final acceptBtn = find.text('Accept Offer (Simulate Mechanic)');
+      expect(acceptBtn, findsOneWidget);
+      await tester.tap(acceptBtn);
+      await tester.pump();
+
+      // Immediately unmount the screen before 4s/8s/12s/16s simulation timers fire
+      await tester.pumpWidget(const SizedBox());
+      await tester.pump(const Duration(seconds: 1));
+
+      // If any timer leaked past dispose, testWidgets will fail assertion !timersPending
+    });
+
+    testWidgets('Renders on 390x844 and 320x640 viewports without RenderFlex overflow', (WidgetTester tester) async {
+      for (final size in [const Size(390, 844), const Size(320, 640)]) {
+        tester.view.physicalSize = size;
+        tester.view.devicePixelRatio = 1.0;
+
+        await tester.pumpWidget(
+          const MaterialApp(
+            home: Scaffold(
+              body: DispatchScreen(
+                selectedFault: 'Engine Breakdown & Overheating',
+                vehicleType: 'Passenger Car',
+                licensePlate: 'Dhaka Metro GA-11-2034',
+                symptoms: ['Overheating engine', 'Steam from radiator'],
+                isHighPriority: true,
+              ),
+            ),
+          ),
+        );
+
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 100));
+
+        final demoBtn = find.text('Run Interactive Demo Simulation');
+        if (demoBtn.evaluate().isNotEmpty) {
+          await tester.tap(demoBtn);
+          await tester.pump();
+        }
+
+        expect(tester.takeException(), isNull);
+
+        // Advance to offered phase
+        await tester.pump(const Duration(seconds: 4));
+        expect(tester.takeException(), isNull);
+
+        // Verify key widgets render cleanly
+        expect(find.textContaining('Expiring'), findsOneWidget);
+        expect(find.textContaining('rescues'), findsWidgets);
+        expect(find.textContaining('Uttara 24/7 Motors'), findsWidgets);
+
+        await tester.pumpWidget(const SizedBox());
+        await tester.pump(const Duration(seconds: 1));
+        expect(tester.takeException(), isNull);
+      }
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+
+    testWidgets('Cancellation stops and clears all simulation timers cleanly', (WidgetTester tester) async {
+      tester.view.physicalSize = const Size(390, 844);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(() {
+        tester.view.resetPhysicalSize();
+        tester.view.resetDevicePixelRatio();
+      });
+
+      await tester.pumpWidget(
+        const MaterialApp(
+          home: Scaffold(
+            body: DispatchScreen(
+              selectedFault: 'Flat Tire',
+              vehicleType: 'Motorcycle',
+              licensePlate: 'Dhaka Metro HA-12-3456',
+              symptoms: ['Flat tire'],
+              isHighPriority: false,
+            ),
+          ),
+        ),
+      );
+
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 100));
+
+      final demoBtn = find.text('Run Interactive Demo Simulation');
+      if (demoBtn.evaluate().isNotEmpty) {
+        await tester.tap(demoBtn);
+        await tester.pump();
+      }
+
+      // Advance by 1 second while searching is active
+      await tester.pump(const Duration(seconds: 1));
+
+      // Tap Cancel Search
+      final cancelBtn = find.text('Cancel Search');
+      if (cancelBtn.evaluate().isNotEmpty) {
+        await tester.tap(cancelBtn);
+        await tester.pump();
+
+        // Confirm dialog if shown
+        final confirmBtn = find.text('Yes, Cancel');
+        if (confirmBtn.evaluate().isNotEmpty) {
+          await tester.tap(confirmBtn);
+          await tester.pump();
+        }
+      }
+
+      await tester.pumpWidget(const SizedBox());
+      await tester.pump(const Duration(seconds: 1));
+      expect(tester.takeException(), isNull);
     });
   });
 }

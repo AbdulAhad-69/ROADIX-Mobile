@@ -151,6 +151,37 @@ class AppConfig {
     );
   }
 
+  /// Google Web OAuth Client ID
+  static String get googleWebClientId {
+    if (_fileEnv.containsKey('EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID')) {
+      return _fileEnv['EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID']!;
+    }
+    return const String.fromEnvironment(
+      'EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID',
+      defaultValue: '',
+    );
+  }
+
+  /// Google Android OAuth Client ID
+  static String get googleAndroidClientId {
+    if (_fileEnv.containsKey('EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID')) {
+      return _fileEnv['EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID']!;
+    }
+    return const String.fromEnvironment(
+      'EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID',
+      defaultValue: '',
+    );
+  }
+
+  /// Indicates whether Google OAuth client credentials are configured
+  static bool get isGoogleAuthConfigured {
+    final web = googleWebClientId;
+    final android = googleAndroidClientId;
+    final isWebValid = web.isNotEmpty && !web.contains('your_google_');
+    final isAndroidValid = android.isNotEmpty && !android.contains('your_google_');
+    return isWebValid || isAndroidValid;
+  }
+
   /// Validates whether essential backend configuration is set
   static bool get isConfigured =>
       supabaseUrl.isNotEmpty && supabaseAnonKey.isNotEmpty;

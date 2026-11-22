@@ -12,6 +12,7 @@ class BrandLogo extends StatelessWidget {
   final double size;
   final BoxFit fit;
   final Color? fallbackColor;
+  final bool showBadge;
 
   const BrandLogo({
     super.key,
@@ -19,10 +20,23 @@ class BrandLogo extends StatelessWidget {
     this.size = 24.0,
     this.fit = BoxFit.contain,
     this.fallbackColor,
+    this.showBadge = true,
   });
 
   @override
   Widget build(BuildContext context) {
+    final key = brand.toLowerCase();
+    if (!showBadge && key.contains('bkash')) {
+      return SizedBox(
+        width: size,
+        height: size,
+        child: CustomPaint(
+          size: Size(size, size),
+          painter: const BkashOrigamiBirdPainter(isBadgeMode: false),
+        ),
+      );
+    }
+
     final cdnUrl = CloudinaryService().getBrandLogoUrl(brand, size: (size * 2).round());
     final localFallback = CloudinaryService.getLocalAssetFallback(brand);
 
@@ -52,22 +66,12 @@ class BrandLogo extends StatelessWidget {
   Widget _buildVectorFallback() {
     final key = brand.toLowerCase();
     if (key.contains('bkash')) {
-      return Container(
+      return SizedBox(
         width: size,
         height: size,
-        decoration: BoxDecoration(
-          color: const Color(0xFFE2136E),
-          borderRadius: BorderRadius.circular(size * 0.2),
-        ),
-        child: Center(
-          child: Text(
-            '৳',
-            style: TextStyle(
-              color: Colors.white,
-              fontSize: size * 0.6,
-              fontWeight: FontWeight.w900,
-            ),
-          ),
+        child: CustomPaint(
+          size: Size(size, size),
+          painter: BkashOrigamiBirdPainter(isBadgeMode: showBadge),
         ),
       );
     } else if (key.contains('nagad')) {
@@ -270,3 +274,102 @@ class VehicleIllustration extends StatelessWidget {
     return Icons.directions_car;
   }
 }
+
+/// Authentic bKash Origami Bird Vector Painter
+///
+/// Faithfully renders the official bKash geometric origami bird in flight
+/// with exact polygonal facets. Supports both badge mode (white bird on
+/// gradient container) and standalone vector mode (official duotone facets).
+class BkashOrigamiBirdPainter extends CustomPainter {
+  final Color primaryColor;
+  final Color deepColor;
+  final bool isBadgeMode;
+
+  const BkashOrigamiBirdPainter({
+    this.primaryColor = AppColors.bkashPink,
+    this.deepColor = AppColors.bkashCrimson,
+    this.isBadgeMode = true,
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final w = size.width;
+    final h = size.height;
+
+    if (isBadgeMode) {
+      final rect = Rect.fromLTWH(0, 0, w, h);
+      final bgPaint = Paint()
+        ..shader = LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [primaryColor, deepColor],
+        ).createShader(rect);
+      final rrect = RRect.fromRectAndRadius(rect, Radius.circular(w * 0.22));
+      canvas.drawRRect(rrect, bgPaint);
+    }
+
+    final fillPaint = Paint()..style = PaintingStyle.fill;
+
+    // 1. Dominant Wing Facet (Top right wing)
+    final pathWing = Path()
+      ..moveTo(w * 0.44, h * 0.46)
+      ..lineTo(w * 0.80, h * 0.08)
+      ..lineTo(w * 0.72, h * 0.26)
+      ..close();
+    fillPaint.color = isBadgeMode ? Colors.white : primaryColor;
+    canvas.drawPath(pathWing, fillPaint);
+
+    // 2. Trailing/Secondary Wing Facet (Behind dominant wing)
+    final pathBackWing = Path()
+      ..moveTo(w * 0.44, h * 0.46)
+      ..lineTo(w * 0.58, h * 0.12)
+      ..lineTo(w * 0.80, h * 0.08)
+      ..close();
+    fillPaint.color = isBadgeMode ? Colors.white.withValues(alpha: 0.85) : deepColor;
+    canvas.drawPath(pathBackWing, fillPaint);
+
+    // 3. Head & Beak Facet (Pointing forward/right)
+    final pathHead = Path()
+      ..moveTo(w * 0.72, h * 0.26)
+      ..lineTo(w * 0.95, h * 0.32)
+      ..lineTo(w * 0.76, h * 0.42)
+      ..close();
+    fillPaint.color = isBadgeMode ? Colors.white : primaryColor;
+    canvas.drawPath(pathHead, fillPaint);
+
+    // 4. Central Body / Chest Facet
+    final pathBody = Path()
+      ..moveTo(w * 0.44, h * 0.46)
+      ..lineTo(w * 0.76, h * 0.42)
+      ..lineTo(w * 0.58, h * 0.68)
+      ..lineTo(w * 0.38, h * 0.60)
+      ..close();
+    fillPaint.color = isBadgeMode ? Colors.white.withValues(alpha: 0.92) : deepColor;
+    canvas.drawPath(pathBody, fillPaint);
+
+    // 5. Tail Facet (Origami fold pointing down-left)
+    final pathTail = Path()
+      ..moveTo(w * 0.38, h * 0.60)
+      ..lineTo(w * 0.08, h * 0.86)
+      ..lineTo(w * 0.28, h * 0.54)
+      ..close();
+    fillPaint.color = isBadgeMode ? Colors.white.withValues(alpha: 0.80) : primaryColor;
+    canvas.drawPath(pathTail, fillPaint);
+
+    // 6. Under-tail Fold Facet (Bottom-most tail fold)
+    final pathUnderTail = Path()
+      ..moveTo(w * 0.38, h * 0.60)
+      ..lineTo(w * 0.20, h * 0.92)
+      ..lineTo(w * 0.08, h * 0.86)
+      ..close();
+    fillPaint.color = isBadgeMode ? Colors.white.withValues(alpha: 0.70) : deepColor;
+    canvas.drawPath(pathUnderTail, fillPaint);
+  }
+
+  @override
+  bool shouldRepaint(covariant BkashOrigamiBirdPainter oldDelegate) =>
+      oldDelegate.primaryColor != primaryColor ||
+      oldDelegate.deepColor != deepColor ||
+      oldDelegate.isBadgeMode != isBadgeMode;
+}
+

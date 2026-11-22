@@ -126,14 +126,19 @@ class _SearchBottomSheetState extends State<SearchBottomSheet> {
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: const [
-                  Text(
-                    'Emergency Facilities',
-                    style: TextStyle(
-                      color: AppColors.chassisText,
-                      fontSize: 18,
-                      fontWeight: FontWeight.w900,
+                  Flexible(
+                    child: Text(
+                      'Emergency Facilities',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: AppColors.chassisText,
+                        fontSize: 18,
+                        fontWeight: FontWeight.w900,
+                      ),
                     ),
                   ),
+                  SizedBox(width: 8),
                   Text(
                     'DHAKA NORTH REGION',
                     style: TextStyle(

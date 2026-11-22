@@ -179,12 +179,17 @@ class _VehicleSelectScreenState extends State<VehicleSelectScreen> {
                     ),
                     onPressed: () => Navigator.of(context).pop(),
                   ),
-                  const Text(
-                    'Vehicle Classification',
-                    style: TextStyle(
-                      color: AppColors.chassisText,
-                      fontSize: 16,
-                      fontWeight: FontWeight.w700,
+                  const Expanded(
+                    child: Text(
+                      'Vehicle Classification',
+                      textAlign: TextAlign.center,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: AppColors.chassisText,
+                        fontSize: 16,
+                        fontWeight: FontWeight.w700,
+                      ),
                     ),
                   ),
                   const SizedBox(width: 48),
@@ -212,13 +217,16 @@ class _VehicleSelectScreenState extends State<VehicleSelectScreen> {
                           letterSpacing: 0.8,
                         ),
                       ),
-                      Text(
-                        'VEHICLE CLASSIFICATION',
-                        style: TextStyle(
-                          color: AppColors.slateMuted,
-                          fontSize: 10,
-                          fontWeight: FontWeight.w600,
-                          letterSpacing: 0.5,
+                      Flexible(
+                        child: Text(
+                          'VEHICLE CLASSIFICATION',
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            color: AppColors.slateMuted,
+                            fontSize: 10,
+                            fontWeight: FontWeight.w600,
+                            letterSpacing: 0.5,
+                          ),
                         ),
                       ),
                     ],
@@ -284,13 +292,16 @@ class _VehicleSelectScreenState extends State<VehicleSelectScreen> {
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        const Text(
-                          'SAVED DIGITAL GARAGE',
-                          style: TextStyle(
-                            color: AppColors.slateMuted,
-                            fontSize: 9.5,
-                            fontWeight: FontWeight.w800,
-                            letterSpacing: 0.8,
+                        const Flexible(
+                          child: Text(
+                            'SAVED DIGITAL GARAGE',
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              color: AppColors.slateMuted,
+                              fontSize: 9.5,
+                              fontWeight: FontWeight.w800,
+                              letterSpacing: 0.8,
+                            ),
                           ),
                         ),
                         InkWell(
@@ -352,10 +363,14 @@ class _VehicleSelectScreenState extends State<VehicleSelectScreen> {
                         child: Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            const Text(
-                              'No saved vehicles in garage yet.',
-                              style: TextStyle(color: AppColors.slateMuted, fontSize: 11.5),
+                            const Flexible(
+                              child: Text(
+                                'No saved vehicles in garage yet.',
+                                style: TextStyle(color: AppColors.slateMuted, fontSize: 11.5),
+                                overflow: TextOverflow.ellipsis,
+                              ),
                             ),
+                            const SizedBox(width: 8),
                             InkWell(
                               onTap: _openAddVehicleSheet,
                               child: const Text(
@@ -389,7 +404,7 @@ class _VehicleSelectScreenState extends State<VehicleSelectScreen> {
                             crossAxisCount: 2,
                             crossAxisSpacing: 10,
                             mainAxisSpacing: 10,
-                            childAspectRatio: 1.35,
+                            childAspectRatio: 1.05,
                           ),
                       itemBuilder: (context, index) {
                         final bool isSelected =
@@ -405,7 +420,7 @@ class _VehicleSelectScreenState extends State<VehicleSelectScreen> {
                           },
                           borderRadius: BorderRadius.circular(14),
                           child: Container(
-                            padding: const EdgeInsets.all(12),
+                            padding: const EdgeInsets.all(10),
                             decoration: BoxDecoration(
                               color: isSelected
                                   ? AppColors.crimsonLight.withAlpha(140)
@@ -436,8 +451,8 @@ class _VehicleSelectScreenState extends State<VehicleSelectScreen> {
                                       MainAxisAlignment.spaceBetween,
                                   children: [
                                     VehicleIllustration(
-                                      vehicleType: item['srsCategory'] as String,
-                                      size: 34,
+                                      vehicleType: (item['srsType'] ?? item['title'] ?? 'Passenger Car') as String,
+                                      size: 30,
                                     ),
                                     Container(
                                       width: 18,
@@ -467,22 +482,30 @@ class _VehicleSelectScreenState extends State<VehicleSelectScreen> {
                                 Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
-                                    Text(
-                                      item['title'] as String,
-                                      style: TextStyle(
-                                        color: isSelected
-                                            ? AppColors.caliperCrimson
-                                            : AppColors.chassisText,
-                                        fontSize: 12.5,
-                                        fontWeight: FontWeight.w800,
+                                    FittedBox(
+                                      fit: BoxFit.scaleDown,
+                                      alignment: Alignment.centerLeft,
+                                      child: Text(
+                                        item['title'] as String,
+                                        style: TextStyle(
+                                          color: isSelected
+                                              ? AppColors.caliperCrimson
+                                              : AppColors.chassisText,
+                                          fontSize: 12.0,
+                                          fontWeight: FontWeight.w800,
+                                        ),
                                       ),
                                     ),
                                     const SizedBox(height: 1),
-                                    Text(
-                                      item['subtitle'] as String,
-                                      style: const TextStyle(
-                                        color: AppColors.slateMuted,
-                                        fontSize: 9.5,
+                                    FittedBox(
+                                      fit: BoxFit.scaleDown,
+                                      alignment: Alignment.centerLeft,
+                                      child: Text(
+                                        item['subtitle'] as String,
+                                        style: const TextStyle(
+                                          color: AppColors.slateMuted,
+                                          fontSize: 9.0,
+                                        ),
                                       ),
                                     ),
                                   ],
@@ -650,13 +673,16 @@ class _VehicleSelectScreenState extends State<VehicleSelectScreen> {
                       child: Row(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: const [
-                          Text(
-                            'CONTINUE TO FAULT DETAILS',
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 13,
-                              fontWeight: FontWeight.w800,
-                              letterSpacing: 0.5,
+                          Flexible(
+                            child: Text(
+                              'CONTINUE TO FAULT DETAILS',
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 13,
+                                fontWeight: FontWeight.w800,
+                                letterSpacing: 0.5,
+                              ),
                             ),
                           ),
                           SizedBox(width: 6),

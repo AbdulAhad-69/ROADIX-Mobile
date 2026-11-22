@@ -194,33 +194,42 @@ class _WalletEditorSheetState extends State<WalletEditorSheet> {
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Row(
-                          children: [
-                            BrandLogo(brand: provider, size: 34),
-                            const SizedBox(width: 10),
-                            Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  '$provider (${wallet['number']})',
-                                  style: const TextStyle(
-                                    color: AppColors.chassisText,
-                                    fontSize: 12.5,
-                                    fontWeight: FontWeight.bold,
-                                  ),
+                        Expanded(
+                          child: Row(
+                            children: [
+                              BrandLogo(brand: provider, size: 34),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      '$provider (${wallet['number']})',
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: const TextStyle(
+                                        color: AppColors.chassisText,
+                                        fontSize: 12.5,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                    Text(
+                                      isPrimary ? 'Primary authorization' : 'Tap radio to set primary',
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: TextStyle(
+                                        color: isPrimary ? AppColors.emeraldGps : AppColors.slateMuted,
+                                        fontSize: 9.5,
+                                        fontWeight: isPrimary ? FontWeight.bold : FontWeight.normal,
+                                      ),
+                                    ),
+                                  ],
                                 ),
-                                Text(
-                                  isPrimary ? 'Primary authorization' : 'Tap radio to set primary',
-                                  style: TextStyle(
-                                    color: isPrimary ? AppColors.emeraldGps : AppColors.slateMuted,
-                                    fontSize: 9.5,
-                                    fontWeight: isPrimary ? FontWeight.bold : FontWeight.normal,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ],
+                              ),
+                            ],
+                          ),
                         ),
+                        const SizedBox(width: 4),
                         Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [

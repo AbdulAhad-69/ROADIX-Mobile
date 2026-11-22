@@ -72,12 +72,16 @@ class _LocationConfirmScreenState extends State<LocationConfirmScreen> {
                     ),
                     onPressed: () => Navigator.of(context).pop(),
                   ),
-                  const Text(
-                    'Confirm Location',
-                    style: TextStyle(
-                      color: AppColors.chassisText,
-                      fontSize: 16,
-                      fontWeight: FontWeight.w700,
+                  const Flexible(
+                    child: Text(
+                      'Confirm Location',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: AppColors.chassisText,
+                        fontSize: 16,
+                        fontWeight: FontWeight.w700,
+                      ),
                     ),
                   ),
                   Container(
@@ -91,6 +95,7 @@ class _LocationConfirmScreenState extends State<LocationConfirmScreen> {
                       border: Border.all(color: AppColors.slateBorder),
                     ),
                     child: Row(
+                      mainAxisSize: MainAxisSize.min,
                       children: const [
                         CircleAvatar(
                           radius: 3,
@@ -123,22 +128,31 @@ class _LocationConfirmScreenState extends State<LocationConfirmScreen> {
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: const [
-                      Text(
-                        'STEP 1 OF 4',
-                        style: TextStyle(
-                          color: AppColors.caliperCrimson,
-                          fontSize: 10,
-                          fontWeight: FontWeight.w800,
-                          letterSpacing: 0.8,
+                      Flexible(
+                        child: Text(
+                          'STEP 1 OF 4',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            color: AppColors.caliperCrimson,
+                            fontSize: 10,
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: 0.8,
+                          ),
                         ),
                       ),
-                      Text(
-                        'LOCATION TRIAGE',
-                        style: TextStyle(
-                          color: AppColors.slateMuted,
-                          fontSize: 10,
-                          fontWeight: FontWeight.w600,
-                          letterSpacing: 0.5,
+                      SizedBox(width: 8),
+                      Flexible(
+                        child: Text(
+                          'LOCATION TRIAGE',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            color: AppColors.slateMuted,
+                            fontSize: 10,
+                            fontWeight: FontWeight.w600,
+                            letterSpacing: 0.5,
+                          ),
                         ),
                       ),
                     ],
@@ -348,20 +362,29 @@ class _LocationConfirmScreenState extends State<LocationConfirmScreen> {
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: const [
-                      Text(
-                        'BREAKDOWN LOCATION',
-                        style: TextStyle(
-                          color: AppColors.slateMuted,
-                          fontSize: 9.5,
-                          fontWeight: FontWeight.w800,
-                          letterSpacing: 0.8,
+                      Flexible(
+                        child: Text(
+                          'BREAKDOWN LOCATION',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            color: AppColors.slateMuted,
+                            fontSize: 9.5,
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: 0.8,
+                          ),
                         ),
                       ),
-                      Text(
-                        'Drag map or tap preset',
-                        style: TextStyle(
-                          color: AppColors.slateMuted,
-                          fontSize: 10.5,
+                      SizedBox(width: 8),
+                      Flexible(
+                        child: Text(
+                          'Drag map or tap preset',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            color: AppColors.slateMuted,
+                            fontSize: 10.5,
+                          ),
                         ),
                       ),
                     ],
@@ -413,12 +436,16 @@ class _LocationConfirmScreenState extends State<LocationConfirmScreen> {
                             const SizedBox(height: 2),
                             Row(
                               children: [
-                                Text(
-                                  '${_currentCenter.latitude.toStringAsFixed(4)}° N, ${_currentCenter.longitude.toStringAsFixed(4)}° E',
-                                  style: const TextStyle(
-                                    color: AppColors.slateMuted,
-                                    fontSize: 10,
-                                    fontFamily: 'monospace',
+                                Flexible(
+                                  child: Text(
+                                    '${_currentCenter.latitude.toStringAsFixed(4)}° N, ${_currentCenter.longitude.toStringAsFixed(4)}° E',
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: const TextStyle(
+                                      color: AppColors.slateMuted,
+                                      fontSize: 10,
+                                      fontFamily: 'monospace',
+                                    ),
                                   ),
                                 ),
                                 const SizedBox(width: 6),
@@ -476,25 +503,28 @@ class _LocationConfirmScreenState extends State<LocationConfirmScreen> {
                         ),
                         elevation: 3,
                       ),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: const [
-                          Text(
-                            'CONFIRM LOCATION',
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 13,
-                              fontWeight: FontWeight.w800,
-                              letterSpacing: 0.5,
+                      child: FittedBox(
+                        fit: BoxFit.scaleDown,
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: const [
+                            Text(
+                              'CONFIRM LOCATION',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 13,
+                                fontWeight: FontWeight.w800,
+                                letterSpacing: 0.5,
+                              ),
                             ),
-                          ),
-                          SizedBox(width: 6),
-                          Icon(
-                            Icons.arrow_forward,
-                            color: Colors.white,
-                            size: 16,
-                          ),
-                        ],
+                            SizedBox(width: 6),
+                            Icon(
+                              Icons.arrow_forward,
+                              color: Colors.white,
+                              size: 16,
+                            ),
+                          ],
+                        ),
                       ),
                     ),
                   ),

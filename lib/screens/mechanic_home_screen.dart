@@ -112,16 +112,21 @@ class _MechanicHomeScreenState extends State<MechanicHomeScreen> {
 
   void _setupRealtime() {
     _offerSub?.cancel();
-    _offerSub = _db.streamIncomingOffers(_profileId).listen((offers) {
-      if (!mounted) return;
-      final active = offers.where((o) => o['status'] == 'offered').toList();
-      if (active.isNotEmpty) {
-        _setIncomingOffer(active.first);
-      } else if (_activeOffer != null) {
-        setState(() => _activeOffer = null);
-        _offerTimer?.cancel();
-      }
-    });
+    _offerSub = _db.streamIncomingOffers(_profileId).listen(
+      (offers) {
+        if (!mounted) return;
+        final active = offers.where((o) => o['status'] == 'offered').toList();
+        if (active.isNotEmpty) {
+          _setIncomingOffer(active.first);
+        } else if (_activeOffer != null) {
+          setState(() => _activeOffer = null);
+          _offerTimer?.cancel();
+        }
+      },
+      onError: (e) {
+        // Stream connection glitch handled gracefully; fallback polling will continue
+      },
+    );
   }
 
   Future<void> _pollForOffersAndRescues() async {
@@ -550,12 +555,16 @@ class _MechanicHomeScreenState extends State<MechanicHomeScreen> {
                       children: const [
                         Icon(Icons.gavel_rounded, color: Color(0xFFB45309), size: 20),
                         SizedBox(width: 8),
-                        Text(
-                          'Workshop Verification Pending',
-                          style: TextStyle(
-                            color: Color(0xFF92400E),
-                            fontSize: 13,
-                            fontWeight: FontWeight.w900,
+                        Expanded(
+                          child: Text(
+                            'Workshop Verification Pending',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              color: Color(0xFF92400E),
+                              fontSize: 13,
+                              fontWeight: FontWeight.w900,
+                            ),
                           ),
                         ),
                       ],
@@ -613,55 +622,66 @@ class _MechanicHomeScreenState extends State<MechanicHomeScreen> {
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Row(
-                        children: [
-                          Container(
-                            width: 44,
-                            height: 44,
-                            decoration: BoxDecoration(
-                              color: _isOnDuty
-                                  ? AppColors.emeraldGps.withAlpha(25)
-                                  : AppColors.slateBorder.withAlpha(50),
-                              shape: BoxShape.circle,
+                      Expanded(
+                        child: Row(
+                          children: [
+                            Container(
+                              width: 44,
+                              height: 44,
+                              decoration: BoxDecoration(
+                                color: _isOnDuty
+                                    ? AppColors.emeraldGps.withAlpha(25)
+                                    : AppColors.slateBorder.withAlpha(50),
+                                shape: BoxShape.circle,
+                              ),
+                              child: Icon(
+                                _isOnDuty ? Icons.build_circle : Icons.nightlight_round,
+                                color: _isOnDuty ? AppColors.emeraldGps : AppColors.slateMuted,
+                                size: 24,
+                              ),
                             ),
-                            child: Icon(
-                              _isOnDuty ? Icons.build_circle : Icons.nightlight_round,
-                              color: _isOnDuty ? AppColors.emeraldGps : AppColors.slateMuted,
-                              size: 24,
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-                          Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Row(
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  Text(
-                                    _isOnDuty ? 'ON DUTY' : 'OFF DUTY',
-                                    style: TextStyle(
-                                      color: _isOnDuty ? AppColors.emeraldGps : AppColors.slateMuted,
-                                      fontSize: 14,
-                                      fontWeight: FontWeight.w900,
-                                      letterSpacing: 0.5,
-                                    ),
+                                  Row(
+                                    children: [
+                                      Flexible(
+                                        child: Text(
+                                          _isOnDuty ? 'ON DUTY' : 'OFF DUTY',
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                          style: TextStyle(
+                                            color: _isOnDuty ? AppColors.emeraldGps : AppColors.slateMuted,
+                                            fontSize: 14,
+                                            fontWeight: FontWeight.w900,
+                                            letterSpacing: 0.5,
+                                          ),
+                                        ),
+                                      ),
+                                      const SizedBox(width: 6),
+                                      Icon(
+                                        _isVerified ? Icons.verified : Icons.hourglass_empty,
+                                        color: _isVerified ? AppColors.emeraldGps : const Color(0xFFD97706),
+                                        size: 14,
+                                      ),
+                                    ],
                                   ),
-                                  const SizedBox(width: 6),
-                                  Icon(
-                                    _isVerified ? Icons.verified : Icons.hourglass_empty,
-                                    color: _isVerified ? AppColors.emeraldGps : const Color(0xFFD97706),
-                                    size: 14,
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    workshopAddress,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: const TextStyle(color: AppColors.slateMuted, fontSize: 11),
                                   ),
                                 ],
                               ),
-                              const SizedBox(height: 2),
-                              Text(
-                                workshopAddress,
-                                style: const TextStyle(color: AppColors.slateMuted, fontSize: 11),
-                              ),
-                            ],
-                          ),
-                        ],
+                            ),
+                          ],
+                        ),
                       ),
+                      const SizedBox(width: 8),
                       Switch(
                         value: _isOnDuty,
                         onChanged: _toggleDuty,
@@ -673,9 +693,9 @@ class _MechanicHomeScreenState extends State<MechanicHomeScreen> {
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceAround,
                     children: [
-                      _buildMetricCol('Rating', '${rating.toStringAsFixed(1)} ★'),
-                      _buildMetricCol('Completed', '$totalRescues Rescues'),
-                      _buildMetricCol('Status', _isOnDuty ? 'Available' : 'Paused'),
+                      Expanded(child: _buildMetricCol('Rating', '${rating.toStringAsFixed(1)} ★')),
+                      Expanded(child: _buildMetricCol('Completed', '$totalRescues Rescues')),
+                      Expanded(child: _buildMetricCol('Status', _isOnDuty ? 'Available' : 'Paused')),
                     ],
                   ),
                 ],
@@ -695,16 +715,18 @@ class _MechanicHomeScreenState extends State<MechanicHomeScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Row(
-                    children: [
+                  Row(
+                    children: const [
                       Icon(Icons.directions_car, color: AppColors.caliperCrimson, size: 18),
                       SizedBox(width: 8),
-                      Text(
-                        'Vehicle Specializations',
-                        style: TextStyle(
-                          color: AppColors.chassisText,
-                          fontSize: 13.5,
-                          fontWeight: FontWeight.w800,
+                      Flexible(
+                        child: Text(
+                          'Vehicle Specializations',
+                          style: TextStyle(
+                            color: AppColors.chassisText,
+                            fontSize: 13.5,
+                            fontWeight: FontWeight.w800,
+                          ),
                         ),
                       ),
                     ],
@@ -1158,9 +1180,15 @@ class _MechanicHomeScreenState extends State<MechanicHomeScreen> {
   Widget _buildMetricCol(String label, String value) {
     return Column(
       children: [
-        Text(value, style: const TextStyle(color: AppColors.chassisText, fontSize: 14, fontWeight: FontWeight.w900)),
+        FittedBox(
+          fit: BoxFit.scaleDown,
+          child: Text(value, style: const TextStyle(color: AppColors.chassisText, fontSize: 13, fontWeight: FontWeight.w900)),
+        ),
         const SizedBox(height: 2),
-        Text(label, style: const TextStyle(color: AppColors.slateMuted, fontSize: 10)),
+        FittedBox(
+          fit: BoxFit.scaleDown,
+          child: Text(label, style: const TextStyle(color: AppColors.slateMuted, fontSize: 10)),
+        ),
       ],
     );
   }

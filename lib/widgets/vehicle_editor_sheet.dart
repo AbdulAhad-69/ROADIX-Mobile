@@ -119,12 +119,16 @@ class _VehicleEditorSheetState extends State<VehicleEditorSheet> {
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Text(
-                    _isEditing ? 'Edit Vehicle' : 'Add Vehicle to Garage',
-                    style: const TextStyle(
-                      color: AppColors.chassisText,
-                      fontSize: 18,
-                      fontWeight: FontWeight.w900,
+                  Flexible(
+                    child: Text(
+                      _isEditing ? 'Edit Vehicle' : 'Add Vehicle to Garage',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: AppColors.chassisText,
+                        fontSize: 18,
+                        fontWeight: FontWeight.w900,
+                      ),
                     ),
                   ),
                   if (_isEditing && widget.onDelete != null)

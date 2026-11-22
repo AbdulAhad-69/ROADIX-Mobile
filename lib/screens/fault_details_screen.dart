@@ -100,12 +100,16 @@ class _FaultDetailsScreenState extends State<FaultDetailsScreen> {
                     icon: const Icon(Icons.arrow_back, color: AppColors.chassisText),
                     onPressed: () => Navigator.of(context).pop(),
                   ),
-                  const Text(
-                    'Fault Diagnostics',
-                    style: TextStyle(
-                      color: AppColors.chassisText,
-                      fontSize: 16,
-                      fontWeight: FontWeight.w700,
+                  const Flexible(
+                    child: Text(
+                      'Fault Diagnostics',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: AppColors.chassisText,
+                        fontSize: 16,
+                        fontWeight: FontWeight.w700,
+                      ),
                     ),
                   ),
                   const SizedBox(width: 48),
@@ -130,13 +134,17 @@ class _FaultDetailsScreenState extends State<FaultDetailsScreen> {
                           letterSpacing: 0.8,
                         ),
                       ),
-                      Text(
-                        'DEFECT QUESTIONNAIRE',
-                        style: TextStyle(
-                          color: AppColors.slateMuted,
-                          fontSize: 10,
-                          fontWeight: FontWeight.w600,
-                          letterSpacing: 0.5,
+                      Flexible(
+                        child: Text(
+                          'DEFECT QUESTIONNAIRE',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            color: AppColors.slateMuted,
+                            fontSize: 10,
+                            fontWeight: FontWeight.w600,
+                            letterSpacing: 0.5,
+                          ),
                         ),
                       ),
                     ],
@@ -340,23 +348,26 @@ class _FaultDetailsScreenState extends State<FaultDetailsScreen> {
                           Row(
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
-                              Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: const [
-                                  Text(
-                                    'Stranded in live highway lane',
-                                    style: TextStyle(
-                                      color: AppColors.chassisText,
-                                      fontSize: 12.5,
-                                      fontWeight: FontWeight.w700,
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: const [
+                                    Text(
+                                      'Stranded in live highway lane',
+                                      style: TextStyle(
+                                        color: AppColors.chassisText,
+                                        fontSize: 12.5,
+                                        fontWeight: FontWeight.w700,
+                                      ),
                                     ),
-                                  ),
-                                  Text(
-                                    'High hazard risk: marks priority rescue',
-                                    style: TextStyle(color: AppColors.slateMuted, fontSize: 10.5),
-                                  ),
-                                ],
+                                    Text(
+                                      'High hazard risk: marks priority rescue',
+                                      style: TextStyle(color: AppColors.slateMuted, fontSize: 10.5),
+                                    ),
+                                  ],
+                                ),
                               ),
+                              const SizedBox(width: 8),
                               Switch.adaptive(
                                 value: _isInLiveLane,
                                 activeTrackColor: AppColors.caliperCrimson.withAlpha(120),
@@ -396,23 +407,26 @@ class _FaultDetailsScreenState extends State<FaultDetailsScreen> {
                           Row(
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
-                              Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: const [
-                                  Text(
-                                    'Hazard lights functioning',
-                                    style: TextStyle(
-                                      color: AppColors.chassisText,
-                                      fontSize: 12.5,
-                                      fontWeight: FontWeight.w700,
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: const [
+                                    Text(
+                                      'Hazard lights functioning',
+                                      style: TextStyle(
+                                        color: AppColors.chassisText,
+                                        fontSize: 12.5,
+                                        fontWeight: FontWeight.w700,
+                                      ),
                                     ),
-                                  ),
-                                  Text(
-                                    'Vehicle visibility to oncoming traffic',
-                                    style: TextStyle(color: AppColors.slateMuted, fontSize: 10.5),
-                                  ),
-                                ],
+                                    Text(
+                                      'Vehicle visibility to oncoming traffic',
+                                      style: TextStyle(color: AppColors.slateMuted, fontSize: 10.5),
+                                    ),
+                                  ],
+                                ),
                               ),
+                              const SizedBox(width: 8),
                               Switch.adaptive(
                                 value: _hazardsWorking,
                                 activeTrackColor: AppColors.caliperCrimson.withAlpha(120),
@@ -507,13 +521,17 @@ class _FaultDetailsScreenState extends State<FaultDetailsScreen> {
                       child: Row(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: const [
-                          Text(
-                            'FIND NEARBY MECHANICS',
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 13,
-                              fontWeight: FontWeight.w800,
-                              letterSpacing: 0.5,
+                          Flexible(
+                            child: Text(
+                              'FIND NEARBY MECHANICS',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 13,
+                                fontWeight: FontWeight.w800,
+                                letterSpacing: 0.5,
+                              ),
                             ),
                           ),
                           SizedBox(width: 6),

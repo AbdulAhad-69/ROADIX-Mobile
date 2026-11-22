@@ -493,15 +493,20 @@ class _ProfileScreenState extends State<ProfileScreen> {
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  const Text(
-                    'EMERGENCY BROADCAST CONTACTS',
-                    style: TextStyle(
-                      color: AppColors.slateMuted,
-                      fontSize: 10,
-                      fontWeight: FontWeight.w800,
-                      letterSpacing: 0.8,
+                  const Flexible(
+                    child: Text(
+                      'EMERGENCY BROADCAST CONTACTS',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: AppColors.slateMuted,
+                        fontSize: 10,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: 0.8,
+                      ),
                     ),
                   ),
+                  const SizedBox(width: 8),
                   InkWell(
                     onTap: () => _openContactEditor(),
                     child: const Text(
@@ -651,15 +656,20 @@ class _ProfileScreenState extends State<ProfileScreen> {
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  const Text(
-                    'PAYMENT & MFS WALLETS',
-                    style: TextStyle(
-                      color: AppColors.slateMuted,
-                      fontSize: 10,
-                      fontWeight: FontWeight.w800,
-                      letterSpacing: 0.8,
+                  const Flexible(
+                    child: Text(
+                      'PAYMENT & MFS WALLETS',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: AppColors.slateMuted,
+                        fontSize: 10,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: 0.8,
+                      ),
                     ),
                   ),
+                  const SizedBox(width: 8),
                   InkWell(
                     onTap: _openWalletEditor,
                     child: const Text(

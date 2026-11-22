@@ -155,8 +155,13 @@ class _SosScreenState extends State<SosScreen> with TickerProviderStateMixin {
     return Scaffold(
       backgroundColor: AppColors.porcelainBg,
       body: SafeArea(
-        child: Column(
-          children: [
+        child: LayoutBuilder(
+          builder: (context, constraints) => SingleChildScrollView(
+            child: ConstrainedBox(
+              constraints: BoxConstraints(minHeight: constraints.maxHeight),
+              child: IntrinsicHeight(
+                child: Column(
+                  children: [
             // Top Bar with Close Button
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 4.0),
@@ -187,31 +192,39 @@ class _SosScreenState extends State<SosScreen> with TickerProviderStateMixin {
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Row(
-                    children: [
-                      FadeTransition(
-                        opacity: _pulseController,
-                        child: Container(
-                          width: 8,
-                          height: 8,
-                          decoration: const BoxDecoration(
-                            color: Colors.white,
-                            shape: BoxShape.circle,
+                  Flexible(
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        FadeTransition(
+                          opacity: _pulseController,
+                          child: Container(
+                            width: 8,
+                            height: 8,
+                            decoration: const BoxDecoration(
+                              color: Colors.white,
+                              shape: BoxShape.circle,
+                            ),
                           ),
                         ),
-                      ),
-                      const SizedBox(width: 8),
-                      const Text(
-                        'EMERGENCY SOS ACTIVE',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 10,
-                          fontWeight: FontWeight.w900,
-                          letterSpacing: 1.2,
+                        const SizedBox(width: 8),
+                        const Flexible(
+                          child: Text(
+                            'EMERGENCY SOS ACTIVE',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 10,
+                              fontWeight: FontWeight.w900,
+                              letterSpacing: 1.2,
+                            ),
+                          ),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
+                  const SizedBox(width: 6),
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                     decoration: BoxDecoration(
@@ -256,12 +269,16 @@ class _SosScreenState extends State<SosScreen> with TickerProviderStateMixin {
                 children: const [
                   Icon(Icons.circle, color: AppColors.caliperCrimson, size: 7),
                   SizedBox(width: 6),
-                  Text(
-                    'Alerting Highway Police & Family Contacts',
-                    style: TextStyle(
-                      color: AppColors.slateMuted,
-                      fontSize: 10,
-                      fontWeight: FontWeight.w600,
+                  Flexible(
+                    child: Text(
+                      'Alerting Highway Police & Contacts',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: AppColors.slateMuted,
+                        fontSize: 10,
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
                   ),
                 ],
@@ -521,21 +538,28 @@ class _SosScreenState extends State<SosScreen> with TickerProviderStateMixin {
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Row(
-                        children: const [
-                          Icon(Icons.circle, color: AppColors.emeraldGps, size: 6),
-                          SizedBox(width: 6),
-                          Text(
-                            'EMERGENCY CONTACTS',
-                            style: TextStyle(
-                              color: AppColors.slateMuted,
-                              fontSize: 9.5,
-                              fontWeight: FontWeight.bold,
-                              letterSpacing: 0.5,
+                      Expanded(
+                        child: Row(
+                          children: const [
+                            Icon(Icons.circle, color: AppColors.emeraldGps, size: 6),
+                            SizedBox(width: 6),
+                            Flexible(
+                              child: Text(
+                                'EMERGENCY CONTACTS',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  color: AppColors.slateMuted,
+                                  fontSize: 9.5,
+                                  fontWeight: FontWeight.bold,
+                                  letterSpacing: 0.5,
+                                ),
+                              ),
                             ),
-                          ),
-                        ],
+                          ],
+                        ),
                       ),
+                      const SizedBox(width: 8),
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                         decoration: BoxDecoration(
@@ -591,9 +615,13 @@ class _SosScreenState extends State<SosScreen> with TickerProviderStateMixin {
                           children: const [
                             Icon(Icons.add, size: 14, color: AppColors.caliperCrimson),
                             SizedBox(width: 6),
-                            Text(
-                              '+ Add Emergency Contact to alert automatically',
-                              style: TextStyle(color: AppColors.caliperCrimson, fontSize: 11, fontWeight: FontWeight.bold),
+                            Flexible(
+                              child: Text(
+                                '+ Add Emergency Contact to alert automatically',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(color: AppColors.caliperCrimson, fontSize: 11, fontWeight: FontWeight.bold),
+                              ),
                             ),
                           ],
                         ),
@@ -607,6 +635,10 @@ class _SosScreenState extends State<SosScreen> with TickerProviderStateMixin {
           ],
         ),
       ),
+    ),
+  ),
+),
+),
     );
   }
 
@@ -629,43 +661,52 @@ class _SosScreenState extends State<SosScreen> with TickerProviderStateMixin {
         child: Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Row(
-              children: [
-                Container(
-                  width: 32,
-                  height: 32,
-                  decoration: BoxDecoration(
-                    color: AppColors.crimsonLight,
-                    borderRadius: BorderRadius.circular(8),
+            Expanded(
+              child: Row(
+                children: [
+                  Container(
+                    width: 32,
+                    height: 32,
+                    decoration: BoxDecoration(
+                      color: AppColors.crimsonLight,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Icon(icon, color: AppColors.caliperCrimson, size: 18),
                   ),
-                  child: Icon(icon, color: AppColors.caliperCrimson, size: 18),
-                ),
-                const SizedBox(width: 12),
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      title,
-                      style: const TextStyle(
-                        color: AppColors.chassisText,
-                        fontSize: 11,
-                        fontWeight: FontWeight.w800,
-                        letterSpacing: 0.3,
-                      ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          title,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            color: AppColors.chassisText,
+                            fontSize: 11,
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: 0.3,
+                          ),
+                        ),
+                        const SizedBox(height: 1),
+                        Text(
+                          subtitle,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            color: AppColors.slateMuted,
+                            fontSize: 8.5,
+                            fontFamily: 'monospace',
+                          ),
+                        ),
+                      ],
                     ),
-                    const SizedBox(height: 1),
-                    Text(
-                      subtitle,
-                      style: const TextStyle(
-                        color: AppColors.slateMuted,
-                        fontSize: 8.5,
-                        fontFamily: 'monospace',
-                      ),
-                    ),
-                  ],
-                ),
-              ],
+                  ),
+                ],
+              ),
             ),
+            const SizedBox(width: 8),
             const Icon(Icons.phone, color: AppColors.caliperCrimson, size: 16),
           ],
         ),

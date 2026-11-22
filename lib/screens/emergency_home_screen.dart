@@ -365,168 +365,188 @@ class _EmergencyHomeScreenState extends State<EmergencyHomeScreen>
             if (_activeNavIndex == 0)
               Padding(
                 padding: const EdgeInsets.symmetric(
-                  horizontal: 20.0,
-                  vertical: 10.0,
+                  horizontal: 14.0,
+                  vertical: 8.0,
                 ),
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     // Top Left: User Photo & Name (Tapping jumps to Profile tab)
-                    InkWell(
-                      onTap: () {
-                        HapticFeedback.selectionClick();
-                        setState(() => _activeNavIndex = 2);
-                      },
-                      borderRadius: BorderRadius.circular(12),
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 2.0, horizontal: 4.0),
-                        child: Row(
-                          children: [
-                            Container(
-                              width: 42,
-                              height: 42,
-                              decoration: BoxDecoration(
-                                shape: BoxShape.circle,
-                                color: AppColors.cardWhite,
-                                border: Border.all(
-                                  color: AppColors.slateBorder,
-                                  width: 1.5,
-                                ),
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: AppColors.chassisText.withAlpha(8),
-                                    blurRadius: 4,
-                                    offset: const Offset(0, 1),
+                    Expanded(
+                      child: InkWell(
+                        onTap: () {
+                          HapticFeedback.selectionClick();
+                          setState(() => _activeNavIndex = 2);
+                        },
+                        borderRadius: BorderRadius.circular(12),
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 2.0, horizontal: 2.0),
+                          child: FittedBox(
+                            fit: BoxFit.scaleDown,
+                            alignment: Alignment.centerLeft,
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Container(
+                                  width: 34,
+                                  height: 34,
+                                  decoration: BoxDecoration(
+                                    shape: BoxShape.circle,
+                                    color: AppColors.cardWhite,
+                                    border: Border.all(
+                                      color: AppColors.slateBorder,
+                                      width: 1.5,
+                                    ),
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: AppColors.chassisText.withAlpha(8),
+                                        blurRadius: 4,
+                                        offset: const Offset(0, 1),
+                                      ),
+                                    ],
                                   ),
-                                ],
-                              ),
-                              child: Center(
-                                child: CircleAvatar(
-                                  radius: 18,
-                                  backgroundColor: AppColors.crimsonLight,
-                                  child: Text(
-                                    _userName.isNotEmpty ? _userName[0].toUpperCase() : 'M',
-                                    style: const TextStyle(
-                                      color: AppColors.caliperCrimson,
-                                      fontWeight: FontWeight.w900,
-                                      fontSize: 16,
+                                  child: Center(
+                                    child: CircleAvatar(
+                                      radius: 14,
+                                      backgroundColor: AppColors.crimsonLight,
+                                      child: Text(
+                                        _userName.isNotEmpty ? _userName[0].toUpperCase() : 'M',
+                                        style: const TextStyle(
+                                          color: AppColors.caliperCrimson,
+                                          fontWeight: FontWeight.w900,
+                                          fontSize: 14,
+                                        ),
+                                      ),
                                     ),
                                   ),
                                 ),
-                              ),
-                            ),
-                            const SizedBox(width: 10),
-                            Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Row(
+                                const SizedBox(width: 7),
+                                Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  mainAxisSize: MainAxisSize.min,
                                   children: [
-                                    const Text(
-                                      'Welcome back,',
-                                      style: TextStyle(
-                                        color: AppColors.slateMuted,
-                                        fontSize: 11,
-                                        fontWeight: FontWeight.w500,
+                                    Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        const Text(
+                                          'Welcome,',
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                          style: TextStyle(
+                                            color: AppColors.slateMuted,
+                                            fontSize: 10,
+                                            fontWeight: FontWeight.w500,
+                                            height: 1.1,
+                                          ),
+                                        ),
+                                        if (_isNidVerified) ...[
+                                          const SizedBox(width: 3),
+                                          const Icon(
+                                            Icons.verified,
+                                            color: AppColors.emeraldGps,
+                                            size: 12,
+                                          ),
+                                        ],
+                                      ],
+                                    ),
+                                    const SizedBox(height: 1),
+                                    Text(
+                                      _userName,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: const TextStyle(
+                                        color: AppColors.chassisText,
+                                        fontSize: 12.5,
+                                        fontWeight: FontWeight.w900,
+                                        letterSpacing: -0.3,
                                         height: 1.1,
                                       ),
                                     ),
-                                    if (_isNidVerified) ...[
-                                      const SizedBox(width: 4),
-                                      const Icon(
-                                        Icons.verified,
-                                        color: AppColors.emeraldGps,
-                                        size: 13,
-                                      ),
-                                    ],
                                   ],
-                                ),
-                                const SizedBox(height: 2),
-                                Text(
-                                  _userName,
-                                  style: const TextStyle(
-                                    color: AppColors.chassisText,
-                                    fontSize: 14,
-                                    fontWeight: FontWeight.w900,
-                                    letterSpacing: -0.3,
-                                    height: 1.1,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-
-                    // Top Right: Technician Console Mode Switch, Notifications & Search
-                    Row(
-                      children: [
-                        // Technician Console Mode Switcher Pill
-                        InkWell(
-                          onTap: () {
-                            HapticFeedback.selectionClick();
-                            Navigator.of(context).push(
-                              MaterialPageRoute(
-                                builder: (_) => const MechanicHomeScreen(),
-                              ),
-                            );
-                          },
-                          borderRadius: BorderRadius.circular(16),
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFF0F172A),
-                              borderRadius: BorderRadius.circular(16),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: Colors.black.withAlpha(20),
-                                  blurRadius: 4,
-                                  offset: const Offset(0, 1),
-                                ),
-                              ],
-                            ),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: const [
-                                Icon(Icons.engineering_outlined, color: Colors.white, size: 13),
-                                SizedBox(width: 4),
-                                Text(
-                                  'Tech Console',
-                                  style: TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 10.5,
-                                    fontWeight: FontWeight.w800,
-                                    letterSpacing: 0.2,
-                                  ),
                                 ),
                               ],
                             ),
                           ),
                         ),
-                        const SizedBox(width: 6),
+                      ),
+                    ),
+                    const SizedBox(width: 4),
+
+                    // Top Right: Technician Console Mode Switch, Notifications & Search
+                    Flexible(
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          // Technician Console Mode Switcher Pill
+                          Flexible(
+                            child: InkWell(
+                              onTap: () {
+                                HapticFeedback.selectionClick();
+                                Navigator.of(context).push(
+                                  MaterialPageRoute(
+                                    builder: (_) => const MechanicHomeScreen(),
+                                  ),
+                                );
+                              },
+                              borderRadius: BorderRadius.circular(14),
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4.5),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFF0F172A),
+                                  borderRadius: BorderRadius.circular(14),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: Colors.black.withAlpha(20),
+                                      blurRadius: 4,
+                                      offset: const Offset(0, 1),
+                                    ),
+                                  ],
+                                ),
+                                child: FittedBox(
+                                  fit: BoxFit.scaleDown,
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: const [
+                                      Icon(Icons.engineering_outlined, color: Colors.white, size: 12),
+                                      SizedBox(width: 3),
+                                      Text(
+                                        'Tech Console',
+                                        style: TextStyle(
+                                          color: Colors.white,
+                                          fontSize: 10,
+                                          fontWeight: FontWeight.w800,
+                                          letterSpacing: 0.1,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        const SizedBox(width: 4),
 
                         // Notification Bell
                         InkWell(
                           onTap: _openNotificationsSheet,
                           borderRadius: BorderRadius.circular(20),
                           child: Padding(
-                            padding: const EdgeInsets.all(8.0),
+                            padding: const EdgeInsets.all(5.0),
                             child: Stack(
                               clipBehavior: Clip.none,
                               children: [
                                 const Icon(
                                   Icons.notifications_outlined,
                                   color: AppColors.chassisText,
-                                  size: 22,
+                                  size: 20,
                                 ),
                                 if (_hasUnreadAlerts)
                                   Positioned(
-                                    top: 1,
-                                    right: 1,
+                                    top: 0,
+                                    right: 0,
                                     child: Container(
-                                      width: 8,
-                                      height: 8,
+                                      width: 7,
+                                      height: 7,
                                       decoration: BoxDecoration(
                                         color: AppColors.caliperCrimson,
                                         shape: BoxShape.circle,
@@ -541,26 +561,27 @@ class _EmergencyHomeScreenState extends State<EmergencyHomeScreen>
                             ),
                           ),
                         ),
-                        const SizedBox(width: 4),
+                        const SizedBox(width: 2),
 
                         // Search Icon
                         InkWell(
                           onTap: _openSearchSheet,
                           borderRadius: BorderRadius.circular(20),
                           child: const Padding(
-                            padding: EdgeInsets.all(8.0),
+                            padding: EdgeInsets.all(5.0),
                             child: Icon(
                               Icons.search,
                               color: AppColors.chassisText,
-                              size: 22,
+                              size: 20,
                             ),
                           ),
                         ),
                       ],
                     ),
-                  ],
-                ),
+                  ),
+                ],
               ),
+            ),
 
             // Tab Body (IndexedStack switching between Home, Activity, and Profile)
             Expanded(
@@ -791,13 +812,17 @@ class _EmergencyHomeScreenState extends State<EmergencyHomeScreen>
                             children: [
                               Row(
                                 children: const [
-                                  Text(
-                                    'DETECTED LOCATION',
-                                    style: TextStyle(
-                                      color: AppColors.slateMuted,
-                                      fontSize: 9,
-                                      fontWeight: FontWeight.w800,
-                                      letterSpacing: 0.8,
+                                  Flexible(
+                                    child: Text(
+                                      'DETECTED LOCATION',
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: TextStyle(
+                                        color: AppColors.slateMuted,
+                                        fontSize: 9,
+                                        fontWeight: FontWeight.w800,
+                                        letterSpacing: 0.8,
+                                      ),
                                     ),
                                   ),
                                   SizedBox(width: 5),
@@ -987,25 +1012,28 @@ class _EmergencyHomeScreenState extends State<EmergencyHomeScreen>
                                   color: Colors.white.withAlpha(35),
                                   borderRadius: BorderRadius.circular(10),
                                 ),
-                                child: Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: const [
-                                    Icon(
-                                      Icons.touch_app,
-                                      color: Colors.white,
-                                      size: 10,
-                                    ),
-                                    SizedBox(width: 3),
-                                    Text(
-                                      'PRESS FOR HELP',
-                                      style: TextStyle(
+                                child: FittedBox(
+                                  fit: BoxFit.scaleDown,
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: const [
+                                      Icon(
+                                        Icons.touch_app,
                                         color: Colors.white,
-                                        fontSize: 8.5,
-                                        fontWeight: FontWeight.w900,
-                                        letterSpacing: 1.2,
+                                        size: 10,
                                       ),
-                                    ),
-                                  ],
+                                      SizedBox(width: 3),
+                                      Text(
+                                        'PRESS FOR HELP',
+                                        style: TextStyle(
+                                          color: Colors.white,
+                                          fontSize: 8.5,
+                                          fontWeight: FontWeight.w900,
+                                          letterSpacing: 1.2,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
                                 ),
                               ),
                             ],
@@ -1044,14 +1072,18 @@ class _EmergencyHomeScreenState extends State<EmergencyHomeScreen>
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: const [
-              Text(
-                'What do you need help with?',
-                style: TextStyle(
-                  color: AppColors.chassisText,
-                  fontSize: 13,
-                  fontWeight: FontWeight.w800,
+              Flexible(
+                child: Text(
+                  'What do you need help with?',
+                  style: TextStyle(
+                    color: AppColors.chassisText,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w800,
+                  ),
+                  overflow: TextOverflow.ellipsis,
                 ),
               ),
+              SizedBox(width: 8),
               Text(
                 'Instant triage',
                 style: TextStyle(
@@ -1133,7 +1165,7 @@ class _EmergencyHomeScreenState extends State<EmergencyHomeScreen>
         },
         borderRadius: BorderRadius.circular(12),
         child: Container(
-          padding: const EdgeInsets.symmetric(vertical: 9, horizontal: 3),
+          padding: const EdgeInsets.symmetric(vertical: 9, horizontal: 2),
           decoration: BoxDecoration(
             color: AppColors.cardWhite,
             borderRadius: BorderRadius.circular(12),

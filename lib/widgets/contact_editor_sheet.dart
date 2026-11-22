@@ -92,12 +92,16 @@ class _ContactEditorSheetState extends State<ContactEditorSheet> {
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Text(
-                    _isEditing ? 'Edit Emergency Contact' : 'Add Broadcast Contact',
-                    style: const TextStyle(
-                      color: AppColors.chassisText,
-                      fontSize: 18,
-                      fontWeight: FontWeight.w900,
+                  Flexible(
+                    child: Text(
+                      _isEditing ? 'Edit Emergency Contact' : 'Add Broadcast Contact',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: AppColors.chassisText,
+                        fontSize: 18,
+                        fontWeight: FontWeight.w900,
+                      ),
                     ),
                   ),
                   if (_isEditing && widget.onDelete != null)

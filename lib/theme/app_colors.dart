@@ -12,4 +12,10 @@ class AppColors {
   static const Color slateBorder = Color(0xFFE2E8F0);
   static const Color cardWhite = Color(0xFFFFFFFF);
   static const Color emeraldGps = Color(0xFF10B981);
+
+  // Official bKash Primary Colors (Hex #D12053 & #E2136E)
+  static const Color bkashCrimson = Color(0xFFD12053);
+  static const Color bkashPink = Color(0xFFE2136E);
+  static const Color bkashPrimary = bkashPink;
+  static const Color bkashDeep = bkashCrimson;
 }

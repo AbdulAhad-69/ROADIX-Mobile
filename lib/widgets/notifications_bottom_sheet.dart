@@ -94,23 +94,30 @@ class _NotificationsBottomSheetState extends State<NotificationsBottomSheet> {
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: const [
-                    Text(
-                      'Highway Advisories',
-                      style: TextStyle(
-                        color: AppColors.chassisText,
-                        fontSize: 18,
-                        fontWeight: FontWeight.w900,
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: const [
+                      Text(
+                        'Highway Advisories',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: AppColors.chassisText,
+                          fontSize: 18,
+                          fontWeight: FontWeight.w900,
+                        ),
                       ),
-                    ),
-                    Text(
-                      'Live road condition & rescue alerts',
-                      style: TextStyle(color: AppColors.slateMuted, fontSize: 11),
-                    ),
-                  ],
+                      Text(
+                        'Live road condition & rescue alerts',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(color: AppColors.slateMuted, fontSize: 11),
+                      ),
+                    ],
+                  ),
                 ),
+                const SizedBox(width: 8),
                 TextButton(
                   onPressed: _markAllAsRead,
                   child: const Text(

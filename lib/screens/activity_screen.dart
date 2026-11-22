@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../services/supabase_service.dart';
 import '../theme/app_colors.dart';
+import '../widgets/brand_logo.dart';
 import 'dispatch_screen.dart';
 
 class ActivityScreen extends StatefulWidget {
@@ -112,45 +113,79 @@ class _ActivityScreenState extends State<ActivityScreen> {
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'DIGITAL RESCUE INVOICE',
+                          style: TextStyle(
+                            color: AppColors.slateMuted,
+                            fontSize: 9.5,
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: 0.8,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          item['serviceId'] as String,
+                          style: const TextStyle(
+                            color: AppColors.chassisText,
+                            fontSize: 15,
+                            fontWeight: FontWeight.w900,
+                            fontFamily: 'monospace',
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
                     children: [
-                      const Text(
-                        'DIGITAL RESCUE INVOICE',
-                        style: TextStyle(
-                          color: AppColors.slateMuted,
-                          fontSize: 9.5,
-                          fontWeight: FontWeight.w800,
-                          letterSpacing: 0.8,
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                        decoration: BoxDecoration(
+                          color: AppColors.bkashPink.withValues(alpha: 0.12),
+                          borderRadius: BorderRadius.circular(6),
+                          border: Border.all(color: AppColors.bkashCrimson.withValues(alpha: 0.4)),
+                        ),
+                        child: const Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            BrandLogo(brand: 'bkash', size: 13),
+                            SizedBox(width: 4),
+                            Text(
+                              'bKash',
+                              style: TextStyle(
+                                color: AppColors.bkashCrimson,
+                                fontSize: 9.5,
+                                fontWeight: FontWeight.w900,
+                              ),
+                            ),
+                          ],
                         ),
                       ),
-                      const SizedBox(height: 2),
-                      Text(
-                        item['serviceId'] as String,
-                        style: const TextStyle(
-                          color: AppColors.chassisText,
-                          fontSize: 15,
-                          fontWeight: FontWeight.w900,
-                          fontFamily: 'monospace',
+                      const SizedBox(width: 6),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFECFDF5),
+                          borderRadius: BorderRadius.circular(6),
+                          border: Border.all(color: const Color(0xFFA7F3D0)),
+                        ),
+                        child: const Text(
+                          'PAID & SETTLED',
+                          style: TextStyle(
+                            color: AppColors.emeraldGps,
+                            fontSize: 9.5,
+                            fontWeight: FontWeight.w800,
+                          ),
                         ),
                       ),
                     ],
-                  ),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFECFDF5),
-                      borderRadius: BorderRadius.circular(6),
-                      border: Border.all(color: const Color(0xFFA7F3D0)),
-                    ),
-                    child: const Text(
-                      'PAID & SETTLED',
-                      style: TextStyle(
-                        color: AppColors.emeraldGps,
-                        fontSize: 9.5,
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
                   ),
                 ],
               ),
@@ -161,6 +196,11 @@ class _ActivityScreenState extends State<ActivityScreen> {
               _buildReceiptRow('Location', item['location'] as String? ?? 'Dhaka Breakdown Site'),
               _buildReceiptRow('Vehicle', item['vehicle'] as String? ?? 'Registered Vehicle'),
               _buildReceiptRow('Timestamp', item['date'] as String? ?? 'Recently'),
+              _buildReceiptRow(
+                'Payment Method',
+                'bKash MFS Secured',
+                trailing: const BrandLogo(brand: 'bkash', size: 15),
+              ),
               const SizedBox(height: 12),
               const Divider(color: AppColors.slateBorder, height: 1),
               const SizedBox(height: 12),
@@ -241,19 +281,35 @@ class _ActivityScreenState extends State<ActivityScreen> {
     );
   }
 
-  Widget _buildReceiptRow(String label, String value) {
+  Widget _buildReceiptRow(String label, String value, {Widget? trailing}) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 6.0),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           Text(label, style: const TextStyle(color: AppColors.slateMuted, fontSize: 11.5)),
-          Text(
-            value,
-            style: const TextStyle(
-              color: AppColors.chassisText,
-              fontSize: 12,
-              fontWeight: FontWeight.w600,
+          const SizedBox(width: 8),
+          Flexible(
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (trailing != null) ...[
+                  trailing,
+                  const SizedBox(width: 6),
+                ],
+                Flexible(
+                  child: Text(
+                    value,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: AppColors.chassisText,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              ],
             ),
           ),
         ],
@@ -552,16 +608,21 @@ class _ActivityScreenState extends State<ActivityScreen> {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    const Text(
-                      'PAST RESCUES (DHAKA REGION)',
-                      style: TextStyle(
-                        color: AppColors.slateMuted,
-                        fontSize: 10,
-                        fontWeight: FontWeight.w800,
-                        letterSpacing: 0.8,
+                    const Flexible(
+                      child: Text(
+                        'PAST RESCUES (DHAKA REGION)',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: AppColors.slateMuted,
+                          fontSize: 10,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: 0.8,
+                        ),
                       ),
                     ),
-                    if (_pastRescues.isEmpty)
+                    if (_pastRescues.isEmpty) ...[
+                      const SizedBox(width: 8),
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                         decoration: BoxDecoration(
@@ -577,6 +638,7 @@ class _ActivityScreenState extends State<ActivityScreen> {
                           ),
                         ),
                       ),
+                    ],
                   ],
                 ),
                 const SizedBox(height: 10),
@@ -655,13 +717,20 @@ class _ActivityScreenState extends State<ActivityScreen> {
                                   ),
                                 ),
                                 const SizedBox(height: 2),
-                                const Text(
-                                  'Receipt ›',
-                                  style: TextStyle(
-                                    color: AppColors.caliperCrimson,
-                                    fontSize: 10,
-                                    fontWeight: FontWeight.w700,
-                                  ),
+                                const Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    BrandLogo(brand: 'bkash', size: 11),
+                                    SizedBox(width: 3),
+                                    Text(
+                                      'Receipt ›',
+                                      style: TextStyle(
+                                        color: AppColors.caliperCrimson,
+                                        fontSize: 10,
+                                        fontWeight: FontWeight.w700,
+                                      ),
+                                    ),
+                                  ],
                                 ),
                               ],
                             ),
