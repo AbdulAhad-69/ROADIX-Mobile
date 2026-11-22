@@ -51,7 +51,7 @@ class CloudinaryService {
 
   /// Returns the CDN URL for official brand logos.
   String getBrandLogoUrl(String brand, {int size = 128}) {
-    final normalized = brand.toLowerCase().trim();
+    final normalized = _normalizeBrandKey(brand);
     final path = 'roadix/brands/${normalized}_logo.png';
     return getImageUrl(path, width: size, height: size, crop: 'fit');
   }
@@ -76,11 +76,27 @@ class CloudinaryService {
     if (key.contains('google')) return 'assets/images/google_logo.png';
     if (key.contains('bkash')) return 'assets/images/bkash_logo.png';
     if (key.contains('nagad')) return 'assets/images/nagad_logo.png';
+    if (key.contains('upay')) return 'assets/images/upay_logo.png';
+    if (key.contains('rocket') || key.contains('dbbl')) return 'assets/images/rocket_logo.png';
+    if (key.contains('nexuspay') || key.contains('nexus')) return 'assets/images/nexuspay_logo.png';
+    if (key.contains('ucash')) return 'assets/images/ucash_logo.png';
     if (key.contains('sedan') || key.contains('car')) return 'assets/images/sedan.png';
     if (key.contains('suv')) return 'assets/images/suv.png';
     if (key.contains('motorcycle') || key.contains('bike')) return 'assets/images/motorcycle.png';
-    if (key.contains('commercial') || key.contains('truck')) return 'assets/images/commercial.png';
+    if (key.contains('commercial') || key.contains('truck') || key.contains('microbus')) return 'assets/images/commercial.png';
     return 'assets/images/logo.png';
+  }
+
+  static String _normalizeBrandKey(String brand) {
+    final lower = brand.toLowerCase().trim();
+    if (lower.contains('google')) return 'google';
+    if (lower.contains('bkash')) return 'bkash';
+    if (lower.contains('nagad')) return 'nagad';
+    if (lower.contains('rocket') || lower.contains('dbbl')) return 'rocket';
+    if (lower.contains('upay')) return 'upay';
+    if (lower.contains('nexuspay') || lower.contains('nexus')) return 'nexuspay';
+    if (lower.contains('ucash')) return 'ucash';
+    return lower;
   }
 
   static String _normalizeVehicleKey(String vehicleType) {

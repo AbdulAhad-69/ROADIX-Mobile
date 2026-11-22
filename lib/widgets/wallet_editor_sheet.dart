@@ -30,7 +30,14 @@ class _WalletEditorSheetState extends State<WalletEditorSheet> {
   String? _errorMessage;
   bool _isAdding = false;
 
-  final List<String> _providers = ['bKash', 'Nagad', 'Rocket'];
+  final List<String> _providers = [
+    'bKash',
+    'Nagad',
+    'Rocket',
+    'Upay',
+    'NexusPay',
+    'Ucash',
+  ];
 
   @override
   void initState() {

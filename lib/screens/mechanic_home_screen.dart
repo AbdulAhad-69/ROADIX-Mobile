@@ -31,6 +31,9 @@ class _MechanicHomeScreenState extends State<MechanicHomeScreen> {
   Timer? _offerTimer;
   Timer? _refreshTimer;
   Timer? _telemetryTimer;
+  bool _isPushingLocation = false;
+  double? _lastKnownMechanicLat;
+  double? _lastKnownMechanicLng;
 
   Map<String, dynamic>? _activeRescue;
   StreamSubscription? _offerSub;
@@ -265,14 +268,57 @@ class _MechanicHomeScreenState extends State<MechanicHomeScreen> {
   }
 
   Future<void> _pushCurrentLocation() async {
+    if (_isPushingLocation) return;
+    _isPushingLocation = true;
+
     try {
-      final pos = await Geolocator.getCurrentPosition(
-        locationSettings: const LocationSettings(accuracy: LocationAccuracy.high),
-      );
-      await _db.updateMechanicLocation(lat: pos.latitude, lng: pos.longitude);
+      Position? pos;
+      try {
+        final serviceEnabled = await Geolocator.isLocationServiceEnabled();
+        if (serviceEnabled) {
+          pos = await Geolocator.getCurrentPosition(
+            locationSettings: const LocationSettings(
+              accuracy: LocationAccuracy.high,
+              timeLimit: Duration(seconds: 4),
+            ),
+          );
+        }
+      } catch (_) {}
+
+      pos ??= await _tryGetLastKnownPosition();
+
+      double pushLat;
+      double pushLng;
+      if (pos != null) {
+        pushLat = pos.latitude;
+        pushLng = pos.longitude;
+        _lastKnownMechanicLat = pushLat;
+        _lastKnownMechanicLng = pushLng;
+      } else if (_lastKnownMechanicLat != null && _lastKnownMechanicLng != null) {
+        // Retain verified mechanic coordinates rather than forcing Dhaka
+        pushLat = _lastKnownMechanicLat!;
+        pushLng = _lastKnownMechanicLng!;
+      } else {
+        // Default fallback only if coordinates were never recorded
+        pushLat = 23.8103;
+        pushLng = 90.4125;
+      }
+
+      try {
+        await _db.updateMechanicLocation(lat: pushLat, lng: pushLng);
+      } catch (_) {
+        // Gracefully absorb offline or demo mode RPC failures
+      }
+    } finally {
+      _isPushingLocation = false;
+    }
+  }
+
+  Future<Position?> _tryGetLastKnownPosition() async {
+    try {
+      return await Geolocator.getLastKnownPosition();
     } catch (_) {
-      // Fallback to roadside coordinates if GPS read fails
-      await _db.updateMechanicLocation(lat: 23.8103, lng: 90.4125);
+      return null;
     }
   }
 
@@ -515,12 +561,17 @@ class _MechanicHomeScreenState extends State<MechanicHomeScreen> {
             icon: const Icon(Icons.logout, color: AppColors.caliperCrimson, size: 20),
             tooltip: 'Sign Out',
             onPressed: () async {
-              await _db.signOut();
-              if (context.mounted) {
-                Navigator.of(context).pushAndRemoveUntil(
-                  MaterialPageRoute(builder: (_) => const LoginScreen()),
-                  (route) => false,
-                );
+              try {
+                await _db.signOut();
+              } catch (e) {
+                debugPrint('Mechanic HomeScreen signOut error: $e');
+              } finally {
+                if (context.mounted) {
+                  Navigator.of(context).pushAndRemoveUntil(
+                    MaterialPageRoute(builder: (_) => const LoginScreen()),
+                    (route) => false,
+                  );
+                }
               }
             },
           ),

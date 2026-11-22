@@ -30,6 +30,7 @@ class _EmergencyHomeScreenState extends State<EmergencyHomeScreen>
 
   // Dynamic user & location telemetry
   String _userName = 'Motorist';
+  String? _avatarUrl;
   bool _isNidVerified = false;
   String _currentLocationName = 'Dhaka Region';
   double _currentLat = 23.8759;
@@ -59,6 +60,7 @@ class _EmergencyHomeScreenState extends State<EmergencyHomeScreen>
       if (mounted && profile != null) {
         setState(() {
           _userName = profile['full_name'] as String? ?? 'Motorist';
+          _avatarUrl = profile['avatar_url'] as String?;
           _isNidVerified = profile['is_nid_verified'] == true;
         });
       }
@@ -341,17 +343,25 @@ class _EmergencyHomeScreenState extends State<EmergencyHomeScreen>
     }
   }
 
-  void _openLocationConfirm() {
+  Future<void> _openLocationConfirm() async {
     HapticFeedback.selectionClick();
-    Navigator.of(context).push(
+    final result = await Navigator.of(context).push<Map<String, dynamic>>(
       MaterialPageRoute(
         builder: (_) => LocationConfirmScreen(
           selectedFault: 'General Breakdown',
           initialLat: _currentLat,
           initialLng: _currentLng,
+          isSelectingLocationOnly: true,
         ),
       ),
     );
+    if (result != null && mounted) {
+      setState(() {
+        _currentLat = (result['lat'] as num?)?.toDouble() ?? _currentLat;
+        _currentLng = (result['lng'] as num?)?.toDouble() ?? _currentLng;
+        _currentLocationName = result['address'] as String? ?? _currentLocationName;
+      });
+    }
   }
 
   @override
@@ -377,6 +387,7 @@ class _EmergencyHomeScreenState extends State<EmergencyHomeScreen>
                         onTap: () {
                           HapticFeedback.selectionClick();
                           setState(() => _activeNavIndex = 2);
+                          _loadUserProfile();
                         },
                         borderRadius: BorderRadius.circular(12),
                         child: Padding(
@@ -409,14 +420,24 @@ class _EmergencyHomeScreenState extends State<EmergencyHomeScreen>
                                     child: CircleAvatar(
                                       radius: 14,
                                       backgroundColor: AppColors.crimsonLight,
-                                      child: Text(
-                                        _userName.isNotEmpty ? _userName[0].toUpperCase() : 'M',
-                                        style: const TextStyle(
-                                          color: AppColors.caliperCrimson,
-                                          fontWeight: FontWeight.w900,
-                                          fontSize: 14,
-                                        ),
-                                      ),
+                                      backgroundImage: (_avatarUrl != null && _avatarUrl!.isNotEmpty)
+                                          ? (_avatarUrl!.startsWith('http')
+                                              ? NetworkImage(_avatarUrl!)
+                                              : AssetImage(_avatarUrl!) as ImageProvider)
+                                          : null,
+                                      onBackgroundImageError: (_avatarUrl != null && _avatarUrl!.isNotEmpty)
+                                          ? (e, s) {}
+                                          : null,
+                                      child: (_avatarUrl == null || _avatarUrl!.isEmpty)
+                                          ? Text(
+                                              _userName.isNotEmpty ? _userName[0].toUpperCase() : 'M',
+                                              style: const TextStyle(
+                                                color: AppColors.caliperCrimson,
+                                                fontWeight: FontWeight.w900,
+                                                fontSize: 14,
+                                              ),
+                                            )
+                                          : null,
                                     ),
                                   ),
                                 ),
@@ -771,18 +792,18 @@ class _EmergencyHomeScreenState extends State<EmergencyHomeScreen>
           // Dynamic Location Indicator Card
           InkWell(
             onTap: _openLocationConfirm,
-            borderRadius: BorderRadius.circular(14),
+            borderRadius: BorderRadius.circular(16),
             child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
               decoration: BoxDecoration(
                 color: AppColors.cardWhite,
-                borderRadius: BorderRadius.circular(14),
+                borderRadius: BorderRadius.circular(16),
                 border: Border.all(color: AppColors.slateBorder),
                 boxShadow: [
                   BoxShadow(
-                    color: AppColors.chassisText.withAlpha(4),
-                    blurRadius: 6,
-                    offset: const Offset(0, 2),
+                    color: AppColors.caliperCrimson.withAlpha(12),
+                    blurRadius: 10,
+                    offset: const Offset(0, 3),
                   ),
                 ],
               ),
@@ -793,16 +814,20 @@ class _EmergencyHomeScreenState extends State<EmergencyHomeScreen>
                     child: Row(
                       children: [
                         Container(
-                          width: 32,
-                          height: 32,
+                          width: 36,
+                          height: 36,
                           decoration: BoxDecoration(
                             color: const Color(0xFFFEF2F2),
-                            borderRadius: BorderRadius.circular(10),
+                            borderRadius: BorderRadius.circular(11),
+                            border: Border.all(
+                              color: AppColors.caliperCrimson.withAlpha(35),
+                              width: 1.0,
+                            ),
                           ),
                           child: const Icon(
                             Icons.location_on,
                             color: AppColors.caliperCrimson,
-                            size: 18,
+                            size: 19,
                           ),
                         ),
                         const SizedBox(width: 10),
@@ -1096,47 +1121,55 @@ class _EmergencyHomeScreenState extends State<EmergencyHomeScreen>
           ),
           const SizedBox(height: 10),
 
-          // 5-Card Responsive Breakdown Row with Elevated Automotive Styling
-          Row(
+          // 2-Row Responsive Breakdown Cards Layout with Elevated Modern Styling
+          Column(
             children: [
-              _buildCategoryCard(
-                title: 'Battery',
-                badge: 'Jump / 12V',
-                icon: Icons.battery_charging_full,
-                accentColor: const Color(0xFFD97706),
-                fullFault: 'Dead Battery',
+              Row(
+                children: [
+                  _buildCategoryCard(
+                    title: 'Battery',
+                    badge: 'Jump / 12V',
+                    icon: Icons.battery_charging_full,
+                    accentColor: const Color(0xFFD97706),
+                    fullFault: 'Dead Battery',
+                  ),
+                  const SizedBox(width: 8),
+                  _buildCategoryCard(
+                    title: 'Flat Tire',
+                    badge: 'Puncture',
+                    icon: Icons.album_outlined,
+                    accentColor: AppColors.caliperCrimson,
+                    fullFault: 'Flat Tire',
+                  ),
+                  const SizedBox(width: 8),
+                  _buildCategoryCard(
+                    title: 'Engine',
+                    badge: 'Thermal',
+                    icon: Icons.warning_amber_rounded,
+                    accentColor: const Color(0xFFEA580C),
+                    fullFault: 'Engine Trouble',
+                  ),
+                ],
               ),
-              const SizedBox(width: 6),
-              _buildCategoryCard(
-                title: 'Flat Tire',
-                badge: 'Puncture',
-                icon: Icons.album_outlined,
-                accentColor: AppColors.caliperCrimson,
-                fullFault: 'Flat Tire',
-              ),
-              const SizedBox(width: 6),
-              _buildCategoryCard(
-                title: 'Engine',
-                badge: 'Thermal',
-                icon: Icons.warning_amber_rounded,
-                accentColor: const Color(0xFFEA580C),
-                fullFault: 'Engine Trouble',
-              ),
-              const SizedBox(width: 6),
-              _buildCategoryCard(
-                title: 'Fuel',
-                badge: '5L Delivery',
-                icon: Icons.local_gas_station_outlined,
-                accentColor: const Color(0xFF0284C7),
-                fullFault: 'Out of Fuel',
-              ),
-              const SizedBox(width: 6),
-              _buildCategoryCard(
-                title: 'Towing',
-                badge: 'Flatbed',
-                icon: Icons.local_shipping_outlined,
-                accentColor: const Color(0xFF4F46E5),
-                fullFault: 'Towing',
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  _buildCategoryCard(
+                    title: 'Fuel',
+                    badge: '5L Delivery',
+                    icon: Icons.local_gas_station_outlined,
+                    accentColor: const Color(0xFF0284C7),
+                    fullFault: 'Out of Fuel',
+                  ),
+                  const SizedBox(width: 8),
+                  _buildCategoryCard(
+                    title: 'Towing',
+                    badge: 'Flatbed',
+                    icon: Icons.local_shipping_outlined,
+                    accentColor: const Color(0xFF4F46E5),
+                    fullFault: 'Towing',
+                  ),
+                ],
               ),
             ],
           ),
@@ -1163,17 +1196,17 @@ class _EmergencyHomeScreenState extends State<EmergencyHomeScreen>
           HapticFeedback.lightImpact();
           _startEmergencyTriage(fullFault);
         },
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(16),
         child: Container(
-          padding: const EdgeInsets.symmetric(vertical: 9, horizontal: 2),
+          padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 6),
           decoration: BoxDecoration(
             color: AppColors.cardWhite,
-            borderRadius: BorderRadius.circular(12),
+            borderRadius: BorderRadius.circular(16),
             border: Border.all(color: AppColors.slateBorder),
             boxShadow: [
               BoxShadow(
-                color: accentColor.withAlpha(16),
-                blurRadius: 6,
+                color: accentColor.withAlpha(20),
+                blurRadius: 8,
                 offset: const Offset(0, 2),
               ),
             ],
@@ -1182,13 +1215,13 @@ class _EmergencyHomeScreenState extends State<EmergencyHomeScreen>
             mainAxisSize: MainAxisSize.min,
             children: [
               Container(
-                width: 34,
-                height: 34,
+                width: 36,
+                height: 36,
                 decoration: BoxDecoration(
-                  color: accentColor.withAlpha(25),
+                  color: accentColor.withAlpha(24),
                   borderRadius: BorderRadius.circular(10),
                 ),
-                child: Icon(icon, color: accentColor, size: 19),
+                child: Icon(icon, color: accentColor, size: 20),
               ),
               const SizedBox(height: 5),
               FittedBox(
@@ -1200,7 +1233,7 @@ class _EmergencyHomeScreenState extends State<EmergencyHomeScreen>
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
                     color: AppColors.chassisText,
-                    fontSize: 10.5,
+                    fontSize: 12.0,
                     fontWeight: FontWeight.w800,
                     height: 1.1,
                   ),
@@ -1208,10 +1241,10 @@ class _EmergencyHomeScreenState extends State<EmergencyHomeScreen>
               ),
               const SizedBox(height: 3),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1.5),
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                 decoration: BoxDecoration(
                   color: accentColor.withAlpha(20),
-                  borderRadius: BorderRadius.circular(4),
+                  borderRadius: BorderRadius.circular(6),
                 ),
                 child: FittedBox(
                   fit: BoxFit.scaleDown,
@@ -1219,7 +1252,7 @@ class _EmergencyHomeScreenState extends State<EmergencyHomeScreen>
                     badge,
                     style: TextStyle(
                       color: accentColor,
-                      fontSize: 7.5,
+                      fontSize: 10.0,
                       fontWeight: FontWeight.w800,
                       letterSpacing: 0.1,
                     ),

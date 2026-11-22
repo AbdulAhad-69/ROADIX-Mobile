@@ -183,45 +183,102 @@ class _FaultDetailsScreenState extends State<FaultDetailsScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // Summary Badge Card
+                    // Hero Fault Summary Card with Gradient Accent & Depth
                     Container(
-                      padding: const EdgeInsets.all(12),
+                      padding: const EdgeInsets.all(14),
                       decoration: BoxDecoration(
-                        color: AppColors.cardWhite,
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: AppColors.slateBorder),
+                        gradient: const LinearGradient(
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                          colors: [
+                            Colors.white,
+                            Color(0xFFFFF7F7),
+                          ],
+                        ),
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(
+                          color: AppColors.caliperCrimson.withAlpha(50),
+                          width: 1.2,
+                        ),
+                        boxShadow: [
+                          BoxShadow(
+                            color: AppColors.caliperCrimson.withAlpha(15),
+                            blurRadius: 10,
+                            offset: const Offset(0, 3),
+                          ),
+                        ],
                       ),
                       child: Row(
                         children: [
                           Container(
-                            width: 36,
-                            height: 36,
+                            width: 44,
+                            height: 44,
                             decoration: BoxDecoration(
                               color: AppColors.crimsonLight,
-                              borderRadius: BorderRadius.circular(8),
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(
+                                color: AppColors.caliperCrimson.withAlpha(40),
+                                width: 1.0,
+                              ),
                             ),
-                            child: const Icon(Icons.build, color: AppColors.caliperCrimson, size: 20),
+                            child: const Icon(
+                              Icons.build,
+                              color: AppColors.caliperCrimson,
+                              size: 22,
+                            ),
                           ),
-                          const SizedBox(width: 12),
+                          const SizedBox(width: 14),
                           Expanded(
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
+                                Row(
+                                  children: [
+                                    const Text(
+                                      'SELECTED FAULT',
+                                      style: TextStyle(
+                                        color: AppColors.caliperCrimson,
+                                        fontSize: 9.0,
+                                        fontWeight: FontWeight.w900,
+                                        letterSpacing: 0.8,
+                                      ),
+                                    ),
+                                    const SizedBox(width: 6),
+                                    Container(
+                                      width: 5,
+                                      height: 5,
+                                      decoration: const BoxDecoration(
+                                        color: AppColors.caliperCrimson,
+                                        shape: BoxShape.circle,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 2),
                                 Text(
                                   widget.selectedFault,
                                   style: const TextStyle(
                                     color: AppColors.chassisText,
-                                    fontSize: 14,
-                                    fontWeight: FontWeight.w800,
+                                    fontSize: 15,
+                                    fontWeight: FontWeight.w900,
                                   ),
                                 ),
-                                const SizedBox(height: 2),
-                                Text(
-                                  '${widget.vehicleType} • ${widget.licensePlate}',
-                                  style: const TextStyle(
-                                    color: AppColors.slateMuted,
-                                    fontSize: 11,
-                                    fontFamily: 'monospace',
+                                const SizedBox(height: 3),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFFF1F5F9),
+                                    borderRadius: BorderRadius.circular(5),
+                                    border: Border.all(color: AppColors.slateBorder, width: 0.8),
+                                  ),
+                                  child: Text(
+                                    '${widget.vehicleType} • ${widget.licensePlate}',
+                                    style: const TextStyle(
+                                      color: AppColors.slateMuted,
+                                      fontSize: 10.5,
+                                      fontFamily: 'monospace',
+                                      fontWeight: FontWeight.w700,
+                                    ),
                                   ),
                                 ),
                               ],
@@ -248,7 +305,7 @@ class _FaultDetailsScreenState extends State<FaultDetailsScreen> {
                     ),
                     const SizedBox(height: 10),
 
-                    // Symptom Checklist Cards
+                    // Symptom Checklist Cards with Clear Tactile Selection States
                     ..._symptomOptions.map((symptom) {
                       final bool isChecked = _selectedSymptoms.contains(symptom);
                       return Padding(
@@ -264,22 +321,23 @@ class _FaultDetailsScreenState extends State<FaultDetailsScreen> {
                               }
                             });
                           },
-                          borderRadius: BorderRadius.circular(12),
-                          child: Container(
+                          borderRadius: BorderRadius.circular(14),
+                          child: AnimatedContainer(
+                            duration: const Duration(milliseconds: 180),
                             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                             decoration: BoxDecoration(
                               color: isChecked ? AppColors.crimsonLight.withAlpha(140) : AppColors.cardWhite,
-                              borderRadius: BorderRadius.circular(12),
+                              borderRadius: BorderRadius.circular(14),
                               border: Border.all(
                                 color: isChecked ? AppColors.caliperCrimson : AppColors.slateBorder,
-                                width: isChecked ? 1.6 : 1.0,
+                                width: isChecked ? 1.8 : 1.0,
                               ),
                               boxShadow: [
                                 BoxShadow(
                                   color: isChecked
-                                      ? AppColors.caliperCrimson.withAlpha(14)
-                                      : Colors.black.withAlpha(3),
-                                  blurRadius: 4,
+                                      ? AppColors.caliperCrimson.withAlpha(20)
+                                      : Colors.black.withAlpha(4),
+                                  blurRadius: isChecked ? 6 : 3,
                                   offset: const Offset(0, 1),
                                 ),
                               ],
@@ -287,11 +345,11 @@ class _FaultDetailsScreenState extends State<FaultDetailsScreen> {
                             child: Row(
                               children: [
                                 Container(
-                                  width: 22,
-                                  height: 22,
+                                  width: 24,
+                                  height: 24,
                                   decoration: BoxDecoration(
                                     color: isChecked ? AppColors.caliperCrimson : Colors.transparent,
-                                    borderRadius: BorderRadius.circular(6),
+                                    borderRadius: BorderRadius.circular(7),
                                     border: Border.all(
                                       color: isChecked ? AppColors.caliperCrimson : AppColors.slateBorder,
                                       width: 1.5,
@@ -301,7 +359,7 @@ class _FaultDetailsScreenState extends State<FaultDetailsScreen> {
                                       ? const Icon(
                                           Icons.check,
                                           color: Colors.white,
-                                          size: 15,
+                                          size: 16,
                                         )
                                       : null,
                                 ),
@@ -325,7 +383,7 @@ class _FaultDetailsScreenState extends State<FaultDetailsScreen> {
 
                     const SizedBox(height: 18),
 
-                    // Roadside Hazard Toggles
+                    // Roadside Hazard Toggles with High-Visibility Urgent Hazard Styling
                     const Text(
                       'Roadside Safety Conditions',
                       style: TextStyle(
@@ -336,12 +394,25 @@ class _FaultDetailsScreenState extends State<FaultDetailsScreen> {
                     ),
                     const SizedBox(height: 10),
 
-                    Container(
-                      padding: const EdgeInsets.all(12),
+                    AnimatedContainer(
+                      duration: const Duration(milliseconds: 200),
+                      padding: const EdgeInsets.all(14),
                       decoration: BoxDecoration(
                         color: AppColors.cardWhite,
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: AppColors.slateBorder),
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(
+                          color: _isInLiveLane ? AppColors.caliperCrimson : AppColors.slateBorder,
+                          width: _isInLiveLane ? 1.6 : 1.0,
+                        ),
+                        boxShadow: [
+                          BoxShadow(
+                            color: _isInLiveLane
+                                ? AppColors.caliperCrimson.withAlpha(25)
+                                : Colors.black.withAlpha(4),
+                            blurRadius: _isInLiveLane ? 10 : 4,
+                            offset: const Offset(0, 2),
+                          ),
+                        ],
                       ),
                       child: Column(
                         children: [
@@ -351,16 +422,42 @@ class _FaultDetailsScreenState extends State<FaultDetailsScreen> {
                               Expanded(
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: const [
-                                    Text(
-                                      'Stranded in live highway lane',
-                                      style: TextStyle(
-                                        color: AppColors.chassisText,
-                                        fontSize: 12.5,
-                                        fontWeight: FontWeight.w700,
-                                      ),
+                                  children: [
+                                    Row(
+                                      children: [
+                                        const Flexible(
+                                          child: Text(
+                                            'Stranded in live highway lane',
+                                            style: TextStyle(
+                                              color: AppColors.chassisText,
+                                              fontSize: 12.5,
+                                              fontWeight: FontWeight.w700,
+                                            ),
+                                          ),
+                                        ),
+                                        if (_isInLiveLane) ...[
+                                          const SizedBox(width: 6),
+                                          Container(
+                                            padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
+                                            decoration: BoxDecoration(
+                                              color: AppColors.caliperCrimson,
+                                              borderRadius: BorderRadius.circular(4),
+                                            ),
+                                            child: const Text(
+                                              'URGENT',
+                                              style: TextStyle(
+                                                color: Colors.white,
+                                                fontSize: 7.5,
+                                                fontWeight: FontWeight.w900,
+                                                letterSpacing: 0.5,
+                                              ),
+                                            ),
+                                          ),
+                                        ],
+                                      ],
                                     ),
-                                    Text(
+                                    const SizedBox(height: 2),
+                                    const Text(
                                       'High hazard risk: marks priority rescue',
                                       style: TextStyle(color: AppColors.slateMuted, fontSize: 10.5),
                                     ),
@@ -379,23 +476,45 @@ class _FaultDetailsScreenState extends State<FaultDetailsScreen> {
                           if (_isInLiveLane) ...[
                             const SizedBox(height: 10),
                             Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                               decoration: BoxDecoration(
                                 color: const Color(0xFFFEF2F2),
-                                borderRadius: BorderRadius.circular(10),
-                                border: Border.all(color: AppColors.caliperCrimson),
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(
+                                  color: AppColors.caliperCrimson,
+                                  width: 1.5,
+                                ),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: AppColors.caliperCrimson.withAlpha(16),
+                                    blurRadius: 6,
+                                    offset: const Offset(0, 2),
+                                  ),
+                                ],
                               ),
                               child: Row(
-                                children: const [
-                                  Icon(Icons.warning_amber_rounded, color: AppColors.caliperCrimson, size: 18),
-                                  SizedBox(width: 8),
-                                  Expanded(
+                                children: [
+                                  Container(
+                                    padding: const EdgeInsets.all(5),
+                                    decoration: const BoxDecoration(
+                                      color: AppColors.caliperCrimson,
+                                      shape: BoxShape.circle,
+                                    ),
+                                    child: const Icon(
+                                      Icons.warning_amber_rounded,
+                                      color: Colors.white,
+                                      size: 16,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 10),
+                                  const Expanded(
                                     child: Text(
                                       'HIGH ROADWAY HAZARD: Priority dispatch queue activated. Mechanics alerted to exercise traffic caution.',
                                       style: TextStyle(
                                         color: AppColors.caliperCrimson,
                                         fontSize: 10.5,
-                                        fontWeight: FontWeight.w700,
+                                        fontWeight: FontWeight.w800,
+                                        height: 1.3,
                                       ),
                                     ),
                                   ),

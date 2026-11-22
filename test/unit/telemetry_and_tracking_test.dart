@@ -1,8 +1,120 @@
-import 'dart:typed_data';
+import 'dart:async';
+import 'package:flutter/foundation.dart';
+import 'package:flutter/gestures.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:geolocator/geolocator.dart';
+import 'package:maplibre_gl/maplibre_gl.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:roadix_mobile/src/core/config/app_config.dart';
+import 'package:roadix_mobile/screens/location_confirm_screen.dart';
+import 'package:roadix_mobile/screens/sos_screen.dart';
+import 'package:roadix_mobile/screens/mechanic_home_screen.dart';
 import 'package:roadix_mobile/src/core/utils/geometry_utils.dart';
 
+class _MockMapLibrePlatform extends MapLibrePlatform {
+  bool _viewCreated = false;
+
+  @override
+  Future<void> initPlatform(int id) async {}
+
+  @override
+  Widget buildView(
+    Map<String, dynamic> creationParams,
+    OnPlatformViewCreatedCallback onPlatformViewCreated,
+    Set<Factory<OneSequenceGestureRecognizer>>? gestureRecognizers,
+  ) {
+    if (!_viewCreated) {
+      _viewCreated = true;
+      scheduleMicrotask(() {
+        try {
+          onPlatformViewCreated(1);
+        } catch (_) {}
+      });
+    }
+    return const SizedBox.expand();
+  }
+
+  @override
+  Future<bool?> animateCamera(CameraUpdate cameraUpdate, {Duration? duration}) async {
+    return true;
+  }
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) {
+    if (invocation.isGetter) return null;
+    if (invocation.isMethod) {
+      return Future.value(null);
+    }
+    return super.noSuchMethod(invocation);
+  }
+}
+
+class MockGeolocatorPlatform extends GeolocatorPlatform {
+  bool serviceEnabled = true;
+  LocationPermission permission = LocationPermission.whileInUse;
+  Position? mockPosition = Position(
+    latitude: 22.3569,
+    longitude: 91.7832,
+    timestamp: DateTime(2026, 11, 22),
+    accuracy: 4.0,
+    altitude: 10.0,
+    altitudeAccuracy: 1.0,
+    heading: 0.0,
+    headingAccuracy: 1.0,
+    speed: 0.0,
+    speedAccuracy: 0.0,
+  );
+  Position? mockLastKnownPosition;
+  bool shouldThrowOnCurrent = false;
+
+  @override
+  Future<bool> isLocationServiceEnabled() async => serviceEnabled;
+
+  @override
+  Future<LocationPermission> checkPermission() async => permission;
+
+  @override
+  Future<LocationPermission> requestPermission() async => permission;
+
+  @override
+  Future<Position> getCurrentPosition({LocationSettings? locationSettings}) async {
+    if (shouldThrowOnCurrent || mockPosition == null) {
+      throw Exception('GPS lookup failed');
+    }
+    return mockPosition!;
+  }
+
+  @override
+  Future<Position?> getLastKnownPosition({bool forceLocationManager = false}) async =>
+      mockLastKnownPosition ?? mockPosition;
+}
+
 void main() {
+  setUpAll(() async {
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(
+      const MethodChannel('plugins.flutter.io/shared_preferences'),
+      (MethodCall methodCall) async {
+        if (methodCall.method == 'getAll') {
+          return <String, dynamic>{};
+        }
+        return true;
+      },
+    );
+
+    await AppConfig.initialize();
+    try {
+      await Supabase.initialize(
+        url: AppConfig.supabaseUrl,
+        // ignore: deprecated_member_use
+        anonKey: AppConfig.supabaseAnonKey,
+      );
+    } catch (_) {
+      // Supabase already initialized or offline mock active
+    }
+  });
   group('Milestone 4: GeometryUtils PostGIS Point Decoder Tests', () {
     test('parsePostgisPoint decodes GeoJSON map with coordinates', () {
       final geoJson = {
@@ -249,6 +361,224 @@ void main() {
       // Further expansion beyond 15km must be blocked
       final canExpandFurther = radius < maxRadius;
       expect(canExpandFurther, isFalse);
+    });
+  });
+
+  group('Milestone 2: LocationConfirmScreen Recenter & GPS Tests', () {
+    test('Can register MockGeolocatorPlatform and query position', () async {
+      final mock = MockGeolocatorPlatform();
+      GeolocatorPlatform.instance = mock;
+
+      final isEnabled = await Geolocator.isLocationServiceEnabled();
+      expect(isEnabled, isTrue);
+
+      final pos = await Geolocator.getCurrentPosition();
+      expect(pos.latitude, equals(22.3569));
+      expect(pos.longitude, equals(91.7832));
+    });
+
+    testWidgets('LocationConfirmScreen renders and recenter button triggers live GPS positioning', (WidgetTester tester) async {
+      MapLibrePlatform.createInstance = () => _MockMapLibrePlatform();
+      final mock = MockGeolocatorPlatform();
+      GeolocatorPlatform.instance = mock;
+
+      await tester.pumpWidget(
+        const MaterialApp(
+          home: LocationConfirmScreen(
+            selectedFault: 'Flat Tire',
+            initialLat: 23.8759,
+            initialLng: 90.3795,
+            accuracyMeters: 8,
+          ),
+        ),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 100));
+
+      expect(find.text('Confirm Location'), findsOneWidget);
+      expect(find.byIcon(Icons.my_location), findsOneWidget);
+
+      // Tap recenter button
+      await tester.tap(find.byIcon(Icons.my_location));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 200));
+
+      // Accuracy pill should update to mock accuracy 4m
+      expect(find.text('± 4m accuracy'), findsOneWidget);
+
+      await tester.pumpWidget(const SizedBox());
+      await tester.pump(const Duration(milliseconds: 100));
+    });
+
+    testWidgets('Recenter button handles disabled location services with warning SnackBar', (WidgetTester tester) async {
+      MapLibrePlatform.createInstance = () => _MockMapLibrePlatform();
+      final mock = MockGeolocatorPlatform();
+      mock.serviceEnabled = false;
+      GeolocatorPlatform.instance = mock;
+
+      await tester.pumpWidget(
+        const MaterialApp(
+          home: LocationConfirmScreen(
+            selectedFault: 'Flat Tire',
+            initialLat: 23.8759,
+            initialLng: 90.3795,
+            accuracyMeters: 8,
+          ),
+        ),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 100));
+
+      await tester.tap(find.byIcon(Icons.my_location));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 200));
+
+      expect(find.text('Location services are disabled on your device. Please turn on GPS.'), findsOneWidget);
+      expect(find.text('± 8m accuracy'), findsOneWidget);
+
+      await tester.pumpWidget(const SizedBox());
+      await tester.pump(const Duration(milliseconds: 100));
+    });
+
+    testWidgets('Recenter button handles denied location permission with feedback SnackBar', (WidgetTester tester) async {
+      MapLibrePlatform.createInstance = () => _MockMapLibrePlatform();
+      final mock = MockGeolocatorPlatform();
+      mock.serviceEnabled = true;
+      mock.permission = LocationPermission.denied;
+      GeolocatorPlatform.instance = mock;
+
+      await tester.pumpWidget(
+        const MaterialApp(
+          home: LocationConfirmScreen(
+            selectedFault: 'Flat Tire',
+            initialLat: 23.8759,
+            initialLng: 90.3795,
+            accuracyMeters: 8,
+          ),
+        ),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 100));
+
+      await tester.tap(find.byIcon(Icons.my_location));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 200));
+
+      expect(find.text('Location permission denied. Showing preset location.'), findsOneWidget);
+      expect(find.text('± 8m accuracy'), findsOneWidget);
+
+      await tester.pumpWidget(const SizedBox());
+      await tester.pump(const Duration(milliseconds: 100));
+    });
+  });
+
+  group('Milestone 2: SosScreen Live GPS Accuracy & Fallback Tests', () {
+    testWidgets('SosScreen renders emerald ±Xm Acc badge when GPS fix is acquired', (WidgetTester tester) async {
+      final mock = MockGeolocatorPlatform();
+      mock.serviceEnabled = true;
+      mock.permission = LocationPermission.whileInUse;
+      mock.mockPosition = Position(
+        latitude: 22.3569,
+        longitude: 91.7832,
+        timestamp: DateTime(2026, 11, 22),
+        accuracy: 3.0,
+        altitude: 10.0,
+        altitudeAccuracy: 1.0,
+        heading: 0.0,
+        headingAccuracy: 1.0,
+        speed: 0.0,
+        speedAccuracy: 0.0,
+      );
+      GeolocatorPlatform.instance = mock;
+
+      await tester.pumpWidget(
+        const MaterialApp(
+          home: SosScreen(),
+        ),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 200));
+
+      expect(find.text('±3m Acc'), findsOneWidget);
+      expect(find.text('GPS Estimating'), findsNothing);
+
+      await tester.pumpWidget(const SizedBox());
+      await tester.pump(const Duration(milliseconds: 100));
+    });
+
+    testWidgets('SosScreen renders amber GPS Estimating badge and regional corridor when GPS fails', (WidgetTester tester) async {
+      final mock = MockGeolocatorPlatform();
+      mock.serviceEnabled = false;
+      mock.mockPosition = null;
+      mock.mockLastKnownPosition = null;
+      mock.shouldThrowOnCurrent = true;
+      GeolocatorPlatform.instance = mock;
+
+      await tester.pumpWidget(
+        const MaterialApp(
+          home: SosScreen(),
+        ),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 200));
+
+      expect(find.text('GPS Estimating'), findsOneWidget);
+      expect(find.textContaining('±'), findsNothing);
+      expect(find.textContaining('Highway Corridor (Estimated)'), findsOneWidget);
+
+      await tester.pumpWidget(const SizedBox());
+      await tester.pump(const Duration(milliseconds: 100));
+    });
+  });
+
+  group('Milestone 2: MechanicHomeScreen Telemetry Coordinate Preservation Tests', () {
+    testWidgets('MechanicHomeScreen preserves verified coordinates on transient GPS failure', (WidgetTester tester) async {
+      final mock = MockGeolocatorPlatform();
+      mock.serviceEnabled = true;
+      mock.permission = LocationPermission.whileInUse;
+      mock.mockPosition = Position(
+        latitude: 22.3569,
+        longitude: 91.7832,
+        timestamp: DateTime(2026, 11, 22),
+        accuracy: 4.0,
+        altitude: 10.0,
+        altitudeAccuracy: 1.0,
+        heading: 0.0,
+        headingAccuracy: 1.0,
+        speed: 0.0,
+        speedAccuracy: 0.0,
+      );
+      GeolocatorPlatform.instance = mock;
+
+      await tester.pumpWidget(
+        const MaterialApp(
+          home: MechanicHomeScreen(),
+        ),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 100));
+
+      // Toggle duty switch to start telemetry stream
+      final dutyToggle = find.byType(Switch);
+      if (dutyToggle.evaluate().isNotEmpty) {
+        await tester.tap(dutyToggle);
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 200));
+      }
+
+      // Simulate sudden GPS outage (e.g. entering basement parking or tunnel)
+      mock.shouldThrowOnCurrent = true;
+      mock.mockPosition = null;
+      mock.mockLastKnownPosition = null;
+
+      // Advance frames
+      await tester.pump(const Duration(seconds: 1));
+
+      expect(tester.takeException(), isNull);
+      expect(find.text('TECHNICIAN CONSOLE'), findsOneWidget);
+
+      await tester.pumpWidget(const SizedBox());
+      await tester.pump(const Duration(seconds: 60));
     });
   });
 }

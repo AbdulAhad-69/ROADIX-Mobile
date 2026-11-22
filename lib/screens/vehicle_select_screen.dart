@@ -57,24 +57,32 @@ class _VehicleSelectScreenState extends State<VehicleSelectScreen> {
       'subtitle': '2-Wheeler / Scooter',
       'icon': Icons.two_wheeler,
       'srsType': 'Motorcycle',
+      'illustrationType': 'motorcycle',
+      'specs': 'Up to 250cc • Agile',
     },
     {
       'title': 'Sedan / Hatch',
       'subtitle': 'Private Passenger Car',
       'icon': Icons.directions_car,
       'srsType': 'Passenger Car',
+      'illustrationType': 'sedan',
+      'specs': '4-5 Seats • Standard',
     },
     {
       'title': 'SUV / Micro',
       'subtitle': '7-Seater / 4x4 Jeep',
       'icon': Icons.directions_car_filled,
       'srsType': 'Passenger Car',
+      'illustrationType': 'suv',
+      'specs': 'High Clearance • 4x4',
     },
     {
       'title': 'Commercial',
       'subtitle': 'Pickup / Covered Van',
       'icon': Icons.local_shipping,
       'srsType': 'Light Commercial',
+      'illustrationType': 'commercial',
+      'specs': 'Up to 3.5 Ton • Flatbed',
     },
   ];
 
@@ -404,12 +412,16 @@ class _VehicleSelectScreenState extends State<VehicleSelectScreen> {
                             crossAxisCount: 2,
                             crossAxisSpacing: 10,
                             mainAxisSpacing: 10,
-                            childAspectRatio: 1.05,
+                            childAspectRatio: 0.94,
                           ),
                       itemBuilder: (context, index) {
                         final bool isSelected =
                             _selectedVehicleTypeIndex == index;
                         final item = _vehicleCategories[index];
+                        final illustrationKey = (item['illustrationType'] ??
+                            item['title'] ??
+                            item['srsType'] ??
+                            'Passenger Car') as String;
                         return InkWell(
                           onTap: () {
                             HapticFeedback.selectionClick();
@@ -418,26 +430,27 @@ class _VehicleSelectScreenState extends State<VehicleSelectScreen> {
                               _selectedSavedVehicleId = null;
                             });
                           },
-                          borderRadius: BorderRadius.circular(14),
-                          child: Container(
-                            padding: const EdgeInsets.all(10),
+                          borderRadius: BorderRadius.circular(16),
+                          child: AnimatedContainer(
+                            duration: const Duration(milliseconds: 180),
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
                             decoration: BoxDecoration(
                               color: isSelected
                                   ? AppColors.crimsonLight.withAlpha(140)
                                   : AppColors.cardWhite,
-                              borderRadius: BorderRadius.circular(14),
+                              borderRadius: BorderRadius.circular(16),
                               border: Border.all(
                                 color: isSelected
                                     ? AppColors.caliperCrimson
                                     : AppColors.slateBorder,
-                                width: isSelected ? 1.8 : 1.0,
+                                width: isSelected ? 2.0 : 1.0,
                               ),
                               boxShadow: [
                                 BoxShadow(
                                   color: isSelected
-                                      ? AppColors.caliperCrimson.withAlpha(16)
-                                      : Colors.black.withAlpha(3),
-                                  blurRadius: 6,
+                                      ? AppColors.caliperCrimson.withAlpha(28)
+                                      : Colors.black.withAlpha(5),
+                                  blurRadius: isSelected ? 8 : 4,
                                   offset: const Offset(0, 2),
                                 ),
                               ],
@@ -450,13 +463,22 @@ class _VehicleSelectScreenState extends State<VehicleSelectScreen> {
                                   mainAxisAlignment:
                                       MainAxisAlignment.spaceBetween,
                                   children: [
-                                    VehicleIllustration(
-                                      vehicleType: (item['srsType'] ?? item['title'] ?? 'Passenger Car') as String,
-                                      size: 30,
+                                    Container(
+                                      padding: const EdgeInsets.all(4),
+                                      decoration: BoxDecoration(
+                                        color: isSelected
+                                            ? Colors.white
+                                            : const Color(0xFFF8FAFC),
+                                        borderRadius: BorderRadius.circular(10),
+                                      ),
+                                      child: VehicleIllustration(
+                                        vehicleType: illustrationKey,
+                                        size: 32,
+                                      ),
                                     ),
                                     Container(
-                                      width: 18,
-                                      height: 18,
+                                      width: 20,
+                                      height: 20,
                                       decoration: BoxDecoration(
                                         shape: BoxShape.circle,
                                         color: isSelected
@@ -473,12 +495,13 @@ class _VehicleSelectScreenState extends State<VehicleSelectScreen> {
                                           ? const Icon(
                                               Icons.check,
                                               color: Colors.white,
-                                              size: 12,
+                                              size: 13,
                                             )
                                           : null,
                                     ),
                                   ],
                                 ),
+                                const SizedBox(height: 4),
                                 Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
@@ -505,6 +528,30 @@ class _VehicleSelectScreenState extends State<VehicleSelectScreen> {
                                         style: const TextStyle(
                                           color: AppColors.slateMuted,
                                           fontSize: 9.0,
+                                        ),
+                                      ),
+                                    ),
+                                    const SizedBox(height: 4),
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
+                                      decoration: BoxDecoration(
+                                        color: isSelected
+                                            ? AppColors.caliperCrimson.withAlpha(20)
+                                            : const Color(0xFFF1F5F9),
+                                        borderRadius: BorderRadius.circular(4),
+                                      ),
+                                      child: FittedBox(
+                                        fit: BoxFit.scaleDown,
+                                        alignment: Alignment.centerLeft,
+                                        child: Text(
+                                          (item['specs'] ?? '') as String,
+                                          style: TextStyle(
+                                            color: isSelected
+                                                ? AppColors.caliperCrimson
+                                                : AppColors.slateMuted,
+                                            fontSize: 8.0,
+                                            fontWeight: FontWeight.w700,
+                                          ),
                                         ),
                                       ),
                                     ),

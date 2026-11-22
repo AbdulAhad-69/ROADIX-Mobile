@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:maplibre_gl/maplibre_gl.dart';
 import '../services/geocoding_service.dart';
 import '../src/core/config/app_config.dart';
@@ -11,6 +12,7 @@ class LocationConfirmScreen extends StatefulWidget {
   final double initialLat;
   final double initialLng;
   final int accuracyMeters;
+  final bool isSelectingLocationOnly;
 
   const LocationConfirmScreen({
     super.key,
@@ -18,6 +20,7 @@ class LocationConfirmScreen extends StatefulWidget {
     this.initialLat = 23.8759,
     this.initialLng = 90.3795,
     this.accuracyMeters = 8,
+    this.isSelectingLocationOnly = false,
   });
 
   @override
@@ -30,10 +33,13 @@ class _LocationConfirmScreenState extends State<LocationConfirmScreen> {
   String get _styleUrl => AppConfig.mapStyleUrl;
   String _currentAddress = 'Dhaka Region • Roadside Position';
   bool _isGeocoding = false;
+  bool _isLocating = false;
+  late int _currentAccuracy;
 
   @override
   void initState() {
     super.initState();
+    _currentAccuracy = widget.accuracyMeters;
     _currentCenter = LatLng(widget.initialLat, widget.initialLng);
     _fetchAddress(_currentCenter.latitude, _currentCenter.longitude);
   }
@@ -46,6 +52,101 @@ class _LocationConfirmScreenState extends State<LocationConfirmScreen> {
         _currentAddress = addr;
         _isGeocoding = false;
       });
+    }
+  }
+
+  Future<void> _recenterToCurrentLocation() async {
+    HapticFeedback.lightImpact();
+    if (_isLocating) return;
+    setState(() => _isLocating = true);
+
+    try {
+      bool serviceEnabled = false;
+      try {
+        serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      } catch (_) {}
+
+      if (!serviceEnabled) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Location services are disabled on your device. Please turn on GPS.'),
+              backgroundColor: AppColors.caliperCrimson,
+              duration: Duration(seconds: 2),
+            ),
+          );
+        }
+        _fallbackToInitial();
+        return;
+      }
+
+      LocationPermission permission = LocationPermission.denied;
+      try {
+        permission = await Geolocator.checkPermission();
+        if (permission == LocationPermission.denied) {
+          permission = await Geolocator.requestPermission();
+        }
+      } catch (_) {}
+
+      if (permission == LocationPermission.denied ||
+          permission == LocationPermission.deniedForever) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Location permission denied. Showing preset location.'),
+              backgroundColor: AppColors.caliperCrimson,
+              duration: Duration(seconds: 2),
+            ),
+          );
+        }
+        _fallbackToInitial();
+        return;
+      }
+
+      Position? pos;
+      try {
+        pos = await Geolocator.getCurrentPosition(
+          locationSettings: const LocationSettings(
+            accuracy: LocationAccuracy.high,
+            timeLimit: Duration(seconds: 4),
+          ),
+        );
+      } catch (_) {
+        try {
+          pos = await Geolocator.getLastKnownPosition();
+        } catch (_) {}
+      }
+
+      if (pos != null && mounted) {
+        final target = LatLng(pos.latitude, pos.longitude);
+        final acc = pos.accuracy.round();
+        setState(() {
+          _currentCenter = target;
+          _currentAccuracy = acc;
+        });
+        _mapController?.animateCamera(CameraUpdate.newLatLng(target));
+        _fetchAddress(pos.latitude, pos.longitude);
+      } else {
+        _fallbackToInitial();
+      }
+    } catch (_) {
+      _fallbackToInitial();
+    } finally {
+      if (mounted) {
+        setState(() => _isLocating = false);
+      }
+    }
+  }
+
+  void _fallbackToInitial() {
+    final target = LatLng(widget.initialLat, widget.initialLng);
+    if (mounted) {
+      setState(() {
+        _currentCenter = target;
+        _currentAccuracy = widget.accuracyMeters;
+      });
+      _mapController?.animateCamera(CameraUpdate.newLatLng(target));
+      _fetchAddress(target.latitude, target.longitude);
     }
   }
 
@@ -127,13 +228,13 @@ class _LocationConfirmScreenState extends State<LocationConfirmScreen> {
                 children: [
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: const [
+                    children: [
                       Flexible(
                         child: Text(
-                          'STEP 1 OF 4',
+                          widget.isSelectingLocationOnly ? 'LOCATION PICKER' : 'STEP 1 OF 4',
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
+                          style: const TextStyle(
                             color: AppColors.caliperCrimson,
                             fontSize: 10,
                             fontWeight: FontWeight.w800,
@@ -141,13 +242,13 @@ class _LocationConfirmScreenState extends State<LocationConfirmScreen> {
                           ),
                         ),
                       ),
-                      SizedBox(width: 8),
+                      const SizedBox(width: 8),
                       Flexible(
                         child: Text(
-                          'LOCATION TRIAGE',
+                          widget.isSelectingLocationOnly ? 'CUSTOM POSITION' : 'LOCATION TRIAGE',
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
+                          style: const TextStyle(
                             color: AppColors.slateMuted,
                             fontSize: 10,
                             fontWeight: FontWeight.w600,
@@ -292,14 +393,7 @@ class _LocationConfirmScreenState extends State<LocationConfirmScreen> {
                     bottom: 14,
                     right: 14,
                     child: InkWell(
-                      onTap: () {
-                        HapticFeedback.lightImpact();
-                        _mapController?.animateCamera(
-                          CameraUpdate.newLatLng(
-                            LatLng(widget.initialLat, widget.initialLng),
-                          ),
-                        );
-                      },
+                      onTap: _recenterToCurrentLocation,
                       borderRadius: BorderRadius.circular(8),
                       child: Container(
                         width: 38,
@@ -315,11 +409,24 @@ class _LocationConfirmScreenState extends State<LocationConfirmScreen> {
                             ),
                           ],
                         ),
-                        child: const Icon(
-                          Icons.my_location,
-                          color: AppColors.caliperCrimson,
-                          size: 20,
-                        ),
+                        child: _isLocating
+                            ? const Center(
+                                child: SizedBox(
+                                  width: 18,
+                                  height: 18,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    valueColor: AlwaysStoppedAnimation<Color>(
+                                      AppColors.caliperCrimson,
+                                    ),
+                                  ),
+                                ),
+                              )
+                            : const Icon(
+                                Icons.my_location,
+                                color: AppColors.caliperCrimson,
+                                size: 20,
+                              ),
                       ),
                     ),
                   ),
@@ -462,7 +569,7 @@ class _LocationConfirmScreenState extends State<LocationConfirmScreen> {
                                     ),
                                   ),
                                   child: Text(
-                                    _isGeocoding ? 'resolving...' : '± ${widget.accuracyMeters}m accuracy',
+                                    _isGeocoding ? 'resolving...' : '± ${_currentAccuracy}m accuracy',
                                     style: const TextStyle(
                                       color: Color(0xFF059669),
                                       fontSize: 9,
@@ -485,6 +592,14 @@ class _LocationConfirmScreenState extends State<LocationConfirmScreen> {
                     child: ElevatedButton(
                       onPressed: () {
                         HapticFeedback.mediumImpact();
+                        if (widget.isSelectingLocationOnly) {
+                          Navigator.of(context).pop({
+                            'lat': _currentCenter.latitude,
+                            'lng': _currentCenter.longitude,
+                            'address': _currentAddress,
+                          });
+                          return;
+                        }
                         Navigator.of(context).push(
                           MaterialPageRoute(
                             builder: (_) => VehicleSelectScreen(
@@ -507,19 +622,19 @@ class _LocationConfirmScreenState extends State<LocationConfirmScreen> {
                         fit: BoxFit.scaleDown,
                         child: Row(
                           mainAxisAlignment: MainAxisAlignment.center,
-                          children: const [
+                          children: [
                             Text(
-                              'CONFIRM LOCATION',
-                              style: TextStyle(
+                              widget.isSelectingLocationOnly ? 'CONFIRM LOCATION' : 'CONFIRM LOCATION',
+                              style: const TextStyle(
                                 color: Colors.white,
                                 fontSize: 13,
                                 fontWeight: FontWeight.w800,
                                 letterSpacing: 0.5,
                               ),
                             ),
-                            SizedBox(width: 6),
+                            const SizedBox(width: 6),
                             Icon(
-                              Icons.arrow_forward,
+                              widget.isSelectingLocationOnly ? Icons.check : Icons.arrow_forward,
                               color: Colors.white,
                               size: 16,
                             ),
@@ -529,10 +644,12 @@ class _LocationConfirmScreenState extends State<LocationConfirmScreen> {
                     ),
                   ),
                   const SizedBox(height: 6),
-                  const Center(
+                  Center(
                     child: Text(
-                      'Step 1 of 4 • Next: Vehicle Classification',
-                      style: TextStyle(
+                      widget.isSelectingLocationOnly
+                          ? 'Set your current location for emergency assistance'
+                          : 'Step 1 of 4 • Next: Vehicle Classification',
+                      style: const TextStyle(
                         color: AppColors.slateMuted,
                         fontSize: 10,
                       ),

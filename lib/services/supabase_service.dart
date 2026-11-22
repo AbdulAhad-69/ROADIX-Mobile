@@ -119,7 +119,16 @@ class SupabaseService {
   }
 
   Future<void> signOut() async {
-    await _client.auth.signOut();
+    try {
+      await _client.auth.signOut(scope: SignOutScope.local).timeout(
+        const Duration(milliseconds: 100),
+        onTimeout: () {
+          // Local session fallback
+        },
+      );
+    } catch (e) {
+      debugPrint('SupabaseService.signOut error: $e');
+    }
   }
 
   Future<String?> getUserRole() async {
@@ -139,6 +148,7 @@ class SupabaseService {
     required String fullName,
     String? phone,
     String role = 'motorist',
+    String? avatarUrl,
   }) async {
     final uid = currentProfileId;
     final normalizedPhone =
@@ -148,6 +158,8 @@ class SupabaseService {
       'full_name': fullName,
       if (normalizedPhone != null && normalizedPhone.isNotEmpty)
         'phone': normalizedPhone,
+      if (avatarUrl != null && avatarUrl.isNotEmpty)
+        'avatar_url': avatarUrl,
       'role': role,
       'updated_at': DateTime.now().toUtc().toIso8601String(),
     });
@@ -173,10 +185,22 @@ class SupabaseService {
   Future<void> updateProfile({
     required String fullName,
     required String phone,
+    String? avatarUrl,
   }) async {
-    await _client.from('profiles').update({
+    final updateMap = <String, dynamic>{
       'full_name': fullName,
       'phone': phone,
+      'updated_at': DateTime.now().toIso8601String(),
+    };
+    if (avatarUrl != null) {
+      updateMap['avatar_url'] = avatarUrl;
+    }
+    await _client.from('profiles').update(updateMap).eq('id', currentProfileId);
+  }
+
+  Future<void> updateAvatar(String avatarUrl) async {
+    await _client.from('profiles').update({
+      'avatar_url': avatarUrl,
       'updated_at': DateTime.now().toIso8601String(),
     }).eq('id', currentProfileId);
   }

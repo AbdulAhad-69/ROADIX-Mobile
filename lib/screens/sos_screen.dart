@@ -23,7 +23,8 @@ class _SosScreenState extends State<SosScreen> with TickerProviderStateMixin {
   String _currentAddress = 'Detecting roadside position...';
   double _currentLat = 23.8759;
   double _currentLng = 90.3795;
-  int _accuracyMeters = 5;
+  int? _accuracyMeters;
+  bool _hasGpsFix = false;
   List<Map<String, dynamic>> _contacts = [];
   bool _isLoadingContacts = true;
 
@@ -57,27 +58,71 @@ class _SosScreenState extends State<SosScreen> with TickerProviderStateMixin {
 
   Future<void> _detectLocation() async {
     try {
-      final pos = await Geolocator.getCurrentPosition(
-        locationSettings: const LocationSettings(
-          accuracy: LocationAccuracy.high,
-          timeLimit: Duration(seconds: 4),
-        ),
-      );
-      final addr = await GeocodingService.reverseGeocode(pos.latitude, pos.longitude);
-      if (mounted) {
-        setState(() {
-          _currentLat = pos.latitude;
-          _currentLng = pos.longitude;
-          _accuracyMeters = pos.accuracy.round();
-          _currentAddress = addr;
-        });
+      bool serviceEnabled = false;
+      try {
+        serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      } catch (_) {}
+
+      if (!serviceEnabled) {
+        _handleLocationFallback();
+        return;
+      }
+
+      LocationPermission permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+      }
+      if (permission == LocationPermission.denied ||
+          permission == LocationPermission.deniedForever) {
+        _handleLocationFallback();
+        return;
+      }
+
+      Position? pos;
+      try {
+        pos = await Geolocator.getCurrentPosition(
+          locationSettings: const LocationSettings(
+            accuracy: LocationAccuracy.high,
+            timeLimit: Duration(seconds: 4),
+          ),
+        );
+      } catch (_) {
+        try {
+          pos = await Geolocator.getLastKnownPosition();
+        } catch (_) {}
+      }
+
+      if (pos != null && mounted) {
+        final lat = pos.latitude;
+        final lng = pos.longitude;
+        final acc = pos.accuracy.round();
+        final addr = await GeocodingService.reverseGeocode(lat, lng);
+        if (mounted) {
+          setState(() {
+            _hasGpsFix = true;
+            _currentLat = lat;
+            _currentLng = lng;
+            _accuracyMeters = acc;
+            _currentAddress = addr;
+          });
+        }
+      } else {
+        _handleLocationFallback();
       }
     } catch (_) {
-      if (mounted) {
-        setState(() {
-          _currentAddress = 'Dhaka Sector Highway Corridor';
-        });
-      }
+      _handleLocationFallback();
+    }
+  }
+
+  void _handleLocationFallback() {
+    if (mounted) {
+      final division = GeocodingService.detectDivision(_currentLat, _currentLng);
+      final region = division.isNotEmpty ? '$division Region' : 'Regional';
+      setState(() {
+        _hasGpsFix = false;
+        _accuracyMeters = null;
+        _currentAddress = '$region Highway Corridor (Estimated)';
+      });
     }
   }
 
@@ -428,6 +473,8 @@ class _SosScreenState extends State<SosScreen> with TickerProviderStateMixin {
                     icon: Icons.shield_outlined,
                     title: 'CALL HIGHWAY PATROL',
                     subtitle: 'Toll-Free • 24/7 Response (999)',
+                    accentColor: const Color(0xFF2563EB),
+                    badgeText: 'POLICE 999',
                     onTap: () async {
                       HapticFeedback.lightImpact();
                       final ok = await PhoneUtils.launchCall('999');
@@ -438,11 +485,13 @@ class _SosScreenState extends State<SosScreen> with TickerProviderStateMixin {
                       }
                     },
                   ),
-                  const SizedBox(height: 8),
+                  const SizedBox(height: 10),
                   _buildEmergencyServiceCard(
                     icon: Icons.local_hospital_outlined,
                     title: 'CALL AMBULANCE',
                     subtitle: 'Critical Medical Response (999)',
+                    accentColor: AppColors.caliperCrimson,
+                    badgeText: 'MEDICAL 999',
                     onTap: () async {
                       HapticFeedback.lightImpact();
                       final ok = await PhoneUtils.launchCall('999');
@@ -459,26 +508,36 @@ class _SosScreenState extends State<SosScreen> with TickerProviderStateMixin {
 
             const SizedBox(height: 12),
 
-            // Live Dynamic GPS Coordinates Card
+            // Live Dynamic GPS Coordinates Card with Precision Indicator
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 20.0),
               child: Container(
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
                   color: AppColors.cardWhite,
-                  borderRadius: BorderRadius.circular(12),
+                  borderRadius: BorderRadius.circular(16),
                   border: Border.all(color: AppColors.slateBorder),
+                  boxShadow: [
+                    BoxShadow(
+                      color: AppColors.chassisText.withAlpha(5),
+                      blurRadius: 8,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
                 ),
                 child: Row(
                   children: [
                     Container(
-                      width: 32,
-                      height: 32,
+                      width: 36,
+                      height: 36,
                       decoration: BoxDecoration(
                         color: AppColors.crimsonLight,
-                        borderRadius: BorderRadius.circular(8),
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(
+                          color: AppColors.caliperCrimson.withAlpha(40),
+                        ),
                       ),
-                      child: const Icon(Icons.location_on, color: AppColors.caliperCrimson, size: 18),
+                      child: const Icon(Icons.location_on, color: AppColors.caliperCrimson, size: 20),
                     ),
                     const SizedBox(width: 10),
                     Expanded(
@@ -491,35 +550,42 @@ class _SosScreenState extends State<SosScreen> with TickerProviderStateMixin {
                             overflow: TextOverflow.ellipsis,
                             style: const TextStyle(
                               color: AppColors.chassisText,
-                              fontSize: 11.5,
+                              fontSize: 12,
                               fontWeight: FontWeight.bold,
                             ),
                           ),
+                          const SizedBox(height: 2),
                           Text(
                             '${_currentLat.toStringAsFixed(4)}° N, ${_currentLng.toStringAsFixed(4)}° E',
                             style: const TextStyle(
                               color: AppColors.slateMuted,
-                              fontSize: 9.5,
+                              fontSize: 10,
                               fontFamily: 'monospace',
+                              fontWeight: FontWeight.w600,
                             ),
                           ),
                         ],
                       ),
                     ),
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3.5),
                       decoration: BoxDecoration(
-                        color: const Color(0xFFECFDF5),
-                        borderRadius: BorderRadius.circular(4),
-                        border: Border.all(color: const Color(0xFFA7F3D0)),
+                        color: _hasGpsFix ? const Color(0xFFECFDF5) : const Color(0xFFFFFBEB),
+                        borderRadius: BorderRadius.circular(6),
+                        border: Border.all(
+                          color: _hasGpsFix ? const Color(0xFFA7F3D0) : const Color(0xFFFDE68A),
+                          width: 1.0,
+                        ),
                       ),
                       child: Text(
-                        '±${_accuracyMeters}m Acc',
-                        style: const TextStyle(
-                          color: Color(0xFF059669),
-                          fontSize: 8.5,
+                        _hasGpsFix && _accuracyMeters != null
+                            ? '±${_accuracyMeters}m Acc'
+                            : 'GPS Estimating',
+                        style: TextStyle(
+                          color: _hasGpsFix ? const Color(0xFF059669) : const Color(0xFFD97706),
+                          fontSize: 9.0,
                           fontFamily: 'monospace',
-                          fontWeight: FontWeight.bold,
+                          fontWeight: FontWeight.w800,
                         ),
                       ),
                     ),
@@ -647,16 +713,28 @@ class _SosScreenState extends State<SosScreen> with TickerProviderStateMixin {
     required String title,
     required String subtitle,
     required VoidCallback onTap,
+    Color accentColor = AppColors.caliperCrimson,
+    String? badgeText,
   }) {
     return InkWell(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(12),
+      borderRadius: BorderRadius.circular(16),
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
         decoration: BoxDecoration(
           color: AppColors.cardWhite,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: AppColors.slateBorder),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: accentColor.withAlpha(60),
+            width: 1.2,
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: accentColor.withAlpha(14),
+              blurRadius: 8,
+              offset: const Offset(0, 2),
+            ),
+          ],
         ),
         child: Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -665,39 +743,69 @@ class _SosScreenState extends State<SosScreen> with TickerProviderStateMixin {
               child: Row(
                 children: [
                   Container(
-                    width: 32,
-                    height: 32,
+                    width: 38,
+                    height: 38,
                     decoration: BoxDecoration(
-                      color: AppColors.crimsonLight,
-                      borderRadius: BorderRadius.circular(8),
+                      color: accentColor.withAlpha(20),
+                      borderRadius: BorderRadius.circular(11),
+                      border: Border.all(
+                        color: accentColor.withAlpha(40),
+                        width: 1.0,
+                      ),
                     ),
-                    child: Icon(icon, color: AppColors.caliperCrimson, size: 18),
+                    child: Icon(icon, color: accentColor, size: 20),
                   ),
                   const SizedBox(width: 12),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(
-                          title,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            color: AppColors.chassisText,
-                            fontSize: 11,
-                            fontWeight: FontWeight.w800,
-                            letterSpacing: 0.3,
-                          ),
+                        Row(
+                          children: [
+                            Flexible(
+                              child: Text(
+                                title,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  color: AppColors.chassisText,
+                                  fontSize: 11.5,
+                                  fontWeight: FontWeight.w900,
+                                  letterSpacing: 0.3,
+                                ),
+                              ),
+                            ),
+                            if (badgeText != null) ...[
+                              const SizedBox(width: 6),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
+                                decoration: BoxDecoration(
+                                  color: accentColor.withAlpha(22),
+                                  borderRadius: BorderRadius.circular(4),
+                                ),
+                                child: Text(
+                                  badgeText,
+                                  style: TextStyle(
+                                    color: accentColor,
+                                    fontSize: 8.0,
+                                    fontWeight: FontWeight.w800,
+                                    letterSpacing: 0.4,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ],
                         ),
-                        const SizedBox(height: 1),
+                        const SizedBox(height: 2),
                         Text(
                           subtitle,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: const TextStyle(
                             color: AppColors.slateMuted,
-                            fontSize: 8.5,
+                            fontSize: 9.0,
                             fontFamily: 'monospace',
+                            fontWeight: FontWeight.w500,
                           ),
                         ),
                       ],
@@ -707,7 +815,14 @@ class _SosScreenState extends State<SosScreen> with TickerProviderStateMixin {
               ),
             ),
             const SizedBox(width: 8),
-            const Icon(Icons.phone, color: AppColors.caliperCrimson, size: 16),
+            Container(
+              padding: const EdgeInsets.all(7),
+              decoration: BoxDecoration(
+                color: accentColor.withAlpha(20),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(Icons.phone, color: accentColor, size: 16),
+            ),
           ],
         ),
       ),

@@ -150,6 +150,20 @@ class _DispatchScreenState extends State<DispatchScreen>
     super.dispose();
   }
 
+  String get _formattedSearchLocation {
+    final addr = widget.breakdownAddress.trim();
+    final coordStr = '(${widget.breakdownLat.toStringAsFixed(4)}° N, ${widget.breakdownLng.toStringAsFixed(4)}° E)';
+    if (addr.contains('•') || addr.startsWith('Roadside Position')) {
+      final match = RegExp(r'^([A-Za-z\s]+ Region)\s*•').firstMatch(addr);
+      final region = match?.group(1)?.trim();
+      if (region != null && region.isNotEmpty) {
+        return 'your roadside location in $region $coordStr';
+      }
+      return 'your roadside location $coordStr';
+    }
+    return addr;
+  }
+
   // --------------------------------------------------------------------------
   // DISPATCH ENGINE INTEGRATION
   // --------------------------------------------------------------------------
@@ -1701,7 +1715,7 @@ class _DispatchScreenState extends State<DispatchScreen>
               ),
               const SizedBox(height: 8),
               Text(
-                'Querying verified mobile workshops within ${_searchRadiusKm.toStringAsFixed(1)} km of ${widget.breakdownAddress}...',
+                'Querying verified mobile workshops within ${_searchRadiusKm.toStringAsFixed(1)} km of $_formattedSearchLocation...',
                 textAlign: TextAlign.center,
                 style: const TextStyle(color: AppColors.slateMuted, fontSize: 12),
               ),
@@ -1777,7 +1791,7 @@ class _DispatchScreenState extends State<DispatchScreen>
               ),
               const SizedBox(height: 6),
               Text(
-                'Awaiting response from ${_candidateWorkshopName ?? 'nearby workshop'} • 2 verified workshops found near ${widget.breakdownAddress}',
+                'Awaiting response from ${_candidateWorkshopName ?? 'nearby workshop'} • 2 verified workshops found near $_formattedSearchLocation',
                 textAlign: TextAlign.center,
                 style: const TextStyle(color: AppColors.slateMuted, fontSize: 11.5),
               ),
@@ -2730,7 +2744,7 @@ class _DispatchScreenState extends State<DispatchScreen>
             ),
             const SizedBox(height: 8),
             Text(
-              'We expanded the search to the maximum 15.0 km radius around ${widget.breakdownAddress}, but no verified on-duty mechanics are currently available.',
+              'We expanded the search to the maximum 15.0 km radius around $_formattedSearchLocation, but no verified on-duty mechanics are currently available.',
               textAlign: TextAlign.center,
               style: const TextStyle(color: AppColors.slateMuted, fontSize: 12),
             ),

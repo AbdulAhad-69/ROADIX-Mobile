@@ -1067,21 +1067,24 @@ class _LoginScreenState extends State<LoginScreen> {
                                         color: Colors.white,
                                       ),
                                     )
-                                  : Row(
-                                      mainAxisAlignment: MainAxisAlignment.center,
-                                      children: const [
-                                        Text(
-                                          'SEND VERIFICATION CODE',
-                                          style: TextStyle(
-                                            color: Colors.white,
-                                            fontSize: 12.5,
-                                            fontWeight: FontWeight.w800,
-                                            letterSpacing: 0.5,
+                                  : FittedBox(
+                                      fit: BoxFit.scaleDown,
+                                      child: Row(
+                                        mainAxisAlignment: MainAxisAlignment.center,
+                                        children: const [
+                                          Text(
+                                            'SEND VERIFICATION CODE',
+                                            style: TextStyle(
+                                              color: Colors.white,
+                                              fontSize: 12.5,
+                                              fontWeight: FontWeight.w800,
+                                              letterSpacing: 0.5,
+                                            ),
                                           ),
-                                        ),
-                                        SizedBox(width: 6),
-                                        Icon(Icons.arrow_forward, color: Colors.white, size: 16),
-                                      ],
+                                          SizedBox(width: 6),
+                                          Icon(Icons.arrow_forward, color: Colors.white, size: 16),
+                                        ],
+                                      ),
                                     ),
                             ),
                           ),
@@ -1357,26 +1360,29 @@ class _LoginScreenState extends State<LoginScreen> {
                   ),
                   const SizedBox(height: 18),
 
-                  // Google OAuth Button
+                  // Premium Authentic Google Sign-In Button
                   SizedBox(
-                    height: 48,
+                    height: 50,
                     child: OutlinedButton.icon(
                       onPressed: _isLoading ? null : _handleGoogleSignIn,
-                      icon: const BrandLogo(brand: 'google', size: 20),
+                      icon: const BrandLogo(brand: 'google', size: 22),
                       label: const Text(
                         'Continue with Google',
                         style: TextStyle(
                           color: AppColors.chassisText,
-                          fontSize: 13,
-                          fontWeight: FontWeight.w700,
+                          fontSize: 13.5,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: 0.2,
                         ),
                       ),
                       style: OutlinedButton.styleFrom(
-                        side: const BorderSide(color: AppColors.slateBorder),
+                        side: const BorderSide(color: AppColors.slateBorder, width: 1.2),
                         shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
+                          borderRadius: BorderRadius.circular(14),
                         ),
                         backgroundColor: AppColors.cardWhite,
+                        elevation: 1,
+                        shadowColor: Colors.black.withAlpha(20),
                       ),
                     ),
                   ),
