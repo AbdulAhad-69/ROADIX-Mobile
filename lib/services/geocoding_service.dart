@@ -2,7 +2,31 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:maplibre_gl/maplibre_gl.dart';
 import '../src/core/config/app_config.dart';
+import '../src/core/models/geo_point.dart';
 import '../src/core/utils/geometry_utils.dart';
+
+/// Place / roadside facility returned by live Geoapify / Nominatim spatial search.
+class RoadixPlaceResult {
+  final String name;
+  final String category;
+  final String address;
+  final double latitude;
+  final double longitude;
+  final String phone;
+  final bool isVerifiedWorkshop;
+  final double distanceKm;
+
+  const RoadixPlaceResult({
+    required this.name,
+    required this.category,
+    required this.address,
+    required this.latitude,
+    required this.longitude,
+    required this.phone,
+    this.isVerifiedWorkshop = false,
+    required this.distanceKm,
+  });
+}
 
 /// Route payload returned by OSRM or Haversine straight-line fallback.
 class RoadixRouteResult {
@@ -17,6 +41,9 @@ class RoadixRouteResult {
     required this.durationMinutes,
     required this.isRoadRouted,
   });
+
+  List<RoadixGeoPoint> get geoPoints =>
+      points.map((p) => RoadixGeoPoint(p.latitude, p.longitude)).toList();
 }
 
 /// Reverse-geocoding, Bangladesh division classification, OSRM road routing,
@@ -221,5 +248,100 @@ class GeocodingService {
       return 'Dhaka';
     }
     return '';
+  }
+
+  /// Searches real nearby automotive workshops, fuel stations, hospitals, and
+  /// police stations via Geoapify Places API (when key is configured) around
+  /// `(lat, lng)`, sorted by Haversine distance.
+  static Future<List<RoadixPlaceResult>> searchNearbyPlaces({
+    required double lat,
+    required double lng,
+    String query = '',
+    int limit = 15,
+  }) async {
+    final geoapifyKey = AppConfig.geoapifyApiKey;
+    if (geoapifyKey.isEmpty) return [];
+
+    final client = HttpClient();
+    client.connectionTimeout = const Duration(seconds: 6);
+    try {
+      final cleanQuery = query.trim();
+      final uri = cleanQuery.isNotEmpty
+          ? Uri.https('api.geoapify.com', '/v1/geocode/search', {
+              'text': cleanQuery,
+              'bias': 'proximity:$lng,$lat',
+              'filter': 'countrycode:bd',
+              'limit': '$limit',
+              'apiKey': geoapifyKey,
+            })
+          : Uri.https('api.geoapify.com', '/v2/places', {
+              'categories':
+                  'service.vehicle,commercial.gas,healthcare.hospital,service.police',
+              'filter': 'circle:$lng,$lat,15000',
+              'bias': 'proximity:$lng,$lat',
+              'limit': '$limit',
+              'apiKey': geoapifyKey,
+            });
+
+      final req = await client.getUrl(uri);
+      final resp = await req.close().timeout(const Duration(seconds: 6));
+      if (resp.statusCode != 200) return [];
+      final body = await resp.transform(utf8.decoder).join();
+      final data = jsonDecode(body);
+      final features =
+          data is Map ? (data['features'] as List? ?? const []) : const [];
+
+      final results = <RoadixPlaceResult>[];
+      for (final item in features) {
+        if (item is! Map) continue;
+        final props = item['properties'];
+        if (props is! Map) continue;
+        final pLat = (props['lat'] as num?)?.toDouble();
+        final pLng = (props['lon'] as num?)?.toDouble();
+        if (pLat == null || pLng == null) continue;
+
+        final cats = (props['categories'] as List?)
+                ?.map((e) => e.toString().toLowerCase())
+                .join(',') ??
+            '';
+        final category = cats.contains('police')
+            ? 'Police'
+            : (cats.contains('hospital')
+                ? 'Hospital'
+                : (cats.contains('gas') ? 'Fuel & CNG' : 'Workshop'));
+
+        final name = (props['name']?.toString().trim().isNotEmpty ?? false)
+            ? props['name'].toString().trim()
+            : (props['address_line1']?.toString().trim() ?? 'Roadside Point');
+        final formatted =
+            props['formatted']?.toString().trim() ??
+                props['address_line2']?.toString().trim() ??
+                '${pLat.toStringAsFixed(4)}, ${pLng.toStringAsFixed(4)}';
+        final phoneRaw =
+            (props['datasource'] is Map && props['datasource']['raw'] is Map)
+                ? (props['datasource']['raw']['phone']?.toString() ?? '')
+                : '';
+
+        results.add(
+          RoadixPlaceResult(
+            name: name,
+            category: category,
+            address: formatted,
+            latitude: pLat,
+            longitude: pLng,
+            phone: phoneRaw.isNotEmpty
+                ? phoneRaw
+                : (category == 'Police' ? '999' : ''),
+            distanceKm: GeometryUtils.calculateDistanceKm(lat, lng, pLat, pLng),
+          ),
+        );
+      }
+      results.sort((a, b) => a.distanceKm.compareTo(b.distanceKm));
+      return results;
+    } catch (_) {
+      return [];
+    } finally {
+      client.close(force: true);
+    }
   }
 }

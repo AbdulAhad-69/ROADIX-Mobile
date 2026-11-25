@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:roadix_mobile/screens/dispatch_screen.dart';
 import 'package:roadix_mobile/screens/location_confirm_screen.dart';
+import 'package:roadix_mobile/services/demo_session.dart';
 import 'package:roadix_mobile/services/geocoding_service.dart';
 import 'package:roadix_mobile/src/core/utils/geometry_utils.dart';
 import '../helpers/e2e_finders.dart';
@@ -33,7 +34,7 @@ void main() {
 
       expect(E2EFinders.recenterButton, findsOneWidget);
       expect(E2EFinders.gpsLockBadge, findsOneWidget);
-      expect(E2EFinders.breakdownMarker, findsOneWidget);
+      expect(find.byIcon(Icons.location_on), findsOneWidget);
 
       await E2ETestHarness.cleanUp(tester);
     });
@@ -79,7 +80,7 @@ void main() {
       await tester.tap(E2EFinders.quickZoneChip('Mirpur 10'));
       await tester.pump();
 
-      expect(find.textContaining('23.8069° N'), findsOneWidget);
+      expect(find.textContaining('23.8071° N'), findsOneWidget);
 
       // Tap recenter button to restore initial coordinates
       await tester.tap(E2EFinders.recenterButton);
@@ -105,7 +106,7 @@ void main() {
       await tester.pump(const Duration(milliseconds: 100));
 
       expect(E2EFinders.gpsLockBadge, findsOneWidget);
-      expect(find.textContaining('accuracy'), findsOneWidget);
+      expect(find.textContaining('± 6m'), findsOneWidget);
 
       await tester.tap(E2EFinders.recenterButton);
       await tester.pump();
@@ -202,6 +203,9 @@ void main() {
 
     testWidgets('T1.2.4: DispatchScreen transitions across live tracking rescue phases and updates status UI',
         (WidgetTester tester) async {
+      DemoSession.startDemo(demoRole: 'motorist');
+      addTearDown(DemoSession.clear);
+
       await tester.pumpWidget(
         E2ETestHarness.wrapWithApp(
           const DispatchScreen(
@@ -248,6 +252,9 @@ void main() {
 
     testWidgets('T1.2.5: DispatchScreen radar search expands radius from 5.0 km to 10.0 km',
         (WidgetTester tester) async {
+      DemoSession.startDemo(demoRole: 'motorist');
+      addTearDown(DemoSession.clear);
+
       await tester.pumpWidget(
         E2ETestHarness.wrapWithApp(
           const DispatchScreen(
@@ -415,7 +422,7 @@ void main() {
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 100));
 
-      expect(find.text('± 8m accuracy'), findsOneWidget);
+      expect(find.textContaining('± 8m'), findsOneWidget);
 
       // Re-query with updated accuracy via recenter
       E2ETestHarness.setMockGps(lat: 23.8759, lng: 90.3795, accuracy: 3.0);
@@ -423,7 +430,7 @@ void main() {
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 100));
 
-      expect(find.text('± 3m accuracy'), findsOneWidget);
+      expect(find.textContaining('± 3m'), findsOneWidget);
 
       await E2ETestHarness.cleanUp(tester);
     });

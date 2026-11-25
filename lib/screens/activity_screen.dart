@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../services/demo_session.dart';
+import '../services/invoice_pdf_service.dart';
 import '../services/supabase_service.dart';
 import '../theme/app_colors.dart';
 import '../widgets/brand_logo.dart';
@@ -257,7 +258,7 @@ class _ActivityScreenState extends State<ActivityScreen> {
                       color: AppColors.caliperCrimson,
                       fontSize: 19,
                       fontWeight: FontWeight.w900,
-                      fontFamily: 'monospace',
+                      fontFeatures: [FontFeature.tabularFigures()],
                     ),
                   ),
                 ],
@@ -270,15 +271,32 @@ class _ActivityScreenState extends State<ActivityScreen> {
                   onPressed: isDownloading
                       ? null
                       : () async {
+                          final messenger = ScaffoldMessenger.of(context);
                           setModalState(() => isDownloading = true);
-                          await Future.delayed(const Duration(milliseconds: 600));
-                          if (ctx.mounted) {
+                          try {
+                            final invoiceData = InvoiceData.fromItem(item);
+                            final file = await InvoicePdfService.saveAndShareInvoice(
+                              invoiceData,
+                            );
+                            if (ctx.mounted) Navigator.pop(ctx);
                             HapticFeedback.mediumImpact();
-                            Navigator.pop(ctx);
-                            ScaffoldMessenger.of(context).showSnackBar(
+                            messenger.showSnackBar(
                               SnackBar(
-                                content: Text('Digital invoice ${item['serviceId']} downloaded to device.'),
-                                backgroundColor: AppColors.emeraldGps,
+                                content: Text(
+                                  'Invoice PDF saved: ${file.uri.pathSegments.last}',
+                                ),
+                                backgroundColor: AppColors.emeraldDark,
+                                behavior: SnackBarBehavior.floating,
+                              ),
+                            );
+                          } catch (e) {
+                            if (ctx.mounted) {
+                              setModalState(() => isDownloading = false);
+                            }
+                            messenger.showSnackBar(
+                              SnackBar(
+                                content: Text('Could not export invoice PDF: $e'),
+                                backgroundColor: AppColors.crimsonHover,
                                 behavior: SnackBarBehavior.floating,
                               ),
                             );
@@ -407,7 +425,7 @@ class _ActivityScreenState extends State<ActivityScreen> {
               'title': r['fault_type'] ?? 'Roadside Recovery',
               'location': r['breakdown_address'] ?? 'Dhaka Region',
               'date': dateStr,
-              'techName': 'Dispatched Specialist',
+              'techName': r['mechanic_name']?.toString() ?? 'Assigned Technician',
               'vehicle':
                   '${snapshot?['vehicle_type'] ?? 'Passenger Car'} • ${snapshot?['plate'] ?? ''}',
               'amount': '৳ ${totalAmount.toStringAsFixed(0)}',
@@ -415,7 +433,9 @@ class _ActivityScreenState extends State<ActivityScreen> {
               'laborFee': '৳ ${laborFee.toStringAsFixed(0)}',
               'partsTotal': '৳ ${partsFee.toStringAsFixed(0)}',
               'paymentMethod':
-                  tx?['payment_method']?.toString() ?? 'Cash / Verified Settlement',
+                  tx?['payment_method']?.toString() ?? 'Pending settlement',
+              'paymentStatus': tx?['status']?.toString() ??
+                  (r['status']?.toString() ?? 'Completed'),
               'status': r['status'] ?? 'Completed',
               'isSample': false,
               'icon': icon,
@@ -601,21 +621,28 @@ class _ActivityScreenState extends State<ActivityScreen> {
                         Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            Row(
-                              children: const [
-                                CircleAvatar(radius: 4, backgroundColor: AppColors.emeraldGps),
-                                SizedBox(width: 8),
-                                Text(
-                                  'NO ACTIVE DISPATCH',
-                                  style: TextStyle(
-                                    color: AppColors.emeraldGps,
-                                    fontSize: 10,
-                                    fontWeight: FontWeight.w900,
-                                    letterSpacing: 0.8,
+                            const Expanded(
+                              child: Row(
+                                children: [
+                                  CircleAvatar(radius: 4, backgroundColor: AppColors.emeraldDark),
+                                  SizedBox(width: 8),
+                                  Flexible(
+                                    child: Text(
+                                      'NO ACTIVE DISPATCH',
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: TextStyle(
+                                        color: AppColors.emeraldDark,
+                                        fontSize: 10,
+                                        fontWeight: FontWeight.w900,
+                                        letterSpacing: 0.8,
+                                      ),
+                                    ),
                                   ),
-                                ),
-                              ],
+                                ],
+                              ),
                             ),
+                            const SizedBox(width: 8),
                             Container(
                               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                               decoration: BoxDecoration(
@@ -659,31 +686,30 @@ class _ActivityScreenState extends State<ActivityScreen> {
                   children: [
                     const Flexible(
                       child: Text(
-                        'PAST RESCUES (DHAKA REGION)',
+                        'Past Rescues',
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
-                          color: AppColors.slateMuted,
-                          fontSize: 10,
+                          color: AppColors.chassisText,
+                          fontSize: 15,
                           fontWeight: FontWeight.w800,
-                          letterSpacing: 0.8,
                         ),
                       ),
                     ),
-                    if (_pastRescues.isEmpty) ...[
+                    if (_pastRescues.isEmpty && displayItems.isNotEmpty) ...[
                       const SizedBox(width: 8),
                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
                         decoration: BoxDecoration(
-                          color: const Color(0xFFF1F5F9),
-                          borderRadius: BorderRadius.circular(4),
+                          color: AppColors.surfaceTint,
+                          borderRadius: BorderRadius.circular(6),
                         ),
                         child: const Text(
-                          'VERIFIED SAMPLES',
+                          'Sample Data',
                           style: TextStyle(
                             color: AppColors.slateMuted,
-                            fontSize: 8.5,
-                            fontWeight: FontWeight.bold,
+                            fontSize: 11,
+                            fontWeight: FontWeight.w700,
                           ),
                         ),
                       ),
@@ -799,24 +825,28 @@ class _ActivityScreenState extends State<ActivityScreen> {
                                     item['amount'] as String,
                                     style: const TextStyle(
                                       color: AppColors.chassisText,
-                                      fontSize: 13.5,
+                                      fontSize: 14,
                                       fontWeight: FontWeight.w900,
-                                      fontFamily: 'monospace',
+                                      fontFeatures: [FontFeature.tabularFigures()],
                                     ),
                                   ),
                                   const SizedBox(height: 2),
                                   const Row(
                                     mainAxisSize: MainAxisSize.min,
                                     children: [
-                                      BrandLogo(brand: 'bkash', size: 11),
-                                      SizedBox(width: 3),
                                       Text(
-                                        'Receipt ›',
+                                        'View Receipt',
                                         style: TextStyle(
                                           color: AppColors.crimsonHover,
-                                          fontSize: 10.5,
+                                          fontSize: 11.5,
                                           fontWeight: FontWeight.w700,
                                         ),
+                                      ),
+                                      SizedBox(width: 2),
+                                      Icon(
+                                        Icons.chevron_right,
+                                        color: AppColors.crimsonHover,
+                                        size: 15,
                                       ),
                                     ],
                                   ),

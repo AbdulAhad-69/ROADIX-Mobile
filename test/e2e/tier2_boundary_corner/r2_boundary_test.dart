@@ -343,8 +343,8 @@ void main() {
       // Callback not called, error message rendered
       expect(addCallbackInvoked, isFalse);
       expect(
-        find.textContaining('Please enter an 11-digit mobile wallet number'),
-        findsOneWidget,
+        find.textContaining('Please enter a valid 11-digit mobile wallet number'),
+        findsWidgets,
       );
 
       await E2ETestHarness.cleanUp(tester);
@@ -376,8 +376,8 @@ void main() {
 
       expect(addCallbackInvoked, isFalse);
       expect(
-        find.textContaining('Please enter an 11-digit mobile wallet number'),
-        findsOneWidget,
+        find.textContaining('Please enter a valid 11-digit mobile wallet number'),
+        findsWidgets,
       );
 
       await E2ETestHarness.cleanUp(tester);
@@ -424,8 +424,8 @@ void main() {
 
       expect(addCallbackInvoked, isFalse);
       expect(
-        find.textContaining('Please enter an 11-digit mobile wallet number'),
-        findsOneWidget,
+        find.textContaining('Please enter a valid 11-digit mobile wallet number'),
+        findsWidgets,
       );
 
       await E2ETestHarness.cleanUp(tester);

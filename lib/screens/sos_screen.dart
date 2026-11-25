@@ -150,8 +150,8 @@ class _SosScreenState extends State<SosScreen> with TickerProviderStateMixin {
         SnackBar(
           content: Text(
             success
-                ? '🚨 999 Emergency Dispatch Initiated!'
-                : '🚨 Could not open dialer automatically. Please dial 999.',
+                ? '999 Emergency Dispatch Initiated'
+                : 'Could not open dialer automatically. Please dial 999.',
           ),
           backgroundColor: AppColors.caliperCrimson,
         ),
@@ -313,9 +313,9 @@ class _SosScreenState extends State<SosScreen> with TickerProviderStateMixin {
                       'LIVE GPS',
                       style: TextStyle(
                         color: Colors.white,
-                        fontSize: 8,
-                        fontFamily: 'monospace',
-                        fontWeight: FontWeight.bold,
+                        fontSize: 10.5,
+                        fontWeight: FontWeight.w700,
+                        fontFeatures: [FontFeature.tabularFigures()],
                       ),
                     ),
                   ),
@@ -872,8 +872,7 @@ class _SosScreenState extends State<SosScreen> with TickerProviderStateMixin {
                           overflow: TextOverflow.ellipsis,
                           style: const TextStyle(
                             color: AppColors.slateMuted,
-                            fontSize: 9.0,
-                            fontFamily: 'monospace',
+                            fontSize: 11.5,
                             fontWeight: FontWeight.w500,
                           ),
                         ),

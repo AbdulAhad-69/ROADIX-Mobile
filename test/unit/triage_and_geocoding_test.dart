@@ -1,37 +1,16 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:roadix_mobile/src/core/config/app_config.dart';
 import 'package:roadix_mobile/screens/dispatch_screen.dart';
+import 'package:roadix_mobile/services/demo_session.dart';
 import 'package:roadix_mobile/src/features/emergency_triage/application/triage_controller.dart';
 import 'package:roadix_mobile/src/features/emergency_triage/domain/models/triage_state.dart';
 import 'package:roadix_mobile/src/core/utils/phone_utils.dart';
 import 'package:roadix_mobile/services/geocoding_service.dart';
+import '../e2e/helpers/test_app_harness.dart';
 
 void main() {
   setUpAll(() async {
-    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-        .setMockMethodCallHandler(
-      const MethodChannel('plugins.flutter.io/shared_preferences'),
-      (MethodCall methodCall) async {
-        if (methodCall.method == 'getAll') {
-          return <String, dynamic>{};
-        }
-        return true;
-      },
-    );
-
-    await AppConfig.initialize();
-    try {
-      await Supabase.initialize(
-        url: AppConfig.supabaseUrl,
-        // ignore: deprecated_member_use
-        anonKey: AppConfig.supabaseAnonKey,
-      );
-    } catch (_) {
-      // Supabase already initialized or offline mock active
-    }
+    await E2ETestHarness.initializeAppEnvironment();
   });
   group('TriageState JSON Serialization & Deserialization Tests', () {
     test('Serializes and deserializes full triage state correctly', () {
@@ -193,6 +172,9 @@ void main() {
 
   group('DispatchScreen Search Location Formatting Tests', () {
     testWidgets('Renders natural grammar for fallback coordinates without corrupted bullet sentences', (WidgetTester tester) async {
+      DemoSession.startDemo(demoRole: 'motorist');
+      addTearDown(DemoSession.clear);
+
       await tester.pumpWidget(
         const MaterialApp(
           home: Scaffold(
@@ -223,11 +205,13 @@ void main() {
         findsNothing,
       );
 
-      await tester.pumpWidget(const SizedBox());
-      await tester.pump(const Duration(milliseconds: 50));
+      await E2ETestHarness.cleanUp(tester);
     });
 
     testWidgets('Renders regional fallback cleanly in DispatchScreen', (WidgetTester tester) async {
+      DemoSession.startDemo(demoRole: 'motorist');
+      addTearDown(DemoSession.clear);
+
       await tester.pumpWidget(
         const MaterialApp(
           home: Scaffold(
@@ -256,11 +240,13 @@ void main() {
         findsNothing,
       );
 
-      await tester.pumpWidget(const SizedBox());
-      await tester.pump(const Duration(milliseconds: 50));
+      await E2ETestHarness.cleanUp(tester);
     });
 
     testWidgets('Preserves verified street address unmodified in DispatchScreen', (WidgetTester tester) async {
+      DemoSession.startDemo(demoRole: 'motorist');
+      addTearDown(DemoSession.clear);
+
       await tester.pumpWidget(
         const MaterialApp(
           home: Scaffold(
@@ -285,8 +271,7 @@ void main() {
         findsOneWidget,
       );
 
-      await tester.pumpWidget(const SizedBox());
-      await tester.pump(const Duration(milliseconds: 50));
+      await E2ETestHarness.cleanUp(tester);
     });
   });
 }

@@ -2,10 +2,11 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:geolocator/geolocator.dart';
-import 'package:maplibre_gl/maplibre_gl.dart';
 import '../services/geocoding_service.dart';
 import '../src/core/config/app_config.dart';
+import '../src/core/models/geo_point.dart';
 import '../theme/app_colors.dart';
+import '../widgets/roadix_map_view.dart';
 import 'vehicle_select_screen.dart';
 
 class LocationConfirmScreen extends StatefulWidget {
@@ -29,10 +30,9 @@ class LocationConfirmScreen extends StatefulWidget {
 }
 
 class _LocationConfirmScreenState extends State<LocationConfirmScreen> {
-  MapLibreMapController? _mapController;
-  late LatLng _currentCenter;
-  String get _styleUrl => AppConfig.mapStyleUrl;
-  String _currentAddress = 'Dhaka Region • Roadside Position';
+  RoadixMapController? _mapController;
+  late RoadixGeoPoint _currentCenter;
+  String _currentAddress = 'Roadside Position';
   bool _isGeocoding = false;
   bool _isLocating = false;
   int? _currentAccuracy;
@@ -45,7 +45,7 @@ class _LocationConfirmScreenState extends State<LocationConfirmScreen> {
     super.initState();
     _currentAccuracy = widget.accuracyMeters;
     _isManualPin = widget.accuracyMeters == null;
-    _currentCenter = LatLng(widget.initialLat, widget.initialLng);
+    _currentCenter = RoadixGeoPoint(widget.initialLat, widget.initialLng);
     _fetchAddress(_currentCenter.latitude, _currentCenter.longitude);
   }
 
@@ -141,14 +141,14 @@ class _LocationConfirmScreenState extends State<LocationConfirmScreen> {
       }
 
       if (pos != null && mounted) {
-        final target = LatLng(pos.latitude, pos.longitude);
+        final target = RoadixGeoPoint(pos.latitude, pos.longitude);
         final acc = pos.accuracy.round();
         setState(() {
           _currentCenter = target;
           _currentAccuracy = acc;
           _isManualPin = false;
         });
-        _mapController?.animateCamera(CameraUpdate.newLatLngZoom(target, 16.0));
+        _mapController?.animateCamera(target, zoom: 16.0);
         _fetchAddress(pos.latitude, pos.longitude);
       } else {
         _fallbackToInitial(manual: true);
@@ -163,21 +163,23 @@ class _LocationConfirmScreenState extends State<LocationConfirmScreen> {
   }
 
   void _fallbackToInitial({bool manual = false}) {
-    final target = LatLng(widget.initialLat, widget.initialLng);
+    final target = RoadixGeoPoint(widget.initialLat, widget.initialLng);
     if (mounted) {
       setState(() {
         _currentCenter = target;
         _isManualPin = manual || widget.accuracyMeters == null;
         _currentAccuracy = widget.accuracyMeters;
       });
-      _mapController?.animateCamera(CameraUpdate.newLatLng(target));
+      _mapController?.animateCamera(target);
       _fetchAddress(target.latitude, target.longitude);
     }
   }
 
-  String get _attributionLabel => AppConfig.geoapifyApiKey.isNotEmpty
-      ? '© OpenStreetMap contributors • © Geoapify'
-      : '© OpenStreetMap contributors • © OpenFreeMap';
+  String get _attributionLabel => AppConfig.hasGoogleMapsApiKey
+      ? 'Google Maps'
+      : (AppConfig.geoapifyApiKey.isNotEmpty
+          ? '© OpenStreetMap • © Geoapify'
+          : '© OpenStreetMap • © OpenFreeMap');
 
   @override
   Widget build(BuildContext context) {
@@ -235,13 +237,13 @@ class _LocationConfirmScreenState extends State<LocationConfirmScreen> {
                         ),
                         const SizedBox(width: 5),
                         Text(
-                          isLiveLock ? 'GPS LOCK' : 'MANUAL PIN',
+                          isLiveLock ? 'GPS Lock' : 'Manual Pin',
                           style: TextStyle(
                             color: isLiveLock
                                 ? AppColors.emeraldDark
                                 : AppColors.amberDark,
-                            fontSize: 10.5,
-                            fontWeight: FontWeight.w800,
+                            fontSize: 11.5,
+                            fontWeight: FontWeight.w700,
                           ),
                         ),
                       ],
@@ -251,7 +253,7 @@ class _LocationConfirmScreenState extends State<LocationConfirmScreen> {
               ),
             ),
 
-            // Step Indicator
+            // Step Progress Bar
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 2.0),
               child: Column(
@@ -262,15 +264,14 @@ class _LocationConfirmScreenState extends State<LocationConfirmScreen> {
                       Flexible(
                         child: Text(
                           widget.isSelectingLocationOnly
-                              ? 'LOCATION PICKER'
-                              : 'STEP 1 OF 4',
+                              ? 'Location Picker'
+                              : 'Step 1 of 4',
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: const TextStyle(
                             color: AppColors.crimsonHover,
-                            fontSize: 10.5,
-                            fontWeight: FontWeight.w800,
-                            letterSpacing: 0.7,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700,
                           ),
                         ),
                       ),
@@ -278,15 +279,14 @@ class _LocationConfirmScreenState extends State<LocationConfirmScreen> {
                       Flexible(
                         child: Text(
                           widget.isSelectingLocationOnly
-                              ? 'CUSTOM POSITION'
-                              : 'LOCATION TRIAGE',
+                              ? 'Drag map pin'
+                              : 'Location',
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: const TextStyle(
                             color: AppColors.slateMuted,
-                            fontSize: 10.5,
+                            fontSize: 12,
                             fontWeight: FontWeight.w600,
-                            letterSpacing: 0.5,
                           ),
                         ),
                       ),
@@ -353,90 +353,49 @@ class _LocationConfirmScreenState extends State<LocationConfirmScreen> {
                 children: [
                   Semantics(
                     label: 'Interactive breakdown map',
-                    child: MapLibreMap(
-                      styleString: _styleUrl,
-                      trackCameraPosition: true,
-                      compassEnabled: true,
-                      myLocationEnabled: false,
-                      minMaxZoomPreference: const MinMaxZoomPreference(5.0, 19.0),
-                      initialCameraPosition: CameraPosition(
-                        target: _currentCenter,
-                        zoom: 15.5,
-                      ),
+                    child: RoadixMapView(
+                      initialCenter: _currentCenter,
+                      initialZoom: 15.5,
                       onMapCreated: (ctrl) => _mapController = ctrl,
-                      onCameraIdle: () {
-                        final pos = _mapController?.cameraPosition?.target;
-                        if (pos == null) return;
-                        final moved = (pos.latitude - _currentCenter.latitude)
-                                    .abs() >
-                                0.00008 ||
-                            (pos.longitude - _currentCenter.longitude).abs() >
-                                0.00008;
-                        if (moved) {
+                      onCameraMove: (pos) {
+                        final moved =
+                            (pos.latitude - _currentCenter.latitude).abs() >
+                                    0.00008 ||
+                                (pos.longitude - _currentCenter.longitude)
+                                        .abs() >
+                                    0.00008;
+                        if (moved && mounted) {
                           setState(() {
                             _currentCenter = pos;
                             _isManualPin = true;
                             _currentAccuracy = null;
                           });
-                          _scheduleGeocode(pos.latitude, pos.longitude);
                         }
+                      },
+                      onCameraIdle: () {
+                        _scheduleGeocode(
+                          _currentCenter.latitude,
+                          _currentCenter.longitude,
+                        );
                       },
                     ),
                   ),
 
-                  // Fixed Center Target Pin (non-blocking so user can drag smoothly underneath)
-                  IgnorePointer(
+                  // Fixed Center Target Pin
+                  const IgnorePointer(
                     child: ExcludeSemantics(
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 10,
-                              vertical: 4,
-                            ),
-                            decoration: BoxDecoration(
-                              color: AppColors.chassisText,
-                              borderRadius: BorderRadius.circular(20),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: Colors.black.withAlpha(80),
-                                  blurRadius: 8,
-                                ),
-                              ],
-                            ),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: const [
-                                CircleAvatar(
-                                  radius: 3.5,
-                                  backgroundColor: AppColors.caliperCrimson,
-                                ),
-                                SizedBox(width: 6),
-                                Text(
-                                  'BREAKDOWN POSITION',
-                                  style: TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 10,
-                                    fontWeight: FontWeight.w800,
-                                    letterSpacing: 0.5,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                          const SizedBox(height: 4),
-                          const Icon(
-                            Icons.location_on,
-                            color: AppColors.caliperCrimson,
-                            size: 40,
-                          ),
-                        ],
+                      child: Padding(
+                        padding: EdgeInsets.only(bottom: 32),
+                        child: Icon(
+                          Icons.location_on,
+                          color: AppColors.caliperCrimson,
+                          size: 42,
+                        ),
                       ),
                     ),
                   ),
 
-                  // Recenter to GPS Button (>= 48x48dp accessible hit target)
+                  // Recenter to GPS Button (>= 48x48dp)
                   Positioned(
                     bottom: 14,
                     right: 14,
@@ -447,7 +406,7 @@ class _LocationConfirmScreenState extends State<LocationConfirmScreen> {
                         message: 'Recenter to my GPS location',
                         child: Material(
                           color: AppColors.cardWhite,
-                          elevation: 3,
+                          elevation: 2,
                           borderRadius: BorderRadius.circular(12),
                           child: InkWell(
                             onTap: _recenterToCurrentLocation,
@@ -482,7 +441,7 @@ class _LocationConfirmScreenState extends State<LocationConfirmScreen> {
                     ),
                   ),
 
-                  // Dynamic Map Tiles Attribution
+                  // Map Attribution
                   Positioned(
                     bottom: 8,
                     left: 12,
@@ -500,7 +459,7 @@ class _LocationConfirmScreenState extends State<LocationConfirmScreen> {
                         _attributionLabel,
                         style: const TextStyle(
                           color: AppColors.slateMuted,
-                          fontSize: 10,
+                          fontSize: 10.5,
                           fontWeight: FontWeight.w600,
                         ),
                       ),
@@ -512,7 +471,7 @@ class _LocationConfirmScreenState extends State<LocationConfirmScreen> {
 
             // Confirmed Location Details Panel
             Container(
-              padding: const EdgeInsets.fromLTRB(20, 14, 20, 14),
+              padding: const EdgeInsets.fromLTRB(20, 14, 20, 16),
               decoration: const BoxDecoration(
                 color: AppColors.cardWhite,
                 border: Border(top: BorderSide(color: AppColors.slateBorder)),
@@ -520,50 +479,6 @@ class _LocationConfirmScreenState extends State<LocationConfirmScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: const [
-                      Flexible(
-                        child: Text(
-                          'BREAKDOWN LOCATION',
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            color: AppColors.slateMuted,
-                            fontSize: 10.5,
-                            fontWeight: FontWeight.w800,
-                            letterSpacing: 0.7,
-                          ),
-                        ),
-                      ),
-                      SizedBox(width: 8),
-                      Flexible(
-                        child: Text(
-                          'Drag map or tap preset',
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            color: AppColors.slateMuted,
-                            fontSize: 11,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                  SingleChildScrollView(
-                    scrollDirection: Axis.horizontal,
-                    child: Row(
-                      children: [
-                        _buildQuickZoneChip('Airport Rd', 23.8512, 90.4078),
-                        _buildQuickZoneChip('Uttara Sec 7', 23.8732, 90.3980),
-                        _buildQuickZoneChip('Kuril Flyover', 23.8190, 90.4200),
-                        _buildQuickZoneChip('Mirpur 10', 23.8069, 90.3687),
-                        _buildQuickZoneChip('Gulshan 2', 23.7985, 90.4143),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 10),
                   Row(
                     children: [
                       Container(
@@ -585,70 +500,31 @@ class _LocationConfirmScreenState extends State<LocationConfirmScreen> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              _currentAddress,
+                              _isGeocoding ? 'Resolving address...' : _currentAddress,
                               maxLines: 2,
                               overflow: TextOverflow.ellipsis,
                               style: const TextStyle(
                                 color: AppColors.chassisText,
-                                fontSize: 13.5,
+                                fontSize: 14,
                                 fontWeight: FontWeight.w700,
                               ),
                             ),
-                            const SizedBox(height: 3),
-                            Row(
-                              children: [
-                                Flexible(
-                                  child: Text(
-                                    '${_currentCenter.latitude.toStringAsFixed(4)}° N, ${_currentCenter.longitude.toStringAsFixed(4)}° E',
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: const TextStyle(
-                                      color: AppColors.slateMuted,
-                                      fontSize: 11,
-                                      fontFamily: 'monospace',
-                                    ),
-                                  ),
-                                ),
-                                const SizedBox(width: 6),
-                                Container(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 6,
-                                    vertical: 2,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    color: isLiveLock
-                                        ? AppColors.emeraldLight
-                                        : AppColors.surfaceTint,
-                                    borderRadius: BorderRadius.circular(5),
-                                    border: Border.all(
-                                      color: isLiveLock
-                                          ? AppColors.emeraldBorder
-                                          : AppColors.slateBorder,
-                                    ),
-                                  ),
-                                  child: Text(
-                                    _isGeocoding
-                                        ? 'resolving...'
-                                        : (_currentAccuracy != null
-                                            ? '± ${_currentAccuracy}m accuracy'
-                                            : 'Manual Pin'),
-                                    style: TextStyle(
-                                      color: isLiveLock
-                                          ? AppColors.emeraldDark
-                                          : AppColors.slateMuted,
-                                      fontSize: 10,
-                                      fontWeight: FontWeight.w700,
-                                    ),
-                                  ),
-                                ),
-                              ],
+                            const SizedBox(height: 2),
+                            Text(
+                              '${_currentCenter.latitude.toStringAsFixed(4)}° N, ${_currentCenter.longitude.toStringAsFixed(4)}° E'
+                              '${_currentAccuracy != null ? ' • ± ${_currentAccuracy}m' : ''}',
+                              style: const TextStyle(
+                                color: AppColors.slateMuted,
+                                fontSize: 11.5,
+                                fontFeatures: [FontFeature.tabularFigures()],
+                              ),
                             ),
                           ],
                         ),
                       ),
                     ],
                   ),
-                  const SizedBox(height: 12),
+                  const SizedBox(height: 14),
                   SizedBox(
                     width: double.infinity,
                     height: 48,
@@ -692,82 +568,10 @@ class _LocationConfirmScreenState extends State<LocationConfirmScreen> {
                       ),
                     ),
                   ),
-                  const SizedBox(height: 6),
-                  Center(
-                    child: Text(
-                      widget.isSelectingLocationOnly
-                          ? 'Set your current location for emergency assistance'
-                          : 'Step 1 of 4 • Next: Vehicle Classification',
-                      style: const TextStyle(
-                        color: AppColors.slateMuted,
-                        fontSize: 11,
-                      ),
-                    ),
-                  ),
                 ],
               ),
             ),
           ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildQuickZoneChip(String label, double lat, double lng) {
-    final bool isSelected = (_currentCenter.latitude - lat).abs() < 0.001 &&
-        (_currentCenter.longitude - lng).abs() < 0.001;
-
-    return Padding(
-      padding: const EdgeInsets.only(right: 8.0),
-      child: Semantics(
-        button: true,
-        selected: isSelected,
-        label: 'Select $label preset location',
-        child: InkWell(
-          onTap: () {
-            HapticFeedback.selectionClick();
-            final target = LatLng(lat, lng);
-            setState(() {
-              _currentCenter = target;
-              _isManualPin = true;
-              _currentAccuracy = null;
-            });
-            _mapController?.animateCamera(CameraUpdate.newLatLngZoom(target, 15.5));
-            _fetchAddress(lat, lng);
-          },
-          borderRadius: BorderRadius.circular(8),
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(minHeight: 48, minWidth: 48),
-            child: Center(
-              widthFactor: 1.0,
-              child: Container(
-                height: 36,
-                alignment: Alignment.center,
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                decoration: BoxDecoration(
-                  color: isSelected
-                      ? AppColors.crimsonLight
-                      : AppColors.surfaceTint,
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(
-                    color: isSelected
-                        ? AppColors.caliperCrimson
-                        : AppColors.slateBorder,
-                  ),
-                ),
-                child: Text(
-                  label,
-                  style: TextStyle(
-                    color: isSelected
-                        ? AppColors.crimsonHover
-                        : AppColors.chassisText,
-                    fontSize: 11.5,
-                    fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
-                  ),
-                ),
-              ),
-            ),
-          ),
         ),
       ),
     );

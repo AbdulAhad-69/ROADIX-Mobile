@@ -1,10 +1,8 @@
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../theme/app_colors.dart';
 import '../services/demo_session.dart';
 import '../services/supabase_service.dart';
-import '../src/core/config/app_config.dart';
 import '../src/core/router/app_router.dart';
 import 'login_screen.dart';
 import 'mechanic_home_screen.dart';
@@ -66,7 +64,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           } else {
             _userName = DemoSession.isActive
                 ? DemoSession.fullName
-                : 'Guest / Demo Motorist';
+                : 'Motorist';
             _userPhone = DemoSession.isActive ? DemoSession.phone : '';
             _avatarUrl = DemoSession.isActive ? DemoSession.avatarUrl : null;
             _userRole = DemoSession.isActive ? DemoSession.role : 'motorist';
@@ -80,7 +78,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     } catch (e) {
       if (mounted) {
         setState(() {
-          if (_userName.isEmpty) _userName = 'Guest / Demo Motorist';
+          if (_userName.isEmpty) _userName = 'Motorist';
           _isLoading = false;
         });
       }
@@ -150,12 +148,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
               fuel: savedData['fuel']!,
             );
           }
-          _loadProfileData();
+          await _loadProfileData();
         },
         onDelete: vehicle != null
             ? () async {
                 await _db.deleteVehicle(vehicle['id']);
-                _loadProfileData();
+                await _loadProfileData();
               }
             : null,
       ),
@@ -193,12 +191,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
               relation: savedData['relation']!,
             );
           }
-          _loadProfileData();
+          await _loadProfileData();
         },
         onDelete: contact != null
             ? () async {
                 await _db.deleteEmergencyContact(contact['id']);
-                _loadProfileData();
+                await _loadProfileData();
               }
             : null,
       ),
@@ -242,7 +240,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           if (primary.isNotEmpty && primary['id'] != null) {
             await _db.setPrimaryWallet(primary['id']);
           }
-          _loadProfileData();
+          await _loadProfileData();
         },
       ),
     );
@@ -259,12 +257,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
       );
     }
 
-    final primaryWallet = _savedWallets.firstWhere(
-      (w) => w['is_primary'] == true,
-      orElse: () => _savedWallets.isNotEmpty
-          ? _savedWallets.first
-          : {'provider': 'bKash', 'account_number': 'None linked'},
-    );
+    final Map<String, dynamic>? primaryWallet = _savedWallets.isEmpty
+        ? null
+        : _savedWallets.firstWhere(
+            (w) => w['is_primary'] == true,
+            orElse: () => _savedWallets.first,
+          );
 
     return Scaffold(
       backgroundColor: AppColors.porcelainBg,
@@ -317,13 +315,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   color: AppColors.cardWhite,
                   borderRadius: BorderRadius.circular(18),
                   border: Border.all(color: AppColors.slateBorder),
-                  boxShadow: [
-                    BoxShadow(
-                      color: AppColors.caliperCrimson.withAlpha(12),
-                      blurRadius: 10,
-                      offset: const Offset(0, 3),
-                    ),
-                  ],
                 ),
                 child: Row(
                   children: [
@@ -336,21 +327,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         child: Stack(
                           alignment: Alignment.bottomRight,
                           children: [
-                            Container(
-                              padding: const EdgeInsets.all(2.5),
-                              decoration: BoxDecoration(
-                                shape: BoxShape.circle,
-                                border: Border.all(
-                                  color: AppColors.caliperCrimson.withAlpha(60),
-                                  width: 1.5,
-                                ),
-                              ),
-                              child: RoadixAvatar(
-                                displayName: _userName,
-                                avatarUrl: _avatarUrl,
-                                radius: 30,
-                                showInitialFallback: false,
-                              ),
+                            RoadixAvatar(
+                              displayName: _userName,
+                              avatarUrl: _avatarUrl,
+                              radius: 30,
                             ),
                             Container(
                               padding: const EdgeInsets.all(5),
@@ -384,7 +364,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                   overflow: TextOverflow.ellipsis,
                                   style: const TextStyle(
                                     color: AppColors.chassisText,
-                                    fontSize: 14.5,
+                                    fontSize: 15,
                                     fontWeight: FontWeight.w800,
                                   ),
                                 ),
@@ -393,43 +373,45 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                 const SizedBox(width: 5),
                                 const Icon(
                                   Icons.verified,
-                                  color: AppColors.emeraldGps,
-                                  size: 15,
+                                  color: AppColors.emeraldDark,
+                                  size: 16,
                                 ),
                               ],
                             ],
                           ),
                           const SizedBox(height: 2),
                           Text(
-                            _userPhone,
+                            _userPhone.isNotEmpty
+                                ? _userPhone
+                                : 'No phone added',
                             style: const TextStyle(
                               color: AppColors.slateMuted,
-                              fontSize: 11,
-                              fontFamily: 'monospace',
+                              fontSize: 12,
+                              fontFeatures: [FontFeature.tabularFigures()],
                             ),
                           ),
-                          const SizedBox(height: 4),
+                          const SizedBox(height: 5),
                           Container(
                             padding: const EdgeInsets.symmetric(
-                              horizontal: 6,
-                              vertical: 2,
+                              horizontal: 8,
+                              vertical: 3,
                             ),
                             decoration: BoxDecoration(
                               color: _isNidVerified
-                                  ? const Color(0xFFF1F5F9)
-                                  : const Color(0xFFFEF2F2),
-                              borderRadius: BorderRadius.circular(4),
+                                  ? AppColors.surfaceTint
+                                  : AppColors.crimsonLight,
+                              borderRadius: BorderRadius.circular(6),
                             ),
                             child: Text(
                               _isNidVerified
-                                  ? 'NID VERIFIED MOTORIST'
-                                  : 'UNVERIFIED MOTORIST',
+                                  ? 'NID Verified'
+                                  : 'Unverified Motorist',
                               style: TextStyle(
                                 color: _isNidVerified
-                                    ? const Color(0xFF475569)
-                                    : AppColors.caliperCrimson,
-                                fontSize: 8.5,
-                                fontWeight: FontWeight.w800,
+                                    ? AppColors.slateMuted
+                                    : AppColors.crimsonHover,
+                                fontSize: 11,
+                                fontWeight: FontWeight.w700,
                               ),
                             ),
                           ),
@@ -437,6 +419,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       ),
                     ),
                     IconButton(
+                      tooltip: 'Edit profile details',
                       icon: const Icon(
                         Icons.edit_outlined,
                         color: AppColors.slateMuted,
@@ -456,32 +439,24 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 children: [
                   const Flexible(
                     child: Text(
-                      'DIGITAL GARAGE (VEHICLES)',
+                      'Digital Garage',
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
-                        color: AppColors.slateMuted,
-                        fontSize: 10,
+                        color: AppColors.chassisText,
+                        fontSize: 14,
                         fontWeight: FontWeight.w800,
-                        letterSpacing: 0.8,
                       ),
                     ),
                   ),
                   const SizedBox(width: 8),
-                  InkWell(
-                    onTap: () => _openVehicleEditor(),
-                    child: const Text(
-                      '+ Add Vehicle',
-                      style: TextStyle(
-                        color: AppColors.caliperCrimson,
-                        fontSize: 11,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
+                  TextButton(
+                    onPressed: () => _openVehicleEditor(),
+                    child: const Text('+ Add Vehicle'),
                   ),
                 ],
               ),
-              const SizedBox(height: 10),
+              const SizedBox(height: 6),
 
               if (_savedGarage.isEmpty)
                 Container(
@@ -496,7 +471,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       'No vehicles saved in garage yet.',
                       style: TextStyle(
                         color: AppColors.slateMuted,
-                        fontSize: 12,
+                        fontSize: 12.5,
                       ),
                     ),
                   ),
@@ -504,111 +479,102 @@ class _ProfileScreenState extends State<ProfileScreen> {
               else
                 ..._savedGarage.map((car) {
                   final bool isPrimary = car['is_primary'] == true;
-                  return InkWell(
-                    onTap: () => _openVehicleEditor(car),
-                    borderRadius: BorderRadius.circular(16),
-                    child: Container(
-                      margin: const EdgeInsets.only(bottom: 10),
-                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                      decoration: BoxDecoration(
-                        color: AppColors.cardWhite,
-                        borderRadius: BorderRadius.circular(16),
-                        border: Border.all(
-                          color: isPrimary
-                              ? AppColors.caliperCrimson.withAlpha(50)
-                              : AppColors.slateBorder,
-                          width: isPrimary ? 1.4 : 1.0,
-                        ),
-                        boxShadow: [
-                          BoxShadow(
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: 10),
+                    child: InkWell(
+                      onTap: () => _openVehicleEditor(car),
+                      borderRadius: BorderRadius.circular(16),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                        decoration: BoxDecoration(
+                          color: AppColors.cardWhite,
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(
                             color: isPrimary
-                                ? AppColors.caliperCrimson.withAlpha(12)
-                                : Colors.black.withAlpha(4),
-                            blurRadius: 8,
-                            offset: const Offset(0, 2),
+                                ? AppColors.caliperCrimson
+                                : AppColors.slateBorder,
+                            width: isPrimary ? 1.5 : 1.0,
                           ),
-                        ],
-                      ),
-                      child: Row(
-                        children: [
-                          Container(
-                            padding: const EdgeInsets.all(6),
-                            decoration: BoxDecoration(
-                              color: isPrimary
-                                  ? AppColors.crimsonLight
-                                  : const Color(0xFFF8FAFC),
-                              borderRadius: BorderRadius.circular(11),
+                        ),
+                        child: Row(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.all(6),
+                              decoration: BoxDecoration(
+                                color: isPrimary
+                                    ? AppColors.crimsonLight
+                                    : AppColors.porcelainBg,
+                                borderRadius: BorderRadius.circular(11),
+                              ),
+                              child: VehicleIllustration(
+                                vehicleType: car['type']?.toString() ?? 'Sedan',
+                                size: 34,
+                              ),
                             ),
-                            child: VehicleIllustration(
-                              vehicleType: car['type']?.toString() ?? 'Sedan',
-                              size: 34,
-                            ),
-                          ),
-                          const SizedBox(width: 14),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Row(
-                                  children: [
-                                    Flexible(
-                                      child: Text(
-                                        car['model'] ?? 'Unknown Vehicle',
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
-                                        style: const TextStyle(
-                                          color: AppColors.chassisText,
-                                          fontSize: 13,
-                                          fontWeight: FontWeight.w800,
-                                        ),
-                                      ),
-                                    ),
-                                    if (isPrimary) ...[
-                                      const SizedBox(width: 6),
-                                      Container(
-                                        padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
-                                        decoration: BoxDecoration(
-                                          color: AppColors.caliperCrimson.withAlpha(20),
-                                          borderRadius: BorderRadius.circular(4),
-                                        ),
-                                        child: const Text(
-                                          'PRIMARY',
-                                          style: TextStyle(
-                                            color: AppColors.caliperCrimson,
-                                            fontSize: 7.5,
-                                            fontWeight: FontWeight.w900,
-                                            letterSpacing: 0.5,
+                            const SizedBox(width: 14),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Row(
+                                    children: [
+                                      Flexible(
+                                        child: Text(
+                                          car['model'] ?? 'Unknown Vehicle',
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                          style: const TextStyle(
+                                            color: AppColors.chassisText,
+                                            fontSize: 13.5,
+                                            fontWeight: FontWeight.w800,
                                           ),
                                         ),
                                       ),
+                                      if (isPrimary) ...[
+                                        const SizedBox(width: 6),
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                          decoration: BoxDecoration(
+                                            color: AppColors.crimsonLight,
+                                            borderRadius: BorderRadius.circular(6),
+                                          ),
+                                          child: const Text(
+                                            'Primary',
+                                            style: TextStyle(
+                                              color: AppColors.crimsonHover,
+                                              fontSize: 11,
+                                              fontWeight: FontWeight.w700,
+                                            ),
+                                          ),
+                                        ),
+                                      ],
                                     ],
-                                  ],
-                                ),
-                                const SizedBox(height: 2),
-                                Text(
-                                  '${car['plate']} • ${car['fuel']}',
-                                  style: const TextStyle(
-                                    color: AppColors.slateMuted,
-                                    fontSize: 10.5,
-                                    fontFamily: 'monospace',
-                                    fontWeight: FontWeight.w600,
                                   ),
-                                ),
-                              ],
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    '${car['plate']} • ${car['fuel']}',
+                                    style: const TextStyle(
+                                      color: AppColors.slateMuted,
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ],
+                              ),
                             ),
-                          ),
-                          const Icon(
-                            Icons.edit_outlined,
-                            color: AppColors.slateMuted,
-                            size: 17,
-                          ),
-                        ],
+                            const Icon(
+                              Icons.edit_outlined,
+                              color: AppColors.slateMuted,
+                              size: 18,
+                            ),
+                          ],
+                        ),
                       ),
                     ),
                   );
                 }),
 
-              const SizedBox(height: 20),
+              const SizedBox(height: 16),
 
               // Emergency Broadcast Contacts Section
               Row(
@@ -616,35 +582,26 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 children: [
                   const Flexible(
                     child: Text(
-                      'EMERGENCY BROADCAST CONTACTS',
+                      'Emergency Contacts',
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
-                        color: AppColors.slateMuted,
-                        fontSize: 10,
+                        color: AppColors.chassisText,
+                        fontSize: 14,
                         fontWeight: FontWeight.w800,
-                        letterSpacing: 0.8,
                       ),
                     ),
                   ),
                   const SizedBox(width: 8),
-                  InkWell(
-                    onTap: () => _openContactEditor(),
-                    child: const Text(
-                      '+ Add Contact',
-                      style: TextStyle(
-                        color: AppColors.caliperCrimson,
-                        fontSize: 11,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
+                  TextButton(
+                    onPressed: () => _openContactEditor(),
+                    child: const Text('+ Add Contact'),
                   ),
                 ],
               ),
-              const SizedBox(height: 4),
               const Text(
                 'Automatically alerted with live GPS during 999 panic calls',
-                style: TextStyle(color: AppColors.slateMuted, fontSize: 10.5),
+                style: TextStyle(color: AppColors.slateMuted, fontSize: 12),
               ),
               const SizedBox(height: 10),
 
@@ -663,20 +620,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           'No emergency broadcast contacts configured yet.',
                           style: TextStyle(
                             color: AppColors.slateMuted,
-                            fontSize: 12,
+                            fontSize: 12.5,
                           ),
                         ),
-                        const SizedBox(height: 6),
-                        InkWell(
-                          onTap: () => _openContactEditor(),
-                          child: const Text(
-                            '+ Add First Family Contact',
-                            style: TextStyle(
-                              color: AppColors.caliperCrimson,
-                              fontSize: 11.5,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
+                        TextButton(
+                          onPressed: () => _openContactEditor(),
+                          child: const Text('+ Add First Family Contact'),
                         ),
                       ],
                     ),
@@ -701,16 +650,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       children: [
                         ListTile(
                           onTap: () => _openContactEditor(contact),
-                          dense: true,
-                          visualDensity: VisualDensity.compact,
                           leading: CircleAvatar(
-                            radius: 14,
+                            radius: 16,
                             backgroundColor: AppColors.crimsonLight,
                             child: Text(
                               contactName.isNotEmpty ? contactName[0] : '?',
                               style: const TextStyle(
-                                color: AppColors.caliperCrimson,
-                                fontSize: 11,
+                                color: AppColors.crimsonHover,
+                                fontSize: 12,
                                 fontWeight: FontWeight.bold,
                               ),
                             ),
@@ -719,7 +666,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                             contactName,
                             style: const TextStyle(
                               color: AppColors.chassisText,
-                              fontSize: 12,
+                              fontSize: 13,
                               fontWeight: FontWeight.w700,
                             ),
                           ),
@@ -727,8 +674,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                             contact['phone']?.toString() ?? '',
                             style: const TextStyle(
                               color: AppColors.slateMuted,
-                              fontSize: 10,
-                              fontFamily: 'monospace',
+                              fontSize: 12,
+                              fontFeatures: [FontFeature.tabularFigures()],
                             ),
                           ),
                           trailing: Row(
@@ -736,18 +683,19 @@ class _ProfileScreenState extends State<ProfileScreen> {
                             children: [
                               Container(
                                 padding: const EdgeInsets.symmetric(
-                                  horizontal: 6,
-                                  vertical: 2,
+                                  horizontal: 8,
+                                  vertical: 3,
                                 ),
                                 decoration: BoxDecoration(
-                                  color: const Color(0xFFF1F5F9),
-                                  borderRadius: BorderRadius.circular(4),
+                                  color: AppColors.surfaceTint,
+                                  borderRadius: BorderRadius.circular(6),
                                 ),
                                 child: Text(
                                   contact['relation']?.toString() ?? 'Family',
                                   style: const TextStyle(
                                     color: AppColors.slateMuted,
-                                    fontSize: 9,
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w600,
                                   ),
                                 ),
                               ),
@@ -755,7 +703,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                               const Icon(
                                 Icons.edit_outlined,
                                 color: AppColors.slateMuted,
-                                size: 14,
+                                size: 16,
                               ),
                             ],
                           ),
@@ -771,7 +719,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 ),
               ),
 
-              const SizedBox(height: 20),
+              const SizedBox(height: 18),
 
               // Payment Wallets
               Row(
@@ -779,32 +727,24 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 children: [
                   const Flexible(
                     child: Text(
-                      'PAYMENT & MFS WALLETS',
+                      'Payment Wallets',
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
-                        color: AppColors.slateMuted,
-                        fontSize: 10,
+                        color: AppColors.chassisText,
+                        fontSize: 14,
                         fontWeight: FontWeight.w800,
-                        letterSpacing: 0.8,
                       ),
                     ),
                   ),
                   const SizedBox(width: 8),
-                  InkWell(
-                    onTap: _openWalletEditor,
-                    child: const Text(
-                      'Manage Wallets',
-                      style: TextStyle(
-                        color: AppColors.caliperCrimson,
-                        fontSize: 11,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
+                  TextButton(
+                    onPressed: _openWalletEditor,
+                    child: const Text('Manage Wallets'),
                   ),
                 ],
               ),
-              const SizedBox(height: 10),
+              const SizedBox(height: 6),
 
               InkWell(
                 onTap: _openWalletEditor,
@@ -815,13 +755,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     color: AppColors.cardWhite,
                     borderRadius: BorderRadius.circular(16),
                     border: Border.all(color: AppColors.slateBorder),
-                    boxShadow: [
-                      BoxShadow(
-                        color: AppColors.chassisText.withAlpha(8),
-                        blurRadius: 8,
-                        offset: const Offset(0, 2),
-                      ),
-                    ],
                   ),
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -835,10 +768,22 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                 color: const Color(0xFFF8FAFC),
                                 borderRadius: BorderRadius.circular(10),
                               ),
-                              child: BrandLogo(
-                                brand: primaryWallet['provider']?.toString() ?? 'bKash',
-                                size: 34,
-                              ),
+                              child: primaryWallet != null
+                                  ? BrandLogo(
+                                      brand: primaryWallet['provider']
+                                              ?.toString() ??
+                                          'bKash',
+                                      size: 34,
+                                    )
+                                  : const SizedBox(
+                                      width: 34,
+                                      height: 34,
+                                      child: Icon(
+                                        Icons.account_balance_wallet_outlined,
+                                        color: AppColors.slateMuted,
+                                        size: 22,
+                                      ),
+                                    ),
                             ),
                             const SizedBox(width: 12),
                             Expanded(
@@ -846,23 +791,27 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   Text(
-                                    '${primaryWallet['provider']} (${primaryWallet['account_number']})',
+                                    primaryWallet != null
+                                        ? '${primaryWallet['provider']} (${primaryWallet['account_number']})'
+                                        : 'No mobile wallet linked',
                                     maxLines: 1,
                                     overflow: TextOverflow.ellipsis,
                                     style: const TextStyle(
                                       color: AppColors.chassisText,
-                                      fontSize: 12.5,
+                                      fontSize: 13,
                                       fontWeight: FontWeight.w800,
                                     ),
                                   ),
                                   const SizedBox(height: 1),
-                                  const Text(
-                                    'Primary authorization method',
+                                  Text(
+                                    primaryWallet != null
+                                        ? 'Primary payment method'
+                                        : 'Tap to add bKash, Nagad, or Rocket',
                                     maxLines: 1,
                                     overflow: TextOverflow.ellipsis,
-                                    style: TextStyle(
+                                    style: const TextStyle(
                                       color: AppColors.slateMuted,
-                                      fontSize: 9.5,
+                                      fontSize: 11.5,
                                       fontWeight: FontWeight.w500,
                                     ),
                                   ),
@@ -873,20 +822,22 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         ),
                       ),
                       const SizedBox(width: 8),
-                      const Icon(
-                        Icons.check_circle,
-                        color: AppColors.emeraldGps,
-                        size: 18,
+                      Icon(
+                        primaryWallet != null
+                            ? Icons.check_circle
+                            : Icons.add_circle_outline,
+                        color: primaryWallet != null
+                            ? AppColors.emeraldDark
+                            : AppColors.caliperCrimson,
+                        size: 20,
                       ),
                     ],
                   ),
                 ),
               ),
 
-              // Mechanic Workshop Mode Switcher Card (shown for verified/registered mechanics or non-prod debug/demo)
-              if (_userRole == 'mechanic' ||
-                  DemoSession.isActive ||
-                  (!AppConfig.isProduction && kDebugMode && !_db.isAuthenticated)) ...[
+              // Technician Console switcher (only for mechanic role accounts)
+              if (_userRole == 'mechanic') ...[
                 const SizedBox(height: 20),
                 InkWell(
                   onTap: () {

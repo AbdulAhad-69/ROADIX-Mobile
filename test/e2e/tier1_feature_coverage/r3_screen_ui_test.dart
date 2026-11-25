@@ -7,6 +7,7 @@ import 'package:roadix_mobile/screens/login_screen.dart';
 import 'package:roadix_mobile/screens/profile_screen.dart';
 import 'package:roadix_mobile/screens/sos_screen.dart';
 import 'package:roadix_mobile/screens/vehicle_select_screen.dart';
+import 'package:roadix_mobile/services/demo_session.dart';
 import 'package:roadix_mobile/theme/app_colors.dart';
 import 'package:roadix_mobile/widgets/brand_logo.dart';
 import '../helpers/e2e_finders.dart';
@@ -63,7 +64,7 @@ void main() {
       expect(E2EFinders.breakdownCategory('Battery'), findsOneWidget);
       expect(E2EFinders.breakdownCategory('Flat Tire'), findsOneWidget);
       expect(E2EFinders.breakdownCategory('Engine'), findsOneWidget);
-      expect(E2EFinders.breakdownCategory('Fuel'), findsOneWidget);
+      expect(E2EFinders.breakdownCategory('Out of Fuel'), findsOneWidget);
       expect(E2EFinders.breakdownCategory('Towing'), findsOneWidget);
 
       await E2ETestHarness.cleanUp(tester);
@@ -486,7 +487,7 @@ void main() {
       // Verify initial live lane switch is false and emergency warning banner is absent
       expect(tester.widget<Switch>(switches.first).value, isFalse);
       expect(
-        find.textContaining('HIGH ROADWAY HAZARD: Priority dispatch queue activated'),
+        find.textContaining('Priority hazard dispatch activated'),
         findsNothing,
       );
 
@@ -497,7 +498,7 @@ void main() {
       // Verify switch toggled to true and high hazard warning banner rendered
       expect(tester.widget<Switch>(switches.first).value, isTrue);
       expect(
-        find.textContaining('HIGH ROADWAY HAZARD: Priority dispatch queue activated'),
+        find.textContaining('Priority hazard dispatch activated'),
         findsOneWidget,
       );
 
@@ -506,7 +507,7 @@ void main() {
       await tester.pump();
       expect(tester.widget<Switch>(switches.first).value, isFalse);
       expect(
-        find.textContaining('HIGH ROADWAY HAZARD: Priority dispatch queue activated'),
+        find.textContaining('Priority hazard dispatch activated'),
         findsNothing,
       );
 
@@ -649,7 +650,7 @@ void main() {
       await E2ETestHarness.cleanUp(tester);
     });
 
-    testWidgets('T1.12.3: Tab toggle switches between Mobile OTP and Email Account auth modes',
+    testWidgets('T1.12.3: LoginScreen uses Email & Password auth directly without Mobile OTP',
         (WidgetTester tester) async {
       await tester.pumpWidget(
         E2ETestHarness.wrapWithApp(
@@ -660,13 +661,9 @@ void main() {
       );
       await tester.pump();
 
-      expect(E2EFinders.phoneAuthTab, findsOneWidget);
-      expect(E2EFinders.emailAuthTab, findsOneWidget);
-
-      // Switch to Email Account
-      await tester.tap(E2EFinders.emailAuthTab);
-      await tester.pump();
-
+      expect(find.text('Mobile OTP'), findsNothing);
+      expect(find.text('Email Address'), findsOneWidget);
+      expect(find.text('Password'), findsOneWidget);
       expect(find.byType(TextField), findsWidgets);
 
       await E2ETestHarness.cleanUp(tester);
@@ -688,10 +685,6 @@ void main() {
             tester: tester,
           ),
         );
-        await tester.pump();
-
-        // Switch to Email Account mode where Sign Up toggle is available
-        await tester.tap(E2EFinders.emailAuthTab);
         await tester.pump();
 
         // Switch to Sign Up mode where role selector is active
@@ -836,6 +829,9 @@ void main() {
 
     testWidgets('T1.13.5: Technician Console mode switcher card is displayed with navigation cue',
         (WidgetTester tester) async {
+      DemoSession.startDemo(demoRole: 'mechanic');
+      addTearDown(DemoSession.clear);
+
       await tester.pumpWidget(
         E2ETestHarness.wrapWithApp(
           const ProfileScreen(),

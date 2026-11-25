@@ -36,6 +36,9 @@ void main() {
     testWidgets(
         'Scenario 1: Motorist Highway Puncture Rescue in Chittagong (R1.1, R1.3, R2.1, R3.1, R3.3, R3.4, R4.3)',
         (WidgetTester tester) async {
+      DemoSession.startDemo(demoRole: 'motorist');
+      addTearDown(DemoSession.clear);
+
       // 1. Set mock GPS to Chittagong coordinates (22.3569, 91.8215)
       E2ETestHarness.setMockGps(lat: 22.3569, lng: 91.8215, accuracy: 6.0);
 
@@ -107,9 +110,10 @@ void main() {
       // 4. Lands on VehicleSelectScreen
       expect(find.byType(VehicleSelectScreen), findsOneWidget);
 
-      // Select "Sedan / Hatch"
+      // Select "Sedan / Hatch" and provide license plate
       expect(E2EFinders.sedanCard, findsOneWidget);
       await tester.tap(E2EFinders.sedanCard);
+      await tester.enterText(E2EFinders.licensePlateField, 'Dhaka Metro GA-11-2034');
       await tester.pump();
 
       // Verify license plate format
@@ -143,8 +147,7 @@ void main() {
       await tester.pump();
 
       // Verify high roadway hazard priority banner
-      expect(find.text('URGENT'), findsOneWidget);
-      expect(find.textContaining('HIGH ROADWAY HAZARD'), findsOneWidget);
+      expect(find.textContaining('Priority hazard dispatch activated'), findsOneWidget);
 
       // Tap "FIND NEARBY MECHANICS"
       expect(E2EFinders.requestMechanicButton, findsOneWidget);
@@ -264,8 +267,8 @@ void main() {
       await tester.pump(const Duration(milliseconds: 100));
       expect(find.byType(LoginScreen), findsOneWidget);
 
-      // Tap "Motorist" demo login
-      final motoristDemo = find.byIcon(Icons.directions_car);
+      // Tap "Demo Motorist" login
+      final motoristDemo = E2EFinders.motoristDemoButton;
       expect(motoristDemo, findsOneWidget);
       await tester.tap(motoristDemo);
       await tester.pump();
@@ -289,6 +292,7 @@ void main() {
       expect(find.byType(VehicleSelectScreen), findsOneWidget);
       expect(E2EFinders.motorcycleCard, findsOneWidget);
       await tester.tap(E2EFinders.motorcycleCard);
+      await tester.enterText(E2EFinders.licensePlateField, 'Sylhet Metro LA-12-4455');
       await tester.pump();
 
       await tester.tap(E2EFinders.continueToFaultButton);
@@ -404,8 +408,7 @@ void main() {
       expect(liveLaneSwitch, findsOneWidget);
       await tester.tap(liveLaneSwitch);
       await tester.pump();
-      expect(find.text('URGENT'), findsOneWidget);
-      expect(find.textContaining('HIGH ROADWAY HAZARD'), findsOneWidget);
+      expect(find.textContaining('Priority hazard dispatch activated'), findsOneWidget);
 
       // 6. Confirm and launch dispatch, verify commercial dispatch request payload
       expect(E2EFinders.requestMechanicButton, findsOneWidget);
@@ -523,7 +526,7 @@ void main() {
       expect(E2EFinders.digitalGarageHeader, findsOneWidget);
       expect(find.textContaining('Toyota Corolla Axio'), findsOneWidget);
       expect(find.textContaining('DHAKA METRO GA-11-2034'), findsOneWidget);
-      expect(find.text('PRIMARY'), findsWidgets);
+      expect(find.text('Primary'), findsWidgets);
 
       // 3. Inspect Linked Wallets section (verify bKash brand logo)
       expect(E2EFinders.linkedWalletsHeader, findsOneWidget);
@@ -613,7 +616,7 @@ void main() {
       expect(find.byType(LoginScreen), findsOneWidget);
 
       // 8. Log back in with Motorist demo, return to ProfileScreen, verify persistence
-      final motoristDemoBtn = find.byIcon(Icons.directions_car);
+      final motoristDemoBtn = E2EFinders.motoristDemoButton;
       expect(motoristDemoBtn, findsOneWidget);
       await tester.tap(motoristDemoBtn);
       await tester.pump();
@@ -651,15 +654,15 @@ void main() {
       );
       await tester.pump();
 
-      // Verify Guest SOS pill
-      final guestSosPill = find.text('Continue as Guest • Instant Triage');
+      // Verify Guest SOS action
+      final guestSosPill = E2EFinders.guestSosButton;
       expect(guestSosPill, findsOneWidget);
       await tester.tap(guestSosPill);
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 200));
 
       // Verify Guest SOS dispatch sheet opened
-      expect(find.text('GUEST SOS DISPATCH'), findsOneWidget);
+      expect(find.text('Guest SOS'), findsWidgets);
 
       // Enter guest phone number
       final phoneInput = find.descendant(

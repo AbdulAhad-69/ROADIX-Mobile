@@ -12,7 +12,6 @@ import '../../../screens/location_confirm_screen.dart';
 import '../../../screens/location_permission_screen.dart';
 import '../../../screens/login_screen.dart';
 import '../../../screens/mechanic_home_screen.dart';
-import '../../../screens/otp_verification_screen.dart';
 import '../../../screens/profile_screen.dart';
 import '../../../screens/profile_setup_screen.dart';
 import '../../../screens/sos_screen.dart';
@@ -26,7 +25,7 @@ abstract class AppRoutes {
   static const String root = '/';
   static const String splash = '/splash';
   static const String login = '/login';
-  static const String otp = '/otp';
+  static const String paymentCallback = '/payment-callback';
   static const String profileSetup = '/profile-setup';
   static const String home = '/home';
   static const String locationPermission = '/location-permission';
@@ -43,7 +42,7 @@ abstract class AppRoutes {
     root,
     splash,
     login,
-    otp,
+    paymentCallback,
     sos,
   };
 }
@@ -180,13 +179,8 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         builder: (context, state) => const LoginScreen(),
       ),
       GoRoute(
-        path: AppRoutes.otp,
-        builder: (context, state) {
-          final phone = (state.extra as String?) ??
-              state.uri.queryParameters['phone'] ??
-              '';
-          return OtpVerificationScreen(phoneNumber: phone);
-        },
+        path: AppRoutes.paymentCallback,
+        redirect: (_, _) => AppRoutes.home,
       ),
       GoRoute(
         path: AppRoutes.profileSetup,

@@ -74,13 +74,12 @@ void main() {
         expect(tester.takeException(), isNull);
 
         expect(find.text('SOS'), findsOneWidget);
-        expect(find.text('PRESS FOR HELP'), findsOneWidget);
+        expect(find.text('TAP FOR HELP'), findsOneWidget);
         expect(find.text('What do you need help with?'), findsOneWidget);
-        expect(find.text('Instant triage'), findsOneWidget);
         expect(find.text('Battery'), findsOneWidget);
         expect(find.text('Flat Tire'), findsOneWidget);
         expect(find.text('Engine'), findsOneWidget);
-        expect(find.text('Fuel'), findsOneWidget);
+        expect(find.text('Out of Fuel'), findsOneWidget);
         expect(find.text('Towing'), findsOneWidget);
 
         await tester.pumpWidget(const SizedBox());
@@ -105,7 +104,7 @@ void main() {
       await tester.pump(const Duration(milliseconds: 100));
 
       expect(tester.takeException(), isNull);
-      expect(find.text('TECHNICIAN CONSOLE'), findsOneWidget);
+      expect(find.text('ROADIX Partner Workshop'), findsOneWidget);
 
       await tester.pumpWidget(const SizedBox());
       await tester.pump(const Duration(seconds: 60));
@@ -132,7 +131,7 @@ void main() {
       expect(tester.takeException(), isNull);
       expect(find.text('Vehicle Classification'), findsOneWidget);
       expect(find.text('Which vehicle needs assistance?'), findsOneWidget);
-      expect(find.text('PROPULSION / FUEL TYPE'), findsOneWidget);
+      expect(find.text('Propulsion / Fuel Type'), findsOneWidget);
 
       await tester.pumpWidget(const SizedBox());
       await tester.pump(const Duration(milliseconds: 100));
@@ -296,13 +295,15 @@ void main() {
       );
       await tester.pump();
       expect(tester.takeException(), isNull);
-      expect(find.text('Highway Advisories'), findsOneWidget);
+      expect(find.text('Notifications & Updates'), findsOneWidget);
 
       // 5. SearchBottomSheet
       await tester.pumpWidget(
         MaterialApp(
           home: Scaffold(
             body: SearchBottomSheet(
+              currentLat: 23.8759,
+              currentLng: 90.3795,
               onFacilitySelected: (name, lat, lng) {},
             ),
           ),
@@ -326,7 +327,7 @@ void main() {
       );
       await tester.pump();
       expect(tester.takeException(), isNull);
-      expect(find.text('Edit Motorist Details'), findsOneWidget);
+      expect(find.text('Edit Profile Details'), findsOneWidget);
 
       await tester.pumpWidget(const SizedBox());
       tester.view.resetPhysicalSize();
@@ -381,19 +382,9 @@ void main() {
       expect(find.text('Battery'), findsOneWidget);
       expect(find.text('Flat Tire'), findsOneWidget);
       expect(find.text('Engine'), findsOneWidget);
-      expect(find.text('Fuel'), findsOneWidget);
+      expect(find.text('Out of Fuel'), findsOneWidget);
       expect(find.text('Towing'), findsOneWidget);
-
-      // Check badges exist and have readable text
-      expect(find.text('Jump / 12V'), findsOneWidget);
-      expect(find.text('Puncture'), findsOneWidget);
-      expect(find.text('Thermal'), findsOneWidget);
-      expect(find.text('5L Delivery'), findsOneWidget);
-      expect(find.text('Flatbed'), findsOneWidget);
-
-      // Verify typography: badge text has fontSize >= 10.0
-      final badgeWidget = tester.widget<Text>(find.text('Jump / 12V'));
-      expect(badgeWidget.style?.fontSize, greaterThanOrEqualTo(10.0));
+      expect(find.text('Other Issue'), findsOneWidget);
 
       // Verify category title has fontSize >= 12.0
       final titleWidget = tester.widget<Text>(find.text('Battery'));
@@ -446,9 +437,10 @@ void main() {
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 100));
 
-      expect(find.text('SELECTED FAULT'), findsOneWidget);
+      expect(find.text('Fault Diagnostics'), findsOneWidget);
       expect(find.text('Dead Battery'), findsWidgets);
-      expect(find.textContaining('Passenger Car • Dhaka Metro GA-11-2034'), findsOneWidget);
+      expect(find.textContaining('Passenger Car'), findsOneWidget);
+      expect(find.textContaining('Dhaka Metro GA-11-2034'), findsOneWidget);
 
       // Toggle live highway lane switch to active
       final switches = find.byType(Switch);
@@ -456,8 +448,10 @@ void main() {
       await tester.tap(switches.first);
       await tester.pump();
 
-      expect(find.text('URGENT'), findsOneWidget);
-      expect(find.textContaining('HIGH ROADWAY HAZARD'), findsOneWidget);
+      expect(
+        find.textContaining('Priority hazard dispatch activated'),
+        findsOneWidget,
+      );
 
       await tester.pumpWidget(const SizedBox());
       tester.view.resetPhysicalSize();
@@ -507,16 +501,16 @@ void main() {
 
       expect(find.byType(ProfileScreen), findsOneWidget);
       expect(find.byType(CircleAvatar), findsWidgets);
-      expect(find.byIcon(Icons.edit), findsWidgets);
-      expect(find.textContaining('DIGITAL GARAGE'), findsOneWidget);
-      expect(find.text('PAYMENT & MFS WALLETS'), findsOneWidget);
+      expect(find.byIcon(Icons.edit_outlined), findsWidgets);
+      expect(find.textContaining('Digital Garage'), findsOneWidget);
+      expect(find.text('Payment Wallets'), findsOneWidget);
 
       await tester.pumpWidget(const SizedBox());
       tester.view.resetPhysicalSize();
       tester.view.resetDevicePixelRatio();
     });
 
-    testWidgets('VehicleSelectScreen renders 2x2 grid with VehicleSpecBadge and selects SUV card with distinct classification', (WidgetTester tester) async {
+    testWidgets('VehicleSelectScreen renders 2x2 grid with VehicleIllustration and selects SUV card cleanly', (WidgetTester tester) async {
       tester.view.physicalSize = const Size(390, 844);
       tester.view.devicePixelRatio = 1.0;
 
@@ -528,11 +522,11 @@ void main() {
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 100));
 
-      expect(find.byType(VehicleSpecBadge), findsWidgets);
-      expect(find.text('High Clearance • 4x4'), findsOneWidget);
-      expect(find.text('Up to 250cc • Agile'), findsOneWidget);
-      expect(find.text('4-5 Seats • Standard'), findsOneWidget);
-      expect(find.text('Up to 3.5 Ton • Flatbed'), findsOneWidget);
+      expect(find.byType(VehicleIllustration), findsWidgets);
+      expect(find.text('7-Seater / 4x4 Jeep'), findsOneWidget);
+      expect(find.text('2-Wheeler / Scooter'), findsOneWidget);
+      expect(find.text('Private Passenger Car'), findsOneWidget);
+      expect(find.text('Pickup / Covered Van'), findsOneWidget);
 
       // Tap on SUV card
       await tester.tap(find.text('SUV / Micro'));
@@ -562,14 +556,13 @@ void main() {
       expect(find.byType(CircleAvatar), findsWidgets);
       expect(find.textContaining('Welcome,'), findsOneWidget);
 
-      // Modern location card is present with detected location
-      expect(find.text('DETECTED LOCATION'), findsOneWidget);
+      // Modern location card is present with location details & Change CTA
       expect(find.text('Change'), findsOneWidget);
       expect(find.byIcon(Icons.location_on), findsWidgets);
 
       // SOS emergency trigger is prominent
       expect(find.text('SOS'), findsOneWidget);
-      expect(find.text('PRESS FOR HELP'), findsOneWidget);
+      expect(find.text('TAP FOR HELP'), findsOneWidget);
 
       // Tapping profile avatar header switches to Profile tab
       await tester.tap(find.textContaining('Welcome,'));
@@ -659,7 +652,7 @@ void main() {
       tester.view.resetDevicePixelRatio();
     });
 
-    testWidgets('LoginScreen segmented auth mode switcher toggles between Mobile OTP and Email Account', (WidgetTester tester) async {
+    testWidgets('LoginScreen authenticates with Email & Password, toggles Sign Up roles, and omits OTP', (WidgetTester tester) async {
       tester.view.physicalSize = const Size(600, 1100);
       tester.view.devicePixelRatio = 1.0;
 
@@ -671,26 +664,17 @@ void main() {
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 100));
 
-      expect(find.text('Mobile OTP'), findsOneWidget);
-      expect(find.text('Email Account'), findsOneWidget);
-
-      // Initially on Mobile OTP
-      expect(find.text('Mobile Number'), findsOneWidget);
-
-      // Switch to Email Account
-      await tester.tap(find.text('Email Account'));
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 100));
-
+      expect(find.text('Mobile OTP'), findsNothing);
       expect(find.text('Email Address'), findsOneWidget);
       expect(find.text('Password'), findsOneWidget);
 
-      // Switch back to Mobile OTP
-      await tester.tap(find.text('Mobile OTP'));
+      await tester.tap(find.text('Need a new account? Sign Up'));
       await tester.pump();
-      await tester.pump(const Duration(milliseconds: 100));
 
-      expect(find.text('Mobile Number'), findsOneWidget);
+      expect(find.text('Create Motorist Account'), findsOneWidget);
+      await tester.tap(find.byKey(const Key('signup_role_technician')));
+      await tester.pump();
+      expect(find.text('Create Technician Account'), findsOneWidget);
 
       await tester.pumpWidget(const SizedBox());
       tester.view.resetPhysicalSize();

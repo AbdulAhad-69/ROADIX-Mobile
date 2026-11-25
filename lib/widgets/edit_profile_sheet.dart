@@ -2,6 +2,8 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
+import '../services/cloudinary_service.dart';
+import '../services/demo_session.dart';
 import '../services/supabase_service.dart';
 import '../theme/app_colors.dart';
 import 'roadix_avatar.dart';
@@ -10,8 +12,11 @@ class EditProfileSheet extends StatefulWidget {
   final String currentName;
   final String currentPhone;
   final String? currentAvatarUrl;
-  final FutureOr<void> Function(String newName, String newPhone, String? newAvatarUrl)?
-      onSave;
+  final FutureOr<void> Function(
+    String newName,
+    String newPhone,
+    String? newAvatarUrl,
+  )? onSave;
   final FutureOr<void> Function(String newName, String newPhone)?
       onProfileSaved;
   final Future<String> Function(Uint8List bytes, String ext)? onUploadPhoto;
@@ -28,14 +33,6 @@ class EditProfileSheet extends StatefulWidget {
     this.pickImageOverride,
   });
 
-  static const List<String> avatarPresets = [
-    'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150',
-    'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150',
-    'https://images.unsplash.com/photo-1517841905240-472988babdf9?w=150',
-    'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150',
-    'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150',
-  ];
-
   @override
   State<EditProfileSheet> createState() => _EditProfileSheetState();
 }
@@ -43,7 +40,6 @@ class EditProfileSheet extends StatefulWidget {
 class _EditProfileSheetState extends State<EditProfileSheet> {
   late TextEditingController _nameController;
   late TextEditingController _phoneController;
-  late TextEditingController _avatarUrlController;
   final ImagePicker _picker = ImagePicker();
 
   String? _selectedAvatarUrl;
@@ -59,18 +55,12 @@ class _EditProfileSheetState extends State<EditProfileSheet> {
     _nameController = TextEditingController(text: widget.currentName);
     _phoneController = TextEditingController(text: widget.currentPhone);
     _selectedAvatarUrl = widget.currentAvatarUrl;
-    final displayUrl = (_selectedAvatarUrl != null &&
-            !_selectedAvatarUrl!.startsWith('data:'))
-        ? _selectedAvatarUrl!
-        : '';
-    _avatarUrlController = TextEditingController(text: displayUrl);
   }
 
   @override
   void dispose() {
     _nameController.dispose();
     _phoneController.dispose();
-    _avatarUrlController.dispose();
     super.dispose();
   }
 
@@ -106,24 +96,34 @@ class _EditProfileSheetState extends State<EditProfileSheet> {
         setState(() {
           _localPreviewBytes = bytes;
           _isUploadingPhoto = true;
-          _statusMessage = 'Uploading profile photo...';
+          _statusMessage = 'Uploading photo to Cloudinary...';
         });
       }
 
-      final uploadedUrl = widget.onUploadPhoto != null
-          ? await widget.onUploadPhoto!(bytes, ext)
-          : await SupabaseService().uploadProfileAvatar(
-              bytes,
-              fileExtension: ext,
-            );
+      String uploadedUrl;
+      if (widget.onUploadPhoto != null) {
+        uploadedUrl = await widget.onUploadPhoto!(bytes, ext);
+      } else if (DemoSession.isActive && !SupabaseService().isAuthenticated) {
+        uploadedUrl = await SupabaseService().uploadProfileAvatar(
+          bytes,
+          fileExtension: ext,
+        );
+      } else {
+        final res = await CloudinaryService().uploadImage(
+          bytes,
+          folder: 'roadix/avatars',
+          fileExtension: ext,
+        );
+        uploadedUrl = res.secureUrl;
+        if (SupabaseService().isAuthenticated) {
+          await SupabaseService().updateAvatar(uploadedUrl);
+        }
+      }
 
       if (!mounted) return;
       setState(() {
         _isUploadingPhoto = false;
         _selectedAvatarUrl = uploadedUrl;
-        if (!uploadedUrl.startsWith('data:')) {
-          _avatarUrlController.text = uploadedUrl;
-        }
         _statusMessage = 'Photo uploaded cleanly.';
       });
     } catch (e) {
@@ -144,15 +144,26 @@ class _EditProfileSheetState extends State<EditProfileSheet> {
       context: context,
       backgroundColor: AppColors.cardWhite,
       shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
       builder: (sheetCtx) => SafeArea(
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
+          padding: const EdgeInsets.fromLTRB(20, 14, 20, 20),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
+              Center(
+                child: Container(
+                  width: 36,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: AppColors.slateBorder,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
               const Text(
                 'Upload Profile Photo',
                 style: TextStyle(
@@ -195,9 +206,6 @@ class _EditProfileSheetState extends State<EditProfileSheet> {
     if (_isSaving || _isUploadingPhoto) return;
     final name = _nameController.text.trim();
     final phone = _phoneController.text.trim();
-    final urlText = _avatarUrlController.text.trim();
-    final effectiveAvatar =
-        urlText.isNotEmpty ? urlText : _selectedAvatarUrl;
 
     if (name.isEmpty) {
       setState(() => _errorMessage = 'Please enter your name.');
@@ -211,7 +219,7 @@ class _EditProfileSheetState extends State<EditProfileSheet> {
 
     try {
       if (widget.onSave != null) {
-        await widget.onSave!(name, phone, effectiveAvatar);
+        await widget.onSave!(name, phone, _selectedAvatarUrl);
       } else if (widget.onProfileSaved != null) {
         await widget.onProfileSaved!(name, phone);
       }
@@ -227,6 +235,10 @@ class _EditProfileSheetState extends State<EditProfileSheet> {
 
   @override
   Widget build(BuildContext context) {
+    final hasPhoto =
+        (_selectedAvatarUrl != null && _selectedAvatarUrl!.isNotEmpty) ||
+            _localPreviewBytes != null;
+
     return Padding(
       padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
       child: Container(
@@ -252,7 +264,7 @@ class _EditProfileSheetState extends State<EditProfileSheet> {
               ),
               const SizedBox(height: 16),
               const Text(
-                'Edit Motorist Details',
+                'Edit Profile Details',
                 style: TextStyle(
                   color: AppColors.chassisText,
                   fontSize: 18,
@@ -261,12 +273,11 @@ class _EditProfileSheetState extends State<EditProfileSheet> {
               ),
               const SizedBox(height: 4),
               const Text(
-                'Choose a curated avatar, upload a photo, or update your contact phone',
-                style: TextStyle(color: AppColors.slateMuted, fontSize: 12),
+                'Upload your photo via Cloudinary or update your contact phone',
+                style: TextStyle(color: AppColors.slateMuted, fontSize: 12.5),
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: 18),
 
-              // Profile Avatar Preview + Camera Badge
               Center(
                 child: Semantics(
                   button: true,
@@ -316,8 +327,27 @@ class _EditProfileSheetState extends State<EditProfileSheet> {
                 ),
               ),
 
+              if (hasPhoto) ...[
+                const SizedBox(height: 6),
+                Center(
+                  child: TextButton(
+                    key: const Key('remove_avatar_btn'),
+                    onPressed: _isUploadingPhoto
+                        ? null
+                        : () {
+                            setState(() {
+                              _localPreviewBytes = null;
+                              _selectedAvatarUrl = null;
+                              _statusMessage = null;
+                            });
+                          },
+                    child: const Text('Remove Photo'),
+                  ),
+                ),
+              ],
+
               if (_statusMessage != null) ...[
-                const SizedBox(height: 10),
+                const SizedBox(height: 8),
                 Center(
                   child: Text(
                     _statusMessage!,
@@ -351,127 +381,13 @@ class _EditProfileSheetState extends State<EditProfileSheet> {
                 ),
               ],
 
-              const SizedBox(height: 14),
+              const SizedBox(height: 16),
               const Text(
-                'CHOOSE AVATAR PRESET',
+                'Upload Photo',
                 style: TextStyle(
-                  color: AppColors.slateMuted,
-                  fontSize: 10.5,
-                  fontWeight: FontWeight.w800,
-                  letterSpacing: 0.7,
-                ),
-              ),
-              const SizedBox(height: 8),
-
-              // Preset Avatars Strip (keeps InkWell indices first for compatibility)
-              SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
-                child: Row(
-                  children: [
-                    Semantics(
-                      button: true,
-                      label: 'Reset to default monogram avatar',
-                      child: InkWell(
-                        onTap: () {
-                          setState(() {
-                            _localPreviewBytes = null;
-                            _selectedAvatarUrl = null;
-                            _avatarUrlController.clear();
-                            _statusMessage = null;
-                          });
-                        },
-                        borderRadius: BorderRadius.circular(24),
-                        child: Container(
-                          width: 48,
-                          height: 48,
-                          margin: const EdgeInsets.only(right: 10),
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            color: AppColors.porcelainBg,
-                            border: Border.all(
-                              color: (_selectedAvatarUrl == null &&
-                                      _localPreviewBytes == null)
-                                  ? AppColors.caliperCrimson
-                                  : AppColors.slateBorder,
-                              width: (_selectedAvatarUrl == null &&
-                                      _localPreviewBytes == null)
-                                  ? 2.5
-                                  : 1,
-                            ),
-                          ),
-                          child: Center(
-                            child: Icon(
-                              Icons.person_outline,
-                              size: 20,
-                              color: (_selectedAvatarUrl == null &&
-                                      _localPreviewBytes == null)
-                                  ? AppColors.caliperCrimson
-                                  : AppColors.slateMuted,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                    ...EditProfileSheet.avatarPresets.asMap().entries.map((entry) {
-                      final idx = entry.key;
-                      final presetUrl = entry.value;
-                      final isSelected = _selectedAvatarUrl == presetUrl;
-                      return Semantics(
-                        button: true,
-                        selected: isSelected,
-                        label: 'Avatar preset ${idx + 1}',
-                        child: InkWell(
-                          key: Key('avatar_preset_$idx'),
-                          onTap: () {
-                            setState(() {
-                              _localPreviewBytes = null;
-                              _selectedAvatarUrl = presetUrl;
-                              _avatarUrlController.text = presetUrl;
-                              _statusMessage = null;
-                            });
-                          },
-                          borderRadius: BorderRadius.circular(24),
-                          child: Container(
-                            width: 48,
-                            height: 48,
-                            margin: const EdgeInsets.only(right: 10),
-                            decoration: BoxDecoration(
-                              shape: BoxShape.circle,
-                              border: Border.all(
-                                color: isSelected
-                                    ? AppColors.caliperCrimson
-                                    : AppColors.slateBorder,
-                                width: isSelected ? 2.5 : 1,
-                              ),
-                            ),
-                            child: ClipOval(
-                              child: Image.network(
-                                presetUrl,
-                                fit: BoxFit.cover,
-                                errorBuilder: (context, error, stackTrace) =>
-                                    const Icon(
-                                  Icons.person,
-                                  color: AppColors.slateMuted,
-                                  size: 20,
-                                ),
-                              ),
-                            ),
-                          ),
-                        ),
-                      );
-                    }),
-                  ],
-                ),
-              ),
-
-              const SizedBox(height: 14),
-              const Text(
-                'UPLOAD YOUR OWN PHOTO',
-                style: TextStyle(
-                  color: AppColors.slateMuted,
-                  fontSize: 10.5,
-                  fontWeight: FontWeight.w800,
-                  letterSpacing: 0.7,
+                  color: AppColors.chassisText,
+                  fontSize: 12.5,
+                  fontWeight: FontWeight.w700,
                 ),
               ),
               const SizedBox(height: 8),
@@ -507,50 +423,18 @@ class _EditProfileSheetState extends State<EditProfileSheet> {
                 ],
               ),
 
-              const SizedBox(height: 14),
+              const SizedBox(height: 16),
               const Text(
-                'OR AVATAR IMAGE URL',
+                'Full Name',
                 style: TextStyle(
-                  color: AppColors.slateMuted,
-                  fontSize: 10.5,
-                  fontWeight: FontWeight.w800,
-                  letterSpacing: 0.7,
-                ),
-              ),
-              const SizedBox(height: 6),
-              TextField(
-                controller: _avatarUrlController,
-                style: const TextStyle(
                   color: AppColors.chassisText,
-                  fontSize: 13,
-                  fontWeight: FontWeight.w500,
-                ),
-                decoration: const InputDecoration(
-                  hintText: 'https://example.com/avatar.jpg',
-                  isDense: true,
-                  prefixIcon: Icon(Icons.link, size: 18, color: AppColors.slateMuted),
-                ),
-                onChanged: (val) {
-                  setState(() {
-                    _localPreviewBytes = null;
-                    _selectedAvatarUrl =
-                        val.trim().isNotEmpty ? val.trim() : null;
-                  });
-                },
-              ),
-
-              const SizedBox(height: 14),
-              const Text(
-                'MOTORIST NAME',
-                style: TextStyle(
-                  color: AppColors.slateMuted,
-                  fontSize: 10.5,
-                  fontWeight: FontWeight.w800,
-                  letterSpacing: 0.7,
+                  fontSize: 12.5,
+                  fontWeight: FontWeight.w700,
                 ),
               ),
               const SizedBox(height: 6),
               TextField(
+                key: const Key('edit_profile_name_field'),
                 controller: _nameController,
                 style: const TextStyle(
                   color: AppColors.chassisText,
@@ -558,6 +442,7 @@ class _EditProfileSheetState extends State<EditProfileSheet> {
                   fontWeight: FontWeight.w600,
                 ),
                 decoration: const InputDecoration(
+                  hintText: 'Your full name',
                   prefixIcon: Icon(
                     Icons.person_outline,
                     size: 18,
@@ -568,25 +453,26 @@ class _EditProfileSheetState extends State<EditProfileSheet> {
 
               const SizedBox(height: 14),
               const Text(
-                'PHONE NUMBER',
+                'Phone Number',
                 style: TextStyle(
-                  color: AppColors.slateMuted,
-                  fontSize: 10.5,
-                  fontWeight: FontWeight.w800,
-                  letterSpacing: 0.7,
+                  color: AppColors.chassisText,
+                  fontSize: 12.5,
+                  fontWeight: FontWeight.w700,
                 ),
               ),
               const SizedBox(height: 6),
               TextField(
+                key: const Key('edit_profile_phone_field'),
                 controller: _phoneController,
                 keyboardType: TextInputType.phone,
                 style: const TextStyle(
                   color: AppColors.chassisText,
                   fontSize: 14,
                   fontWeight: FontWeight.w600,
-                  fontFamily: 'monospace',
+                  fontFeatures: [FontFeature.tabularFigures()],
                 ),
                 decoration: const InputDecoration(
+                  hintText: '+8801XXXXXXXXX',
                   prefixIcon: Icon(
                     Icons.phone_outlined,
                     size: 18,

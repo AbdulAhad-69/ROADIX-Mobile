@@ -1,80 +1,108 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import '../services/notifications_service.dart';
 import '../theme/app_colors.dart';
 
 class NotificationsBottomSheet extends StatefulWidget {
-  final VoidCallback? onMarkAllRead;
+  final Future<List<RoadixNotificationItem>> Function()? loadOverride;
+  final Future<void> Function(Iterable<String> ids)? markAllOverride;
 
-  const NotificationsBottomSheet({super.key, this.onMarkAllRead});
+  const NotificationsBottomSheet({
+    super.key,
+    this.loadOverride,
+    this.markAllOverride,
+  });
 
   @override
-  State<NotificationsBottomSheet> createState() => _NotificationsBottomSheetState();
+  State<NotificationsBottomSheet> createState() =>
+      _NotificationsBottomSheetState();
 }
 
 class _NotificationsBottomSheetState extends State<NotificationsBottomSheet> {
-  final List<Map<String, dynamic>> _alerts = [
-    {
-      'id': '1',
-      'title': 'Severe Waterlogging Crawl',
-      'location': 'Airport Road (Kawla to Jasimuddin)',
-      'desc': 'Slow moving traffic due to monsoon drainage backflow. Average speed below 10 km/h.',
-      'time': '12 mins ago',
-      'severity': 'CRITICAL',
-      'isRead': false,
-      'icon': Icons.flood_outlined,
-    },
-    {
-      'id': '2',
-      'title': 'Stalled Heavy Truck in Left Lane',
-      'location': 'Kuril Flyover (Airport exit ramp)',
-      'desc': 'Wrecker en route to clear stalled container carrier. Exercise extreme caution.',
-      'time': '28 mins ago',
-      'severity': 'HAZARD',
-      'isRead': false,
-      'icon': Icons.warning_amber_rounded,
-    },
-    {
-      'id': '3',
-      'title': 'Rain Traction Advisory',
-      'location': 'Dhaka North Met Area',
-      'desc': 'Wet asphalt reduces braking grip by up to 40%. Maintain 3-car safety gap.',
-      'time': '1 hour ago',
-      'severity': 'ADVISORY',
-      'isRead': true,
-      'icon': Icons.grain_outlined,
-    },
-    {
-      'id': '4',
-      'title': 'Rescue Service Receipt Issued',
-      'location': 'Ticket #RDX-2026-9041',
-      'desc': 'Digital invoice for Jumpstart service is ready. Total paid: ৳ 1,250 via bKash.',
-      'time': '2 days ago',
-      'severity': 'SERVICE',
-      'isRead': true,
-      'icon': Icons.receipt_long_outlined,
-    },
-  ];
+  List<RoadixNotificationItem> _alerts = [];
+  bool _isLoading = true;
+  String? _errorMessage;
 
-  void _markAllAsRead() {
+  @override
+  void initState() {
+    super.initState();
+    _loadNotifications();
+  }
+
+  Future<void> _loadNotifications() async {
     setState(() {
-      for (var a in _alerts) {
-        a['isRead'] = true;
-      }
+      _isLoading = true;
+      _errorMessage = null;
     });
-    widget.onMarkAllRead?.call();
+    try {
+      final list = widget.loadOverride != null
+          ? await widget.loadOverride!()
+          : await NotificationsService.loadNotifications();
+      if (mounted) {
+        setState(() {
+          _alerts = list;
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+          _errorMessage = 'Could not load notifications: $e';
+        });
+      }
+    }
+  }
+
+  Future<void> _markAllAsRead() async {
+    HapticFeedback.selectionClick();
+    final unreadIds =
+        _alerts.where((a) => a.isUnread).map((a) => a.id).toList();
+    setState(() {
+      _alerts = _alerts.map((a) => a.copyWith(isUnread: false)).toList();
+    });
+    if (unreadIds.isNotEmpty) {
+      if (widget.markAllOverride != null) {
+        await widget.markAllOverride!(unreadIds);
+      } else {
+        await NotificationsService.markAllAsRead(unreadIds);
+      }
+    }
+  }
+
+  Future<void> _markSingleRead(int index) async {
+    final item = _alerts[index];
+    if (!item.isUnread) return;
+    setState(() {
+      _alerts[index] = item.copyWith(isUnread: false);
+    });
+    if (widget.markAllOverride != null) {
+      await widget.markAllOverride!([item.id]);
+    } else {
+      await NotificationsService.markAsRead(item.id);
+    }
+  }
+
+  IconData _iconForCategory(String category) {
+    return switch (category.toLowerCase()) {
+      'dispatch' => Icons.local_shipping_outlined,
+      'receipt' => Icons.receipt_long_outlined,
+      _ => Icons.shield_outlined,
+    };
   }
 
   @override
   Widget build(BuildContext context) {
+    final hasUnread = _alerts.any((a) => a.isUnread);
+
     return Container(
-      height: MediaQuery.of(context).size.height * 0.75,
+      height: MediaQuery.of(context).size.height * 0.65,
       decoration: const BoxDecoration(
         color: AppColors.cardWhite,
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
       child: Column(
         children: [
-          // Drag Handle
           const SizedBox(height: 12),
           Center(
             child: Container(
@@ -86,189 +114,180 @@ class _NotificationsBottomSheetState extends State<NotificationsBottomSheet> {
               ),
             ),
           ),
-          const SizedBox(height: 14),
-
-          // Header Bar
+          const SizedBox(height: 16),
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 20.0),
+            padding: const EdgeInsets.symmetric(horizontal: 20),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: const [
-                      Text(
-                        'Highway Advisories',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          color: AppColors.chassisText,
-                          fontSize: 18,
-                          fontWeight: FontWeight.w900,
-                        ),
-                      ),
-                      Text(
-                        'Live road condition & rescue alerts',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(color: AppColors.slateMuted, fontSize: 11),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(width: 8),
-                TextButton(
-                  onPressed: _markAllAsRead,
-                  child: const Text(
-                    'Mark all as read',
+                const Expanded(
+                  child: Text(
+                    'Notifications & Updates',
                     style: TextStyle(
-                      color: AppColors.caliperCrimson,
-                      fontSize: 11,
-                      fontWeight: FontWeight.w700,
+                      color: AppColors.chassisText,
+                      fontSize: 18,
+                      fontWeight: FontWeight.w900,
                     ),
                   ),
+                ),
+                if (hasUnread)
+                  TextButton(
+                    onPressed: _markAllAsRead,
+                    child: const Text('Mark all read'),
+                  ),
+                IconButton(
+                  tooltip: 'Close notifications',
+                  onPressed: () => Navigator.pop(context, hasUnread),
+                  icon: const Icon(Icons.close, color: AppColors.slateMuted),
                 ),
               ],
             ),
           ),
-
-          const SizedBox(height: 8),
           const Divider(color: AppColors.slateBorder, height: 1),
-
-          // Alerts List
           Expanded(
-            child: ListView.separated(
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-              itemCount: _alerts.length,
-              separatorBuilder: (_, _) => const SizedBox(height: 10),
-              itemBuilder: (context, idx) {
-                final alert = _alerts[idx];
-                final bool isUnread = !(alert['isRead'] as bool);
-
-                Color badgeColor;
-                Color badgeBg;
-                switch (alert['severity']) {
-                  case 'CRITICAL':
-                    badgeColor = AppColors.caliperCrimson;
-                    badgeBg = AppColors.crimsonLight;
-                    break;
-                  case 'HAZARD':
-                    badgeColor = const Color(0xFFD97706);
-                    badgeBg = const Color(0xFFFEF3C7);
-                    break;
-                  case 'ADVISORY':
-                    badgeColor = const Color(0xFF2563EB);
-                    badgeBg = const Color(0xFFDBEAFE);
-                    break;
-                  default:
-                    badgeColor = AppColors.emeraldGps;
-                    badgeBg = const Color(0xFFECFDF5);
-                }
-
-                return InkWell(
-                  onTap: () {
-                    HapticFeedback.selectionClick();
-                    setState(() {
-                      alert['isRead'] = true;
-                    });
-                    if (_alerts.every((a) => a['isRead'] == true)) {
-                      widget.onMarkAllRead?.call();
-                    }
-                  },
-                  borderRadius: BorderRadius.circular(14),
-                  child: Container(
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                    color: isUnread ? const Color(0xFFFFF7ED) : AppColors.cardWhite,
-                    borderRadius: BorderRadius.circular(14),
-                    border: Border.all(
-                      color: isUnread ? const Color(0xFFFDBA74) : AppColors.slateBorder,
-                      width: isUnread ? 1.4 : 1.0,
+            child: _isLoading
+                ? const Center(
+                    child: CircularProgressIndicator(
+                      color: AppColors.caliperCrimson,
                     ),
-                  ),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Container(
-                        width: 36,
-                        height: 36,
-                        decoration: BoxDecoration(
-                          color: badgeBg,
-                          borderRadius: BorderRadius.circular(10),
+                  )
+                : _errorMessage != null
+                    ? Center(
+                        child: Padding(
+                          padding: const EdgeInsets.all(24),
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(
+                                _errorMessage!,
+                                textAlign: TextAlign.center,
+                                style: const TextStyle(
+                                  color: AppColors.slateMuted,
+                                  fontSize: 13,
+                                ),
+                              ),
+                              const SizedBox(height: 12),
+                              OutlinedButton(
+                                onPressed: _loadNotifications,
+                                child: const Text('Retry'),
+                              ),
+                            ],
+                          ),
                         ),
-                        child: Icon(alert['icon'] as IconData, color: badgeColor, size: 20),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                  decoration: BoxDecoration(
-                                    color: badgeBg,
-                                    borderRadius: BorderRadius.circular(4),
-                                  ),
-                                  child: Text(
-                                    alert['severity'] as String,
-                                    style: TextStyle(
-                                      color: badgeColor,
-                                      fontSize: 8.5,
-                                      fontWeight: FontWeight.w900,
-                                      letterSpacing: 0.6,
+                      )
+                    : ListView.separated(
+                        padding: const EdgeInsets.all(20),
+                        itemCount: _alerts.length,
+                        separatorBuilder: (_, _) => const SizedBox(height: 10),
+                        itemBuilder: (context, idx) {
+                          final alert = _alerts[idx];
+                          final isUnread = alert.isUnread;
+                          return InkWell(
+                            onTap: () => _markSingleRead(idx),
+                            borderRadius: BorderRadius.circular(14),
+                            child: Container(
+                              padding: const EdgeInsets.all(14),
+                              decoration: BoxDecoration(
+                                color: isUnread
+                                    ? AppColors.porcelainBg
+                                    : AppColors.cardWhite,
+                                borderRadius: BorderRadius.circular(14),
+                                border: Border.all(
+                                  color: isUnread
+                                      ? AppColors.crimsonBorder
+                                      : AppColors.slateBorder,
+                                ),
+                              ),
+                              child: Row(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Container(
+                                    width: 38,
+                                    height: 38,
+                                    decoration: BoxDecoration(
+                                      color: isUnread
+                                          ? AppColors.crimsonLight
+                                          : AppColors.surfaceTint,
+                                      borderRadius: BorderRadius.circular(10),
+                                    ),
+                                    child: Icon(
+                                      _iconForCategory(alert.category),
+                                      color: isUnread
+                                          ? AppColors.crimsonHover
+                                          : AppColors.slateMuted,
+                                      size: 20,
                                     ),
                                   ),
-                                ),
-                                Text(
-                                  alert['time'] as String,
-                                  style: const TextStyle(
-                                    color: AppColors.slateMuted,
-                                    fontSize: 9.5,
-                                    fontFamily: 'monospace',
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Row(
+                                          mainAxisAlignment:
+                                              MainAxisAlignment.spaceBetween,
+                                          children: [
+                                            Container(
+                                              padding:
+                                                  const EdgeInsets.symmetric(
+                                                horizontal: 7,
+                                                vertical: 2,
+                                              ),
+                                              decoration: BoxDecoration(
+                                                color: isUnread
+                                                    ? AppColors.crimsonLight
+                                                    : AppColors.surfaceTint,
+                                                borderRadius:
+                                                    BorderRadius.circular(6),
+                                              ),
+                                              child: Text(
+                                                alert.category,
+                                                style: TextStyle(
+                                                  color: isUnread
+                                                      ? AppColors.crimsonHover
+                                                      : AppColors.slateMuted,
+                                                  fontSize: 11,
+                                                  fontWeight: FontWeight.w700,
+                                                ),
+                                              ),
+                                            ),
+                                            Text(
+                                              alert.timestampLabel,
+                                              style: const TextStyle(
+                                                color: AppColors.slateMuted,
+                                                fontSize: 11,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                        const SizedBox(height: 6),
+                                        Text(
+                                          alert.title,
+                                          style: const TextStyle(
+                                            color: AppColors.chassisText,
+                                            fontSize: 13.5,
+                                            fontWeight: FontWeight.w800,
+                                          ),
+                                        ),
+                                        const SizedBox(height: 3),
+                                        Text(
+                                          alert.body,
+                                          style: const TextStyle(
+                                            color: AppColors.slateMuted,
+                                            fontSize: 12.5,
+                                            height: 1.4,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
                                   ),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 6),
-                            Text(
-                              alert['title'] as String,
-                              style: const TextStyle(
-                                color: AppColors.chassisText,
-                                fontSize: 13,
-                                fontWeight: FontWeight.w800,
+                                ],
                               ),
                             ),
-                            const SizedBox(height: 1),
-                            Text(
-                              alert['location'] as String,
-                              style: const TextStyle(
-                                color: AppColors.caliperCrimson,
-                                fontSize: 10.5,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                            const SizedBox(height: 4),
-                            Text(
-                              alert['desc'] as String,
-                              style: const TextStyle(
-                                color: AppColors.slateMuted,
-                                fontSize: 11,
-                                height: 1.3,
-                              ),
-                            ),
-                          ],
-                        ),
+                          );
+                        },
                       ),
-                    ],
-                  ),
-                ),
-              );
-            },
-            ),
           ),
         ],
       ),

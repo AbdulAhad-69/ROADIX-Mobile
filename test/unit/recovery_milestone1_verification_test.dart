@@ -238,7 +238,7 @@ void main() {
       expect(requestedSource, equals(ImageSource.gallery));
       expect(uploadCalls, equals(1));
       expect(uploadedExt, equals('png'));
-      expect(find.text('https://cdn.example.com/avatars/u1.png'), findsOneWidget);
+      expect(find.text('Photo uploaded cleanly.'), findsOneWidget);
 
       await tester.ensureVisible(find.text('SAVE CHANGES'));
       await tester.tap(find.text('SAVE CHANGES'));

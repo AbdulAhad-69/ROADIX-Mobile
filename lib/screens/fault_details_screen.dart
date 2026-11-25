@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:image_picker/image_picker.dart';
+import '../services/supabase_service.dart';
 import '../theme/app_colors.dart';
 import 'dispatch_screen.dart';
 
@@ -7,6 +9,7 @@ class FaultDetailsScreen extends StatefulWidget {
   final String selectedFault;
   final String vehicleType;
   final String licensePlate;
+  final String fuelType;
   final double breakdownLat;
   final double breakdownLng;
   final String breakdownAddress;
@@ -16,6 +19,7 @@ class FaultDetailsScreen extends StatefulWidget {
     required this.selectedFault,
     required this.vehicleType,
     required this.licensePlate,
+    this.fuelType = 'Octane',
     this.breakdownLat = 23.8759,
     this.breakdownLng = 90.3795,
     this.breakdownAddress = 'Dhaka Region • Roadside Position',
@@ -27,7 +31,11 @@ class FaultDetailsScreen extends StatefulWidget {
 
 class _FaultDetailsScreenState extends State<FaultDetailsScreen> {
   final TextEditingController _notesController = TextEditingController();
+  final ImagePicker _picker = ImagePicker();
   final Set<String> _selectedSymptoms = {};
+  final List<String> _uploadedPhotoUrls = [];
+  final List<Uint8List> _photoThumbnails = [];
+  bool _isUploadingPhoto = false;
   bool _isInLiveLane = false;
   bool _hazardsWorking = true;
 
@@ -74,6 +82,49 @@ class _FaultDetailsScreenState extends State<FaultDetailsScreen> {
           'Electrical system failure',
           'Need diagnostic scanner on-site',
         ];
+    }
+  }
+
+  Future<void> _pickAndUploadFaultPhoto(ImageSource source) async {
+    if (_isUploadingPhoto || _uploadedPhotoUrls.length >= 3) return;
+    HapticFeedback.selectionClick();
+    try {
+      final picked = await _picker.pickImage(
+        source: source,
+        maxWidth: 1080,
+        maxHeight: 1080,
+        imageQuality: 82,
+      );
+      if (picked == null) return;
+      final bytes = await picked.readAsBytes();
+      final nameParts =
+          (picked.name.isNotEmpty ? picked.name : picked.path).split('.');
+      final ext = nameParts.length > 1 ? nameParts.last.toLowerCase() : 'jpg';
+
+      if (mounted) setState(() => _isUploadingPhoto = true);
+      final uploaded = await SupabaseService().uploadFaultPhoto(
+        bytes,
+        fileExtension: ext,
+      );
+      if (!mounted) return;
+      if (uploaded != null && uploaded.isNotEmpty) {
+        setState(() {
+          _uploadedPhotoUrls.add(uploaded);
+          _photoThumbnails.add(bytes);
+          _isUploadingPhoto = false;
+        });
+      } else {
+        setState(() => _isUploadingPhoto = false);
+      }
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _isUploadingPhoto = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Photo upload failed: ${e.toString().replaceAll('Exception: ', '')}'),
+          backgroundColor: AppColors.crimsonHover,
+        ),
+      );
     }
   }
 
@@ -183,102 +234,49 @@ class _FaultDetailsScreenState extends State<FaultDetailsScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // Hero Fault Summary Card with Gradient Accent & Depth
+                    // Flat Fault Summary Card
                     Container(
                       padding: const EdgeInsets.all(14),
                       decoration: BoxDecoration(
-                        gradient: const LinearGradient(
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
-                          colors: [
-                            Colors.white,
-                            Color(0xFFFFF7F7),
-                          ],
-                        ),
-                        borderRadius: BorderRadius.circular(16),
-                        border: Border.all(
-                          color: AppColors.caliperCrimson.withAlpha(50),
-                          width: 1.2,
-                        ),
-                        boxShadow: [
-                          BoxShadow(
-                            color: AppColors.caliperCrimson.withAlpha(15),
-                            blurRadius: 10,
-                            offset: const Offset(0, 3),
-                          ),
-                        ],
+                        color: AppColors.cardWhite,
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(color: AppColors.slateBorder),
                       ),
                       child: Row(
                         children: [
                           Container(
-                            width: 44,
-                            height: 44,
+                            width: 40,
+                            height: 40,
                             decoration: BoxDecoration(
                               color: AppColors.crimsonLight,
-                              borderRadius: BorderRadius.circular(12),
-                              border: Border.all(
-                                color: AppColors.caliperCrimson.withAlpha(40),
-                                width: 1.0,
-                              ),
+                              borderRadius: BorderRadius.circular(10),
                             ),
                             child: const Icon(
                               Icons.build,
                               color: AppColors.caliperCrimson,
-                              size: 22,
+                              size: 20,
                             ),
                           ),
-                          const SizedBox(width: 14),
+                          const SizedBox(width: 12),
                           Expanded(
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Row(
-                                  children: [
-                                    const Text(
-                                      'SELECTED FAULT',
-                                      style: TextStyle(
-                                        color: AppColors.caliperCrimson,
-                                        fontSize: 9.0,
-                                        fontWeight: FontWeight.w900,
-                                        letterSpacing: 0.8,
-                                      ),
-                                    ),
-                                    const SizedBox(width: 6),
-                                    Container(
-                                      width: 5,
-                                      height: 5,
-                                      decoration: const BoxDecoration(
-                                        color: AppColors.caliperCrimson,
-                                        shape: BoxShape.circle,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                                const SizedBox(height: 2),
                                 Text(
                                   widget.selectedFault,
                                   style: const TextStyle(
                                     color: AppColors.chassisText,
                                     fontSize: 15,
-                                    fontWeight: FontWeight.w900,
+                                    fontWeight: FontWeight.w800,
                                   ),
                                 ),
-                                const SizedBox(height: 3),
-                                Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                  decoration: BoxDecoration(
-                                    color: const Color(0xFFF1F5F9),
-                                    borderRadius: BorderRadius.circular(5),
-                                    border: Border.all(color: AppColors.slateBorder, width: 0.8),
-                                  ),
-                                  child: Text(
-                                    '${widget.vehicleType} • ${widget.licensePlate}',
-                                    style: const TextStyle(
-                                      color: AppColors.slateMuted,
-                                      fontSize: 10.5,
-                                      fontFamily: 'monospace',
-                                      fontWeight: FontWeight.w700,
-                                    ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  '${widget.vehicleType} • ${widget.fuelType} • ${widget.licensePlate}',
+                                  style: const TextStyle(
+                                    color: AppColors.slateMuted,
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w600,
                                   ),
                                 ),
                               ],
@@ -308,6 +306,9 @@ class _FaultDetailsScreenState extends State<FaultDetailsScreen> {
                     // Symptom Checklist Cards with Clear Tactile Selection States
                     ..._symptomOptions.map((symptom) {
                       final bool isChecked = _selectedSymptoms.contains(symptom);
+                      final animDur = MediaQuery.disableAnimationsOf(context)
+                          ? Duration.zero
+                          : const Duration(milliseconds: 160);
                       return Padding(
                         padding: const EdgeInsets.only(bottom: 8.0),
                         child: InkWell(
@@ -323,24 +324,16 @@ class _FaultDetailsScreenState extends State<FaultDetailsScreen> {
                           },
                           borderRadius: BorderRadius.circular(14),
                           child: AnimatedContainer(
-                            duration: const Duration(milliseconds: 180),
+                            duration: animDur,
+                            curve: const Cubic(0.23, 1, 0.32, 1),
                             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                             decoration: BoxDecoration(
-                              color: isChecked ? AppColors.crimsonLight.withAlpha(140) : AppColors.cardWhite,
+                              color: isChecked ? AppColors.crimsonLight : AppColors.cardWhite,
                               borderRadius: BorderRadius.circular(14),
                               border: Border.all(
                                 color: isChecked ? AppColors.caliperCrimson : AppColors.slateBorder,
-                                width: isChecked ? 1.8 : 1.0,
+                                width: isChecked ? 1.5 : 1.0,
                               ),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: isChecked
-                                      ? AppColors.caliperCrimson.withAlpha(20)
-                                      : Colors.black.withAlpha(4),
-                                  blurRadius: isChecked ? 6 : 3,
-                                  offset: const Offset(0, 1),
-                                ),
-                              ],
                             ),
                             child: Row(
                               children: [
@@ -395,24 +388,22 @@ class _FaultDetailsScreenState extends State<FaultDetailsScreen> {
                     const SizedBox(height: 10),
 
                     AnimatedContainer(
-                      duration: const Duration(milliseconds: 200),
+                      duration: MediaQuery.disableAnimationsOf(context)
+                          ? Duration.zero
+                          : const Duration(milliseconds: 180),
+                      curve: const Cubic(0.23, 1, 0.32, 1),
                       padding: const EdgeInsets.all(14),
                       decoration: BoxDecoration(
-                        color: AppColors.cardWhite,
+                        color: _isInLiveLane
+                            ? AppColors.crimsonLight
+                            : AppColors.cardWhite,
                         borderRadius: BorderRadius.circular(16),
                         border: Border.all(
-                          color: _isInLiveLane ? AppColors.caliperCrimson : AppColors.slateBorder,
-                          width: _isInLiveLane ? 1.6 : 1.0,
+                          color: _isInLiveLane
+                              ? AppColors.caliperCrimson
+                              : AppColors.slateBorder,
+                          width: _isInLiveLane ? 1.5 : 1.0,
                         ),
-                        boxShadow: [
-                          BoxShadow(
-                            color: _isInLiveLane
-                                ? AppColors.caliperCrimson.withAlpha(25)
-                                : Colors.black.withAlpha(4),
-                            blurRadius: _isInLiveLane ? 10 : 4,
-                            offset: const Offset(0, 2),
-                          ),
-                        ],
                       ),
                       child: Column(
                         children: [
@@ -425,51 +416,21 @@ class _FaultDetailsScreenState extends State<FaultDetailsScreen> {
                                 mainAxisAlignment:
                                     MainAxisAlignment.spaceBetween,
                                 children: [
-                                  Expanded(
+                                  const Expanded(
                                     child: Column(
                                       crossAxisAlignment:
                                           CrossAxisAlignment.start,
                                       children: [
-                                        Row(
-                                          children: [
-                                            const Flexible(
-                                              child: Text(
-                                                'Stranded in live highway lane',
-                                                style: TextStyle(
-                                                  color: AppColors.chassisText,
-                                                  fontSize: 13,
-                                                  fontWeight: FontWeight.w700,
-                                                ),
-                                              ),
-                                            ),
-                                            if (_isInLiveLane) ...[
-                                              const SizedBox(width: 6),
-                                              Container(
-                                                padding:
-                                                    const EdgeInsets.symmetric(
-                                                  horizontal: 6,
-                                                  vertical: 2,
-                                                ),
-                                                decoration: BoxDecoration(
-                                                  color: AppColors.caliperCrimson,
-                                                  borderRadius:
-                                                      BorderRadius.circular(4),
-                                                ),
-                                                child: const Text(
-                                                  'URGENT',
-                                                  style: TextStyle(
-                                                    color: Colors.white,
-                                                    fontSize: 9.5,
-                                                    fontWeight: FontWeight.w900,
-                                                    letterSpacing: 0.5,
-                                                  ),
-                                                ),
-                                              ),
-                                            ],
-                                          ],
+                                        Text(
+                                          'Stranded in live highway lane',
+                                          style: TextStyle(
+                                            color: AppColors.chassisText,
+                                            fontSize: 13,
+                                            fontWeight: FontWeight.w700,
+                                          ),
                                         ),
-                                        const SizedBox(height: 2),
-                                        const Text(
+                                        SizedBox(height: 2),
+                                        Text(
                                           'High hazard risk: marks priority rescue',
                                           style: TextStyle(
                                             color: AppColors.slateMuted,
@@ -493,48 +454,26 @@ class _FaultDetailsScreenState extends State<FaultDetailsScreen> {
                             ),
                           ),
                           if (_isInLiveLane) ...[
-                            const SizedBox(height: 10),
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 12,
-                                vertical: 10,
-                              ),
-                              decoration: BoxDecoration(
-                                color: AppColors.crimsonLight,
-                                borderRadius: BorderRadius.circular(12),
-                                border: Border.all(
-                                  color: AppColors.caliperCrimson,
-                                  width: 1.5,
+                            const SizedBox(height: 8),
+                            Row(
+                              children: const [
+                                Icon(
+                                  Icons.warning_amber_rounded,
+                                  color: AppColors.crimsonHover,
+                                  size: 16,
                                 ),
-                              ),
-                              child: Row(
-                                children: [
-                                  Container(
-                                    padding: const EdgeInsets.all(5),
-                                    decoration: const BoxDecoration(
-                                      color: AppColors.caliperCrimson,
-                                      shape: BoxShape.circle,
-                                    ),
-                                    child: const Icon(
-                                      Icons.warning_amber_rounded,
-                                      color: Colors.white,
-                                      size: 16,
+                                SizedBox(width: 8),
+                                Expanded(
+                                  child: Text(
+                                    'Priority hazard dispatch activated for approaching mechanics.',
+                                    style: TextStyle(
+                                      color: AppColors.crimsonHover,
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w700,
                                     ),
                                   ),
-                                  const SizedBox(width: 10),
-                                  const Expanded(
-                                    child: Text(
-                                      'HIGH ROADWAY HAZARD: Priority dispatch queue activated. Mechanics alerted to exercise traffic caution.',
-                                      style: TextStyle(
-                                        color: AppColors.crimsonHover,
-                                        fontSize: 11.5,
-                                        fontWeight: FontWeight.w800,
-                                        height: 1.3,
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ),
+                                ),
+                              ],
                             ),
                           ],
                           const Divider(color: AppColors.slateBorder, height: 16),
@@ -590,6 +529,98 @@ class _FaultDetailsScreenState extends State<FaultDetailsScreen> {
 
                     const SizedBox(height: 18),
 
+                    // Fault Photos (Uploaded via Cloudinary)
+                    const Text(
+                      'Damage or Warning Light Photos (Optional)',
+                      style: TextStyle(
+                        color: AppColors.chassisText,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: SizedBox(
+                            height: 44,
+                            child: OutlinedButton.icon(
+                              onPressed: (_isUploadingPhoto || _uploadedPhotoUrls.length >= 3)
+                                  ? null
+                                  : () => _pickAndUploadFaultPhoto(ImageSource.camera),
+                              icon: const Icon(Icons.camera_alt_outlined, size: 17),
+                              label: const Text('Camera'),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: SizedBox(
+                            height: 44,
+                            child: OutlinedButton.icon(
+                              onPressed: (_isUploadingPhoto || _uploadedPhotoUrls.length >= 3)
+                                  ? null
+                                  : () => _pickAndUploadFaultPhoto(ImageSource.gallery),
+                              icon: const Icon(Icons.photo_library_outlined, size: 17),
+                              label: const Text('Gallery'),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    if (_isUploadingPhoto) ...[
+                      const SizedBox(height: 8),
+                      const LinearProgressIndicator(color: AppColors.caliperCrimson),
+                    ],
+                    if (_photoThumbnails.isNotEmpty) ...[
+                      const SizedBox(height: 10),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: List.generate(_photoThumbnails.length, (i) {
+                          return Stack(
+                            children: [
+                              ClipRRect(
+                                borderRadius: BorderRadius.circular(10),
+                                child: Image.memory(
+                                  _photoThumbnails[i],
+                                  width: 68,
+                                  height: 68,
+                                  fit: BoxFit.cover,
+                                ),
+                              ),
+                              Positioned(
+                                top: 2,
+                                right: 2,
+                                child: GestureDetector(
+                                  onTap: () {
+                                    setState(() {
+                                      _photoThumbnails.removeAt(i);
+                                      _uploadedPhotoUrls.removeAt(i);
+                                    });
+                                  },
+                                  child: Container(
+                                    padding: const EdgeInsets.all(2),
+                                    decoration: const BoxDecoration(
+                                      color: AppColors.chassisText,
+                                      shape: BoxShape.circle,
+                                    ),
+                                    child: const Icon(
+                                      Icons.close,
+                                      size: 14,
+                                      color: Colors.white,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          );
+                        }),
+                      ),
+                    ],
+
+                    const SizedBox(height: 18),
+
                     // Notes Field
                     const Text(
                       'Additional Notes (Optional)',
@@ -603,24 +634,9 @@ class _FaultDetailsScreenState extends State<FaultDetailsScreen> {
                     TextField(
                       controller: _notesController,
                       maxLines: 3,
-                      style: const TextStyle(color: AppColors.chassisText, fontSize: 12.5),
-                      decoration: InputDecoration(
-                        filled: true,
-                        fillColor: AppColors.cardWhite,
+                      style: const TextStyle(color: AppColors.chassisText, fontSize: 13),
+                      decoration: const InputDecoration(
                         hintText: 'e.g. Parked near Aarong gate, smells like burning rubber...',
-                        hintStyle: const TextStyle(color: AppColors.slateMuted, fontSize: 11.5),
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                          borderSide: const BorderSide(color: AppColors.slateBorder),
-                        ),
-                        enabledBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                          borderSide: const BorderSide(color: AppColors.slateBorder),
-                        ),
-                        focusedBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                          borderSide: const BorderSide(color: AppColors.caliperCrimson, width: 1.5),
-                        ),
                       ),
                     ),
 
@@ -644,29 +660,33 @@ class _FaultDetailsScreenState extends State<FaultDetailsScreen> {
                     width: double.infinity,
                     height: 50,
                     child: ElevatedButton(
-                      onPressed: () {
-                        HapticFeedback.heavyImpact();
-                        Navigator.of(context).push(
-                          MaterialPageRoute(
-                            builder: (_) => DispatchScreen(
-                              selectedFault: widget.selectedFault,
-                              vehicleType: widget.vehicleType,
-                              licensePlate: widget.licensePlate,
-                              symptoms: _selectedSymptoms.toList(),
-                              isHighPriority: _isInLiveLane,
-                              breakdownLat: widget.breakdownLat,
-                              breakdownLng: widget.breakdownLng,
-                              breakdownAddress: widget.breakdownAddress,
-                              diagnosticNotes: _notesController.text.trim(),
-                            ),
-                          ),
-                        );
-                      },
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: AppColors.caliperCrimson,
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                        elevation: 3,
-                      ),
+                      onPressed: _isUploadingPhoto
+                          ? null
+                          : () {
+                              HapticFeedback.heavyImpact();
+                              final hazardNote = _hazardsWorking
+                                  ? ''
+                                  : '[Hazard lights non-functional] ';
+                              final combinedNotes =
+                                  'Fuel: ${widget.fuelType}. $hazardNote${_notesController.text.trim()}'
+                                      .trim();
+                              Navigator.of(context).push(
+                                MaterialPageRoute(
+                                  builder: (_) => DispatchScreen(
+                                    selectedFault: widget.selectedFault,
+                                    vehicleType: widget.vehicleType,
+                                    licensePlate: widget.licensePlate,
+                                    symptoms: _selectedSymptoms.toList(),
+                                    isHighPriority: _isInLiveLane,
+                                    breakdownLat: widget.breakdownLat,
+                                    breakdownLng: widget.breakdownLng,
+                                    breakdownAddress: widget.breakdownAddress,
+                                    diagnosticNotes: combinedNotes,
+                                    photoUrls: List<String>.from(_uploadedPhotoUrls),
+                                  ),
+                                ),
+                              );
+                            },
                       child: Row(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: const [

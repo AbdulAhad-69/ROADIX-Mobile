@@ -468,7 +468,7 @@ void main() {
       await tester.tap(E2EFinders.addWalletButton);
       await tester.pump();
 
-      expect(find.textContaining('Please enter an 11-digit mobile wallet number'), findsOneWidget);
+      expect(find.textContaining('Please enter a valid 11-digit mobile wallet number'), findsOneWidget);
 
       await E2ETestHarness.cleanUp(tester);
     });

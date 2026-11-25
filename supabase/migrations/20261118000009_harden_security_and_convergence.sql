@@ -520,6 +520,10 @@ BEGIN
               AND OLD.status = 'servicing' AND NEW.status = 'completed' THEN
             NEW.completed_at := COALESCE(NEW.completed_at, now());
 
+        ELSIF auth.role() = 'service_role'
+              AND OLD.status = 'servicing' AND NEW.status = 'completed' THEN
+            NEW.completed_at := COALESCE(NEW.completed_at, now());
+
         ELSIF v_user = OLD.motorist_id THEN
             IF NEW.status = 'cancelled' AND OLD.status IN ('created', 'searching', 'assigned') THEN
                 NEW.cancelled_at := COALESCE(NEW.cancelled_at, now());

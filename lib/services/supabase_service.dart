@@ -5,6 +5,7 @@ import '../src/core/config/app_config.dart';
 import '../src/core/utils/geometry_utils.dart';
 import '../src/core/utils/phone_utils.dart';
 import '../src/features/emergency_triage/application/triage_controller.dart';
+import 'cloudinary_service.dart';
 import 'demo_session.dart';
 
 class SupabaseService {
@@ -22,7 +23,7 @@ class SupabaseService {
   bool get isAuthenticated => _client.auth.currentUser != null;
 
   // ==========================================
-  // 1. AUTHENTICATION (EMAIL, GOOGLE OAUTH, PHONE OTP & DEMO)
+  // 1. AUTHENTICATION (EMAIL, GOOGLE OAUTH & DEMO)
   // ==========================================
 
   Future<AuthResponse> signInWithEmail({
@@ -58,34 +59,6 @@ class SupabaseService {
   /// Guest / anonymous sign-in when enabled on Supabase Auth.
   Future<AuthResponse> signInAnonymously() async {
     return await _client.auth.signInAnonymously();
-  }
-
-  Future<void> sendPhoneOtp(String rawPhone) async {
-    final normalized = PhoneUtils.normalize(rawPhone);
-    if (!PhoneUtils.isValidBangladeshPhone(normalized)) {
-      throw const FormatException(
-        'Invalid Bangladesh mobile number. Please enter a valid 11-digit number starting with 01.',
-      );
-    }
-    await _client.auth.signInWithOtp(phone: normalized);
-  }
-
-  Future<AuthResponse> verifyPhoneOtp({
-    required String rawPhone,
-    required String token,
-  }) async {
-    DemoSession.clear();
-    final normalized = PhoneUtils.normalize(rawPhone);
-    return await _client.auth.verifyOTP(
-      phone: normalized,
-      token: token.trim(),
-      type: OtpType.sms,
-    );
-  }
-
-  Future<void> resendPhoneOtp(String rawPhone) async {
-    final normalized = PhoneUtils.normalize(rawPhone);
-    await _client.auth.resend(phone: normalized, type: OtpType.sms);
   }
 
   /// Launches Google OAuth via Supabase Auth PKCE browser flow.
@@ -166,10 +139,11 @@ class SupabaseService {
 
     final existing = await _client
         .from('profiles')
-        .select('id')
+        .select('id, role')
         .eq('id', uid)
         .maybeSingle();
 
+    final safeRole = role == 'mechanic' ? 'mechanic' : 'motorist';
     final updateFields = <String, dynamic>{
       'full_name': fullName,
       if (normalizedPhone != null && normalizedPhone.isNotEmpty)
@@ -179,10 +153,19 @@ class SupabaseService {
 
     if (existing != null) {
       await _client.from('profiles').update(updateFields).eq('id', uid);
+      final currentRole = existing['role']?.toString();
+      if (currentRole != safeRole) {
+        try {
+          await _client
+              .from('profiles')
+              .update({'role': safeRole}).eq('id', uid);
+        } catch (_) {}
+      }
     } else {
       await _client.from('profiles').insert({
         'id': uid,
         'user_id': uid,
+        'role': safeRole,
         ...updateFields,
       });
     }
@@ -256,8 +239,8 @@ class SupabaseService {
         .update({'avatar_url': avatarUrl}).eq('id', uid);
   }
 
-  /// Uploads profile image bytes to Supabase Storage `avatars/<uid>/...` and
-  /// returns the resulting public CDN URL (or base64 data URI in Demo Mode).
+  /// Uploads profile image bytes via Cloudinary (`roadix/avatars`) and
+  /// updates `profiles.avatar_url` (or stores locally in Demo Mode).
   Future<String> uploadProfileAvatar(
     Uint8List bytes, {
     String fileExtension = 'jpg',
@@ -286,41 +269,36 @@ class SupabaseService {
       throw StateError('Sign in to upload a profile picture.');
     }
 
-    final objectPath =
-        '$uid/avatar_${DateTime.now().millisecondsSinceEpoch}.$safeExt';
-    await _client.storage.from('avatars').uploadBinary(
-          objectPath,
-          bytes,
-          fileOptions: FileOptions(
-            contentType: mimeType,
-            upsert: true,
-          ),
-        );
-    final publicUrl = _client.storage.from('avatars').getPublicUrl(objectPath);
-    await updateAvatar(publicUrl);
-    return publicUrl;
+    final uploadResult = await CloudinaryService().uploadImage(
+      bytes,
+      folder: 'roadix/avatars',
+      fileExtension: safeExt,
+    );
+    await updateAvatar(uploadResult.secureUrl);
+    return uploadResult.secureUrl;
   }
 
-  /// Uploads breakdown fault photo bytes to private `fault-photos/<uid>/...`
-  /// bucket and returns a time-limited signed URL or storage path.
+  /// Uploads breakdown fault photo bytes to Cloudinary (`roadix/faults`) and
+  /// returns the resulting `secure_url` (or local data URI in Demo Mode).
   Future<String?> uploadFaultPhoto(
     Uint8List bytes, {
     String fileExtension = 'jpg',
   }) async {
-    final uid = currentProfileId;
-    if (uid.isEmpty) return null;
     final safeExt = fileExtension.toLowerCase() == 'png' ? 'png' : 'jpg';
-    final objectPath =
-        '$uid/fault_${DateTime.now().millisecondsSinceEpoch}.$safeExt';
-    await _client.storage.from('fault-photos').uploadBinary(
-          objectPath,
-          bytes,
-          fileOptions: FileOptions(
-            contentType: safeExt == 'png' ? 'image/png' : 'image/jpeg',
-            upsert: false,
-          ),
-        );
-    return objectPath;
+    final mimeType = safeExt == 'png' ? 'image/png' : 'image/jpeg';
+    final uid = currentProfileId;
+    if (uid.isEmpty) {
+      if (DemoSession.isActive) {
+        return 'data:$mimeType;base64,${base64Encode(bytes)}';
+      }
+      throw StateError('Sign in to upload fault photos.');
+    }
+    final res = await CloudinaryService().uploadImage(
+      bytes,
+      folder: 'roadix/faults',
+      fileExtension: safeExt,
+    );
+    return res.secureUrl;
   }
 
   // ==========================================
@@ -691,7 +669,36 @@ class SupabaseService {
           .select('*, quotations(*), transactions(*)')
           .eq('motorist_id', userId)
           .order('created_at', ascending: false);
-      return List<Map<String, dynamic>>.from(response);
+      final rows = List<Map<String, dynamic>>.from(response);
+      final mechanicIds = rows
+          .map((r) => r['mechanic_id']?.toString())
+          .whereType<String>()
+          .where((id) => id.isNotEmpty)
+          .toSet()
+          .toList();
+      if (mechanicIds.isNotEmpty) {
+        try {
+          final profiles = await _client
+              .from('profiles')
+              .select('id, full_name')
+              .inFilter('id', mechanicIds);
+          final names = <String, String>{};
+          for (final p in (profiles as List)) {
+            final id = p['id']?.toString();
+            final name = p['full_name']?.toString();
+            if (id != null && name != null && name.isNotEmpty) {
+              names[id] = name;
+            }
+          }
+          for (final r in rows) {
+            final mid = r['mechanic_id']?.toString();
+            if (mid != null && names.containsKey(mid)) {
+              r['mechanic_name'] = names[mid];
+            }
+          }
+        } catch (_) {}
+      }
+      return rows;
     } catch (_) {
       try {
         final response = await _client
@@ -710,7 +717,10 @@ class SupabaseService {
     String requestId, {
     String reason = 'Motorist cancelled',
   }) async {
-    if (currentProfileId.isEmpty) return;
+    if (currentProfileId.isEmpty) {
+      if (DemoSession.isActive) return;
+      throw StateError('Authentication required to cancel a request.');
+    }
     await _client.from('service_requests').update({
       'status': 'cancelled',
       'cancellation_reason': reason,
@@ -1011,6 +1021,10 @@ class SupabaseService {
     required String requestId,
     required String offerId,
   }) async {
+    if (currentProfileId.isEmpty) {
+      if (DemoSession.isActive) return true;
+      throw StateError('Authentication required to accept offer.');
+    }
     final response = await _client.rpc(
       'accept_dispatch_offer',
       params: {'p_request_id': requestId, 'p_offer_id': offerId},
@@ -1019,6 +1033,10 @@ class SupabaseService {
   }
 
   Future<bool> rejectDispatchOffer(String offerId) async {
+    if (currentProfileId.isEmpty) {
+      if (DemoSession.isActive) return true;
+      throw StateError('Authentication required to decline offer.');
+    }
     final response = await _client.rpc(
       'reject_dispatch_offer',
       params: {'p_offer_id': offerId},
@@ -1030,7 +1048,10 @@ class SupabaseService {
     required String requestId,
     required String status,
   }) async {
-    if (currentProfileId.isEmpty) return;
+    if (currentProfileId.isEmpty) {
+      if (DemoSession.isActive) return;
+      throw StateError('Authentication required to update service status.');
+    }
     await _client
         .from('service_requests')
         .update({'status': status})
@@ -1048,6 +1069,18 @@ class SupabaseService {
     required double partsFee,
     Map<String, dynamic> lineItems = const {},
   }) async {
+    if (currentProfileId.isEmpty && DemoSession.isActive) {
+      return {
+        'id': 'demo-quote-${DateTime.now().millisecondsSinceEpoch}',
+        'request_id': requestId,
+        'diagnostic_fee': diagnosticFee,
+        'labor_fee': laborFee,
+        'parts_fee': partsFee,
+        'total_amount': diagnosticFee + laborFee + partsFee,
+        'line_items': lineItems,
+        'status': 'pending',
+      };
+    }
     final response = await _client.rpc(
       'submit_quotation',
       params: {

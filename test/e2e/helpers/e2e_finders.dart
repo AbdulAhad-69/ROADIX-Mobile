@@ -41,7 +41,7 @@ class E2EFinders {
   // =========================================================================
   // Emergency Home
   static Finder get sosHomeButton => find.text('SOS');
-  static Finder get pressForHelpText => find.text('PRESS FOR HELP');
+  static Finder get pressForHelpText => find.text('TAP FOR HELP');
   static Finder get triageSectionTitle => find.text('What do you need help with?');
   static Finder get activeRescueBanner => find.text('ACTIVE RESCUE IN PROGRESS');
   static Finder get profileAvatarHeader => find.byType(CircleAvatar);
@@ -75,8 +75,6 @@ class E2EFinders {
   // Login Screen
   static Finder get googleSignInButton =>
       find.widgetWithText(OutlinedButton, 'Continue with Google');
-  static Finder get phoneAuthTab => find.text('Mobile OTP');
-  static Finder get emailAuthTab => find.text('Email Account');
   static Finder get motoristRoleTab => find.byKey(const Key('signup_role_motorist'));
   static Finder get mechanicRoleTab => find.byKey(const Key('signup_role_technician'));
   static Finder get motoristDemoButton => find.byKey(const Key('demo_motorist_btn'));
@@ -86,9 +84,7 @@ class E2EFinders {
   static Finder get editProfileButton => find.byIcon(Icons.edit);
   static Finder get logoutButton =>
       find.widgetWithText(TextButton, 'Log Out & Return to Login');
-  static Finder get digitalGarageHeader =>
-      find.textContaining('DIGITAL GARAGE');
-  static Finder get linkedWalletsHeader => find.text('PAYMENT & MFS WALLETS');
-  static Finder get emergencyContactsHeader =>
-      find.text('EMERGENCY BROADCAST CONTACTS');
+  static Finder get digitalGarageHeader => find.text('Digital Garage');
+  static Finder get linkedWalletsHeader => find.text('Payment Wallets');
+  static Finder get emergencyContactsHeader => find.text('Emergency Contacts');
 }

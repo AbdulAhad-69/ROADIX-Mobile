@@ -33,6 +33,15 @@ class AppConfig {
 
   static const String _cloudinaryCloudEnv =
       String.fromEnvironment('CLOUDINARY_CLOUD_NAME');
+  static const String _cloudinaryApiKeyEnv =
+      String.fromEnvironment('CLOUDINARY_API_KEY');
+  static const String _cloudinaryUploadPresetEnv =
+      String.fromEnvironment('CLOUDINARY_UPLOAD_PRESET');
+  static const String _googleMapsApiKeyEnv =
+      String.fromEnvironment('GOOGLE_MAPS_API_KEY');
+  static const String _mapsApiKeyEnv = String.fromEnvironment('MAPS_API_KEY');
+  static const String _expoGoogleMapsApiKeyEnv =
+      String.fromEnvironment('EXPO_PUBLIC_GOOGLE_MAPS_API_KEY');
   static const String _googleWebClientIdEnv =
       String.fromEnvironment('EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID');
   static const String _googleAndroidClientIdEnv =
@@ -117,6 +126,25 @@ class AppConfig {
         _cloudinaryCloudEnv,
         'kefzjqi3',
       ]);
+
+  /// Non-secret Cloudinary API key passed alongside server-generated SHA-1 signatures.
+  static String get cloudinaryApiKey => _cloudinaryApiKeyEnv.trim();
+
+  /// Optional Cloudinary unsigned upload preset configured in Cloudinary Console.
+  static String get cloudinaryUploadPreset => _cloudinaryUploadPresetEnv.trim();
+
+  /// Google Maps SDK API key injected via `--dart-define` / `.env` when configured.
+  static String get googleMapsApiKey => _firstNonEmpty([
+        _googleMapsApiKeyEnv,
+        _mapsApiKeyEnv,
+        _expoGoogleMapsApiKeyEnv,
+      ]);
+
+  /// Whether a native Google Maps API key is configured for `google_maps_flutter`.
+  static bool get hasGoogleMapsApiKey => googleMapsApiKey.isNotEmpty;
+
+  /// Deep-link callback URI registered for in-app SSLCommerz checkout completion.
+  static const String paymentCallbackUrl = 'io.supabase.roadix://payment-callback';
 
   /// Optional Google Web OAuth Client ID.
   static String get googleWebClientId => _googleWebClientIdEnv.trim();

@@ -8,9 +8,9 @@ import '../src/core/router/app_router.dart';
 import '../src/core/utils/phone_utils.dart';
 import '../theme/app_colors.dart';
 import '../widgets/brand_logo.dart';
+import '../widgets/roadix_pressable.dart';
 import 'emergency_home_screen.dart';
 import 'mechanic_home_screen.dart';
-import 'otp_verification_screen.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -20,14 +20,12 @@ class LoginScreen extends StatefulWidget {
 }
 
 class _LoginScreenState extends State<LoginScreen> {
-  final TextEditingController _phoneController = TextEditingController();
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
   final TextEditingController _nameController = TextEditingController();
 
-  bool _usePhoneAuth = true;
   bool _isSignUp = false;
-  String _selectedRole = 'motorist'; // 'motorist' or 'mechanic'
+  String _selectedRole = 'motorist';
   String? _activeAction;
   bool _obscurePassword = true;
   String? _errorMessage;
@@ -56,7 +54,6 @@ class _LoginScreenState extends State<LoginScreen> {
   @override
   void dispose() {
     _authSubscription?.cancel();
-    _phoneController.dispose();
     _emailController.dispose();
     _passwordController.dispose();
     _nameController.dispose();
@@ -133,7 +130,7 @@ class _LoginScreenState extends State<LoginScreen> {
       try {
         await SupabaseService().signInAnonymously();
       } catch (_) {
-        // Anonymous auth may be disabled in dashboard; use explicit local demo session.
+        // Offline / anonymous sign-in disabled -> fall back to DemoSession
       }
 
       if (SupabaseService().currentUser == null) {
@@ -199,11 +196,11 @@ class _LoginScreenState extends State<LoginScreen> {
         workshopAddress: 'Plot 14, Road 45, Gulshan 2, Dhaka',
       );
 
-  Future<void> _loginAsGuest() => _enterDemoMode(
+  Future<void> _loginAsGuest({String? phone}) => _enterDemoMode(
         actionKey: 'demo_guest',
         role: 'motorist',
         fullName: 'Guest Motorist',
-        phone: '+8801700000000',
+        phone: (phone != null && phone.isNotEmpty) ? phone : '+8801700000000',
       );
 
   void _openGuestSosSheet() {
@@ -224,7 +221,7 @@ class _LoginScreenState extends State<LoginScreen> {
               bottom: MediaQuery.of(context).viewInsets.bottom,
             ),
             child: Container(
-              padding: const EdgeInsets.all(24),
+              padding: const EdgeInsets.fromLTRB(24, 14, 24, 24),
               decoration: const BoxDecoration(
                 color: AppColors.cardWhite,
                 borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
@@ -233,100 +230,75 @@ class _LoginScreenState extends State<LoginScreen> {
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
+                  Center(
+                    child: Container(
+                      width: 36,
+                      height: 4,
+                      decoration: BoxDecoration(
+                        color: AppColors.slateBorder,
+                        borderRadius: BorderRadius.circular(2),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Row(
-                        children: [
-                          Container(
-                            padding: const EdgeInsets.all(6),
-                            decoration: BoxDecoration(
-                              color: AppColors.crimsonLight,
-                              shape: BoxShape.circle,
-                            ),
-                            child: const Icon(
-                              Icons.flash_on,
-                              color: AppColors.crimsonHover,
-                              size: 20,
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          const Text(
-                            'GUEST SOS DISPATCH',
-                            style: TextStyle(
-                              color: AppColors.crimsonHover,
-                              fontSize: 12,
-                              fontWeight: FontWeight.w900,
-                              letterSpacing: 1.0,
-                            ),
-                          ),
-                        ],
+                      const Text(
+                        'Instant Guest Dispatch',
+                        style: TextStyle(
+                          color: AppColors.chassisText,
+                          fontSize: 18,
+                          fontWeight: FontWeight.w900,
+                        ),
                       ),
                       IconButton(
-                        tooltip: 'Close Guest SOS',
-                        icon: const Icon(
-                          Icons.close,
-                          color: AppColors.slateMuted,
-                          size: 22,
-                        ),
+                        tooltip: 'Close',
                         onPressed: () => Navigator.pop(ctx),
+                        icon: const Icon(Icons.close, color: AppColors.slateMuted),
                       ),
                     ],
                   ),
-                  const SizedBox(height: 12),
-                  const Text(
-                    'Direct Roadside Assistance',
-                    style: TextStyle(
-                      color: AppColors.chassisText,
-                      fontSize: 18,
-                      fontWeight: FontWeight.w900,
-                    ),
-                  ),
                   const SizedBox(height: 4),
                   const Text(
-                    'Provide an active callback number so dispatched technicians can reach you quickly.',
+                    'Enter an optional callback phone so the assigned mechanic can call you on arrival.',
                     style: TextStyle(
                       color: AppColors.slateMuted,
-                      fontSize: 13,
-                      height: 1.35,
+                      fontSize: 12.5,
+                      height: 1.4,
                     ),
                   ),
-                  if (localError != null) ...[
-                    const SizedBox(height: 10),
-                    Container(
-                      padding: const EdgeInsets.all(10),
-                      decoration: BoxDecoration(
-                        color: AppColors.crimsonLight,
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: AppColors.crimsonBorder),
-                      ),
-                      child: Text(
-                        localError!,
-                        style: const TextStyle(
-                          color: AppColors.crimsonHover,
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ),
-                  ],
-                  const SizedBox(height: 16),
+                  const SizedBox(height: 14),
                   TextField(
                     controller: guestPhoneController,
                     keyboardType: TextInputType.phone,
-                    autofocus: true,
                     style: const TextStyle(
-                      color: AppColors.chassisText,
                       fontSize: 14,
-                      fontWeight: FontWeight.bold,
+                      fontWeight: FontWeight.w600,
+                      fontFeatures: [FontFeature.tabularFigures()],
                     ),
                     decoration: const InputDecoration(
-                      labelText: 'Callback Mobile Number',
+                      labelText: 'Callback Mobile Number (Optional)',
                       hintText: '017XXXXXXXX',
                       prefixText: '+880 ',
-                      prefixIcon: Icon(Icons.phone, color: AppColors.slateMuted, size: 20),
+                      prefixIcon: Icon(
+                        Icons.phone_in_talk_outlined,
+                        color: AppColors.slateMuted,
+                        size: 20,
+                      ),
                     ),
                   ),
+                  if (localError != null) ...[
+                    const SizedBox(height: 8),
+                    Text(
+                      localError!,
+                      style: const TextStyle(
+                        color: AppColors.crimsonHover,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
                   const SizedBox(height: 18),
                   SizedBox(
                     height: 48,
@@ -334,52 +306,26 @@ class _LoginScreenState extends State<LoginScreen> {
                       onPressed: isSubmitting
                           ? null
                           : () async {
-                              final raw = guestPhoneController.text.trim();
-                              final normalized = PhoneUtils.normalize(raw);
-                              if (!PhoneUtils.isValidBangladeshPhone(normalized)) {
-                                setSheetState(() {
-                                  localError =
-                                      'Enter a valid 11-digit Bangladesh phone (e.g. 01712345678).';
-                                });
-                                return;
+                              final rawPhone = guestPhoneController.text.trim();
+                              String normalized = '+8801700000000';
+                              if (rawPhone.isNotEmpty) {
+                                normalized = PhoneUtils.normalize(rawPhone);
+                                if (!PhoneUtils.isValidBangladeshPhone(normalized)) {
+                                  setSheetState(() {
+                                    localError =
+                                        'Enter a valid 11-digit Bangladesh number (01XXXXXXXXX).';
+                                  });
+                                  return;
+                                }
                               }
                               setSheetState(() {
                                 isSubmitting = true;
                                 localError = null;
                               });
-                              if (ctx.mounted) Navigator.pop(ctx);
-                              await _enterDemoMode(
-                                actionKey: 'demo_guest_sheet',
-                                role: 'motorist',
-                                fullName: 'Guest Motorist',
-                                phone: normalized,
-                              );
+                              Navigator.pop(ctx);
+                              await _loginAsGuest(phone: normalized);
                             },
-                      child: isSubmitting
-                          ? const SizedBox(
-                              width: 20,
-                              height: 20,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2,
-                                color: Colors.white,
-                              ),
-                            )
-                          : const Text('CONTINUE TO EMERGENCY MAP'),
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Center(
-                    child: TextButton(
-                      onPressed: isSubmitting
-                          ? null
-                          : () async {
-                              if (ctx.mounted) Navigator.pop(ctx);
-                              await _loginAsGuest();
-                            },
-                      child: const Text(
-                        'Skip phone entry (Proceed in Guest Demo)',
-                        style: TextStyle(color: AppColors.slateMuted, fontSize: 12),
-                      ),
+                      child: const Text('CONTINUE AS GUEST'),
                     ),
                   ),
                 ],
@@ -395,7 +341,7 @@ class _LoginScreenState extends State<LoginScreen> {
     });
   }
 
-  String _friendlyAuthError(Object e, {bool isPhone = false}) {
+  String _friendlyAuthError(Object e) {
     final raw = e
         .toString()
         .replaceAll('Exception: ', '')
@@ -403,52 +349,13 @@ class _LoginScreenState extends State<LoginScreen> {
         .replaceAll('AuthApiException(', '')
         .trim();
     final lower = raw.toLowerCase();
-    if (isPhone &&
-        (lower.contains('phone') && lower.contains('disabled') ||
-            lower.contains('unsupported phone provider') ||
-            lower.contains('sms'))) {
-      return 'SMS OTP is not yet enabled on Supabase Auth. Sign in via Email Account, Google, or Demo Mode.';
-    }
     if (lower.contains('invalid login credentials')) {
-      return 'Incorrect email or password. Double-check your credentials or sign up.';
+      return 'Incorrect email or password. Double-check your credentials or create an account.';
     }
     if (lower.contains('email not confirmed')) {
-      return 'Please verify your email link before signing in.';
+      return 'Please verify your email confirmation link before signing in.';
     }
     return raw;
-  }
-
-  Future<void> _handlePhoneOtp() async {
-    if (_isLoading || _isDemoActionInProgress) return;
-    final rawPhone = _phoneController.text.trim();
-    final normalized = PhoneUtils.normalize(rawPhone);
-    if (!PhoneUtils.isValidBangladeshPhone(normalized)) {
-      _showError('Enter a valid 11-digit Bangladesh phone (e.g. 01712345678).');
-      return;
-    }
-
-    setState(() {
-      _activeAction = 'otp';
-      _errorMessage = null;
-    });
-
-    try {
-      HapticFeedback.lightImpact();
-      await SupabaseService().sendPhoneOtp(rawPhone);
-      if (mounted) {
-        Navigator.of(context).push(
-          MaterialPageRoute(
-            builder: (_) => OtpVerificationScreen(
-              phoneNumber: normalized.replaceAll('+880', ''),
-            ),
-          ),
-        );
-      }
-    } catch (e) {
-      if (mounted) _showError(_friendlyAuthError(e, isPhone: true));
-    } finally {
-      if (mounted) setState(() => _activeAction = null);
-    }
   }
 
   Future<void> _handleEmailAuth() async {
@@ -489,7 +396,6 @@ class _LoginScreenState extends State<LoginScreen> {
                   'Account created! Verify the confirmation email before signing in.',
                 ),
                 backgroundColor: AppColors.emeraldDark,
-                behavior: SnackBarBehavior.floating,
               ),
             );
             setState(() => _isSignUp = false);
@@ -502,7 +408,10 @@ class _LoginScreenState extends State<LoginScreen> {
           password: password,
         );
       }
-      if (mounted) await _proceedBasedOnRole();
+
+      if (mounted) {
+        await _proceedBasedOnRole();
+      }
     } catch (e) {
       if (mounted) _showError(_friendlyAuthError(e));
     } finally {
@@ -516,33 +425,16 @@ class _LoginScreenState extends State<LoginScreen> {
       _activeAction = 'google';
       _errorMessage = null;
     });
+
     try {
       HapticFeedback.lightImpact();
-      final initiated = await SupabaseService().signInWithGoogle();
-      if (!mounted) return;
-      if (!initiated) {
-        _showError(
-          'Could not open browser for Google Sign-In. Check network connectivity or use Email / Demo Mode.',
-        );
-        return;
-      }
-      final session = Supabase.instance.client.auth.currentSession;
-      if (session != null) {
-        await _proceedBasedOnRole();
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Complete Google Sign-In in the browser tab to return to ROADIX.'),
-            backgroundColor: AppColors.chassisText,
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
+      final launched = await SupabaseService().signInWithGoogle();
+      if (!launched && mounted) {
+        _showError('Could not launch Google sign-in browser.');
       }
     } catch (e) {
       if (mounted) {
-        _showError(
-          'Google Sign-In unavailable right now (${_friendlyAuthError(e)}). Try Email or Demo Mode.',
-        );
+        _showError('Google Sign-In failed: ${_friendlyAuthError(e)}');
       }
     } finally {
       if (mounted) setState(() => _activeAction = null);
@@ -551,14 +443,6 @@ class _LoginScreenState extends State<LoginScreen> {
 
   void _showError(String message) {
     setState(() => _errorMessage = message);
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-        backgroundColor: AppColors.crimsonHover,
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-      ),
-    );
   }
 
   @override
@@ -566,41 +450,34 @@ class _LoginScreenState extends State<LoginScreen> {
     return Scaffold(
       backgroundColor: AppColors.porcelainBg,
       body: SafeArea(
-        child: Center(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 16.0),
+        child: LayoutBuilder(
+          builder: (context, constraints) => SingleChildScrollView(
+            padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 20.0),
             child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 420),
+              constraints: BoxConstraints(minHeight: constraints.maxHeight - 40),
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   Center(
                     child: Container(
-                      width: 68,
-                      height: 68,
+                      width: 64,
+                      height: 64,
                       decoration: BoxDecoration(
                         color: AppColors.cardWhite,
                         shape: BoxShape.circle,
-                        border: Border.all(color: AppColors.slateBorder, width: 1.5),
-                        boxShadow: [
-                          BoxShadow(
-                            color: AppColors.caliperCrimson.withAlpha(22),
-                            blurRadius: 16,
-                            offset: const Offset(0, 4),
-                          ),
-                        ],
+                        border: Border.all(color: AppColors.slateBorder),
                       ),
                       child: Center(
                         child: Image.asset(
                           'assets/images/logo.png',
-                          width: 38,
-                          height: 38,
+                          width: 36,
+                          height: 36,
                           fit: BoxFit.contain,
                           errorBuilder: (_, _, _) => const Icon(
                             Icons.car_crash_outlined,
                             color: AppColors.caliperCrimson,
-                            size: 32,
+                            size: 30,
                           ),
                         ),
                       ),
@@ -622,245 +499,105 @@ class _LoginScreenState extends State<LoginScreen> {
                   const SizedBox(height: 6),
                   const Center(
                     child: Text(
-                      'Rapid Highway Emergency Assistance • Bangladesh',
+                      'Rapid Highway Emergency Assistance',
                       textAlign: TextAlign.center,
                       style: TextStyle(
                         color: AppColors.slateMuted,
-                        fontSize: 12.5,
+                        fontSize: 13,
                         fontWeight: FontWeight.w500,
                       ),
                     ),
                   ),
-                  const SizedBox(height: 22),
+                  const SizedBox(height: 24),
 
-                  // Guest SOS Quick Access Banner
-                  Semantics(
-                    button: true,
-                    label: 'Emergency breakdown? Continue as guest',
-                    child: InkWell(
-                      onTap: _isLoading ? null : _openGuestSosSheet,
-                      borderRadius: BorderRadius.circular(16),
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 16,
-                          vertical: 14,
-                        ),
-                        decoration: BoxDecoration(
-                          color: AppColors.crimsonLight,
-                          borderRadius: BorderRadius.circular(16),
-                          border: Border.all(
-                            color: AppColors.crimsonBorder,
-                            width: 1.5,
-                          ),
-                        ),
-                        child: Row(
-                          children: [
-                            Container(
-                              padding: const EdgeInsets.all(8),
-                              decoration: const BoxDecoration(
-                                color: AppColors.caliperCrimson,
-                                shape: BoxShape.circle,
-                              ),
-                              child: const Icon(
-                                Icons.flash_on,
-                                color: Colors.white,
-                                size: 18,
-                              ),
-                            ),
-                            const SizedBox(width: 12),
-                            const Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    'EMERGENCY BREAKDOWN?',
-                                    style: TextStyle(
-                                      color: AppColors.crimsonHover,
-                                      fontSize: 11.5,
-                                      fontWeight: FontWeight.w900,
-                                      letterSpacing: 0.7,
-                                    ),
-                                  ),
-                                  SizedBox(height: 2),
-                                  Text(
-                                    'Continue as Guest • Instant Triage',
-                                    style: TextStyle(
-                                      color: AppColors.chassisText,
-                                      fontSize: 12.5,
-                                      fontWeight: FontWeight.w600,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                            const Icon(
-                              Icons.arrow_forward_ios,
-                              color: AppColors.crimsonHover,
-                              size: 14,
-                            ),
-                          ],
-                        ),
+                  // Quick Guest Access
+                  RoadixPressable(
+                    onTap: _isLoading ? null : _openGuestSosSheet,
+                    borderRadius: BorderRadius.circular(14),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 14,
                       ),
-                    ),
-                  ),
-                  const SizedBox(height: 14),
-
-                  // Explicit Demo One-Tap Access Card (strictly separated from Account Auth)
-                  Container(
-                    key: const Key('demo_access_card'),
-                    padding: const EdgeInsets.all(14),
-                    decoration: BoxDecoration(
-                      color: AppColors.cardWhite,
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: AppColors.slateBorder),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          children: [
-                            Container(
-                              padding: const EdgeInsets.all(4),
-                              decoration: BoxDecoration(
-                                color: AppColors.crimsonLight,
-                                borderRadius: BorderRadius.circular(6),
-                              ),
-                              child: const Icon(
-                                Icons.bolt,
-                                color: AppColors.crimsonHover,
-                                size: 14,
-                              ),
+                      decoration: BoxDecoration(
+                        color: AppColors.crimsonLight,
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(color: AppColors.crimsonBorder),
+                      ),
+                      child: Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(8),
+                            decoration: const BoxDecoration(
+                              color: AppColors.caliperCrimson,
+                              shape: BoxShape.circle,
                             ),
-                            const SizedBox(width: 8),
-                            const Expanded(
-                              child: Text(
-                                'DEMO ONE-TAP ACCESS',
-                                style: TextStyle(
-                                  color: AppColors.chassisText,
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.w900,
-                                  letterSpacing: 0.7,
-                                ),
-                              ),
+                            child: const Icon(
+                              Icons.flash_on,
+                              color: Colors.white,
+                              size: 18,
                             ),
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 7,
-                                vertical: 3,
-                              ),
-                              decoration: BoxDecoration(
-                                color: AppColors.porcelainBg,
-                                borderRadius: BorderRadius.circular(999),
-                                border: Border.all(color: AppColors.slateBorder),
-                              ),
-                              child: const Text(
-                                'DEMO MODE',
-                                style: TextStyle(
-                                  color: AppColors.slateMuted,
-                                  fontSize: 10,
-                                  fontWeight: FontWeight.w800,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 6),
-                        const Text(
-                          'Preview Motorist, Technician, or Guest flows immediately without credentials.',
-                          style: TextStyle(
-                            color: AppColors.slateMuted,
-                            fontSize: 11.5,
                           ),
-                        ),
-                        const SizedBox(height: 10),
-                        Row(
-                          children: [
-                            _buildDemoTile(
-                              tileKey: const Key('demo_motorist_btn'),
-                              label: 'Demo Motorist',
-                              icon: Icons.directions_car,
-                              iconColor: AppColors.caliperCrimson,
-                              isBusy: _activeAction == 'demo_motorist',
-                              onTap: _loginAsDemoMotorist,
+                          const SizedBox(width: 12),
+                          const Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Continue as Guest',
+                                  style: TextStyle(
+                                    color: AppColors.chassisText,
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w800,
+                                  ),
+                                ),
+                                SizedBox(height: 2),
+                                Text(
+                                  'No signup required for emergency dispatch',
+                                  style: TextStyle(
+                                    color: AppColors.crimsonHover,
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ],
                             ),
-                            const SizedBox(width: 8),
-                            _buildDemoTile(
-                              tileKey: const Key('demo_technician_btn'),
-                              label: 'Demo Technician',
-                              icon: Icons.engineering,
-                              iconColor: AppColors.chassisText,
-                              isBusy: _activeAction == 'demo_technician',
-                              onTap: _loginAsDemoTechnician,
-                            ),
-                            const SizedBox(width: 8),
-                            _buildDemoTile(
-                              tileKey: const Key('demo_guest_btn'),
-                              label: 'Guest SOS',
-                              icon: Icons.flash_on,
-                              iconColor: AppColors.amberDark,
-                              isBusy: _activeAction == 'demo_guest',
-                              onTap: _loginAsGuest,
-                            ),
-                          ],
-                        ),
-                      ],
+                          ),
+                          const Icon(
+                            Icons.chevron_right,
+                            color: AppColors.crimsonHover,
+                            size: 20,
+                          ),
+                        ],
+                      ),
                     ),
                   ),
                   const SizedBox(height: 16),
 
-                  // Live Account Auth Card (Mobile OTP vs Email Account)
+                  // Primary Email Account Card
                   Container(
                     padding: const EdgeInsets.all(20),
                     decoration: BoxDecoration(
                       color: AppColors.cardWhite,
                       borderRadius: BorderRadius.circular(20),
                       border: Border.all(color: AppColors.slateBorder),
-                      boxShadow: [
-                        BoxShadow(
-                          color: AppColors.chassisText.withAlpha(8),
-                          blurRadius: 16,
-                          offset: const Offset(0, 4),
-                        ),
-                      ],
                     ),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
-                        Container(
-                          padding: const EdgeInsets.all(4),
-                          decoration: BoxDecoration(
-                            color: AppColors.porcelainBg,
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(color: AppColors.slateBorder),
-                          ),
-                          child: Row(
-                            children: [
-                              _buildAuthTab(
-                                label: 'Mobile OTP',
-                                selected: _usePhoneAuth,
-                                onTap: () {
-                                  HapticFeedback.selectionClick();
-                                  setState(() {
-                                    _usePhoneAuth = true;
-                                    _errorMessage = null;
-                                  });
-                                },
-                              ),
-                              _buildAuthTab(
-                                label: 'Email Account',
-                                selected: !_usePhoneAuth,
-                                onTap: () {
-                                  HapticFeedback.selectionClick();
-                                  setState(() {
-                                    _usePhoneAuth = false;
-                                    _errorMessage = null;
-                                  });
-                                },
-                              ),
-                            ],
+                        Text(
+                          _isSignUp
+                              ? (_selectedRole == 'mechanic'
+                                  ? 'Create Technician Account'
+                                  : 'Create Motorist Account')
+                              : 'Sign In with Email',
+                          style: const TextStyle(
+                            color: AppColors.chassisText,
+                            fontSize: 16,
+                            fontWeight: FontWeight.w800,
                           ),
                         ),
-                        const SizedBox(height: 16),
+                        const SizedBox(height: 14),
 
                         if (_errorMessage != null) ...[
                           Container(
@@ -895,204 +632,132 @@ class _LoginScreenState extends State<LoginScreen> {
                           const SizedBox(height: 14),
                         ],
 
-                        if (_usePhoneAuth) ...[
-                          const Text(
-                            'Enter your Bangladesh mobile number to sign in or register.',
-                            style: TextStyle(
-                              color: AppColors.slateMuted,
-                              fontSize: 12,
-                              height: 1.35,
+                        if (_isSignUp) ...[
+                          Container(
+                            margin: const EdgeInsets.only(bottom: 12),
+                            padding: const EdgeInsets.all(4),
+                            decoration: BoxDecoration(
+                              color: AppColors.porcelainBg,
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(color: AppColors.slateBorder),
                             ),
-                          ),
-                          const SizedBox(height: 14),
-                          TextField(
-                            controller: _phoneController,
-                            keyboardType: TextInputType.phone,
-                            style: const TextStyle(
-                              color: AppColors.chassisText,
-                              fontSize: 14,
-                              fontWeight: FontWeight.w700,
-                              fontFamily: 'monospace',
-                            ),
-                            decoration: const InputDecoration(
-                              labelText: 'Mobile Number',
-                              hintText: '017XXXXXXXX',
-                              prefixText: '+880 ',
-                              prefixIcon: Icon(
-                                Icons.phone_android,
-                                color: AppColors.slateMuted,
-                                size: 20,
-                              ),
-                            ),
-                          ),
-                          const SizedBox(height: 16),
-                          SizedBox(
-                            height: 48,
-                            child: ElevatedButton(
-                              onPressed: _isLoading ? null : _handlePhoneOtp,
-                              child: _activeAction == 'otp'
-                                  ? const SizedBox(
-                                      width: 20,
-                                      height: 20,
-                                      child: CircularProgressIndicator(
-                                        strokeWidth: 2,
-                                        color: Colors.white,
-                                      ),
-                                    )
-                                  : const FittedBox(
-                                      fit: BoxFit.scaleDown,
-                                      child: Row(
-                                        mainAxisAlignment: MainAxisAlignment.center,
-                                        children: [
-                                          Text('SEND VERIFICATION CODE'),
-                                          SizedBox(width: 6),
-                                          Icon(Icons.arrow_forward, size: 16),
-                                        ],
-                                      ),
-                                    ),
-                            ),
-                          ),
-                        ] else ...[
-                          Text(
-                            _isSignUp
-                                ? (_selectedRole == 'mechanic'
-                                    ? 'Create Technician Account'
-                                    : 'Create Motorist Account')
-                                : 'Sign In with Email',
-                            style: const TextStyle(
-                              color: AppColors.chassisText,
-                              fontSize: 15,
-                              fontWeight: FontWeight.w800,
-                            ),
-                          ),
-                          const SizedBox(height: 12),
-                          if (_isSignUp) ...[
-                            Container(
-                              margin: const EdgeInsets.only(bottom: 12),
-                              padding: const EdgeInsets.all(4),
-                              decoration: BoxDecoration(
-                                color: AppColors.porcelainBg,
-                                borderRadius: BorderRadius.circular(12),
-                                border: Border.all(color: AppColors.slateBorder),
-                              ),
-                              child: Row(
-                                children: [
-                                  _buildRoleChip(
-                                    chipKey: const Key('signup_role_motorist'),
-                                    label: 'Motorist',
-                                    icon: Icons.directions_car,
-                                    selected: _selectedRole == 'motorist',
-                                    onTap: () =>
-                                        setState(() => _selectedRole = 'motorist'),
-                                  ),
-                                  _buildRoleChip(
-                                    chipKey: const Key('signup_role_technician'),
-                                    label: 'Technician',
-                                    icon: Icons.build,
-                                    selected: _selectedRole == 'mechanic',
-                                    onTap: () =>
-                                        setState(() => _selectedRole = 'mechanic'),
-                                  ),
-                                ],
-                              ),
-                            ),
-                            TextField(
-                              controller: _nameController,
-                              style: const TextStyle(
-                                color: AppColors.chassisText,
-                                fontSize: 14,
-                              ),
-                              decoration: const InputDecoration(
-                                labelText: 'Full Name',
-                                prefixIcon: Icon(
-                                  Icons.person_outline,
-                                  color: AppColors.slateMuted,
-                                  size: 20,
+                            child: Row(
+                              children: [
+                                _buildRoleChip(
+                                  chipKey: const Key('signup_role_motorist'),
+                                  label: 'Motorist',
+                                  icon: Icons.directions_car,
+                                  selected: _selectedRole == 'motorist',
+                                  onTap: () =>
+                                      setState(() => _selectedRole = 'motorist'),
                                 ),
-                              ),
+                                _buildRoleChip(
+                                  chipKey: const Key('signup_role_technician'),
+                                  label: 'Technician',
+                                  icon: Icons.build,
+                                  selected: _selectedRole == 'mechanic',
+                                  onTap: () =>
+                                      setState(() => _selectedRole = 'mechanic'),
+                                ),
+                              ],
                             ),
-                            const SizedBox(height: 12),
-                          ],
+                          ),
                           TextField(
-                            controller: _emailController,
-                            keyboardType: TextInputType.emailAddress,
+                            controller: _nameController,
                             style: const TextStyle(
                               color: AppColors.chassisText,
                               fontSize: 14,
                             ),
                             decoration: const InputDecoration(
-                              labelText: 'Email Address',
+                              labelText: 'Full Name',
                               prefixIcon: Icon(
-                                Icons.email_outlined,
+                                Icons.person_outline,
                                 color: AppColors.slateMuted,
                                 size: 20,
                               ),
                             ),
                           ),
                           const SizedBox(height: 12),
-                          TextField(
-                            controller: _passwordController,
-                            obscureText: _obscurePassword,
-                            style: const TextStyle(
-                              color: AppColors.chassisText,
-                              fontSize: 14,
-                            ),
-                            decoration: InputDecoration(
-                              labelText: 'Password',
-                              prefixIcon: const Icon(
-                                Icons.lock_outline,
-                                color: AppColors.slateMuted,
-                                size: 20,
-                              ),
-                              suffixIcon: IconButton(
-                                tooltip: _obscurePassword
-                                    ? 'Show password'
-                                    : 'Hide password',
-                                icon: Icon(
-                                  _obscurePassword
-                                      ? Icons.visibility_off
-                                      : Icons.visibility,
-                                  color: AppColors.slateMuted,
-                                  size: 20,
-                                ),
-                                onPressed: () => setState(
-                                  () => _obscurePassword = !_obscurePassword,
-                                ),
-                              ),
-                            ),
-                          ),
-                          const SizedBox(height: 16),
-                          SizedBox(
-                            height: 48,
-                            child: ElevatedButton(
-                              onPressed: _isLoading ? null : _handleEmailAuth,
-                              child: _activeAction == 'email'
-                                  ? const SizedBox(
-                                      width: 20,
-                                      height: 20,
-                                      child: CircularProgressIndicator(
-                                        strokeWidth: 2,
-                                        color: Colors.white,
-                                      ),
-                                    )
-                                  : Text(_isSignUp ? 'CREATE ACCOUNT' : 'SIGN IN'),
-                            ),
-                          ),
-                          const SizedBox(height: 8),
-                          Center(
-                            child: TextButton(
-                              onPressed: () => setState(() {
-                                _isSignUp = !_isSignUp;
-                                _errorMessage = null;
-                              }),
-                              child: Text(
-                                _isSignUp
-                                    ? 'Already have an account? Sign In'
-                                    : 'Need a new account? Sign Up',
-                              ),
-                            ),
-                          ),
                         ],
+                        TextField(
+                          controller: _emailController,
+                          keyboardType: TextInputType.emailAddress,
+                          style: const TextStyle(
+                            color: AppColors.chassisText,
+                            fontSize: 14,
+                          ),
+                          decoration: const InputDecoration(
+                            labelText: 'Email Address',
+                            prefixIcon: Icon(
+                              Icons.email_outlined,
+                              color: AppColors.slateMuted,
+                              size: 20,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        TextField(
+                          controller: _passwordController,
+                          obscureText: _obscurePassword,
+                          style: const TextStyle(
+                            color: AppColors.chassisText,
+                            fontSize: 14,
+                          ),
+                          decoration: InputDecoration(
+                            labelText: 'Password',
+                            prefixIcon: const Icon(
+                              Icons.lock_outline,
+                              color: AppColors.slateMuted,
+                              size: 20,
+                            ),
+                            suffixIcon: IconButton(
+                              tooltip: _obscurePassword
+                                  ? 'Show password'
+                                  : 'Hide password',
+                              icon: Icon(
+                                _obscurePassword
+                                    ? Icons.visibility_off
+                                    : Icons.visibility,
+                                color: AppColors.slateMuted,
+                                size: 20,
+                              ),
+                              onPressed: () => setState(
+                                () => _obscurePassword = !_obscurePassword,
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        SizedBox(
+                          height: 48,
+                          child: ElevatedButton(
+                            onPressed: _isLoading ? null : _handleEmailAuth,
+                            child: _activeAction == 'email'
+                                ? const SizedBox(
+                                    width: 20,
+                                    height: 20,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                      color: Colors.white,
+                                    ),
+                                  )
+                                : Text(_isSignUp ? 'CREATE ACCOUNT' : 'SIGN IN'),
+                          ),
+                        ),
+                        const SizedBox(height: 6),
+                        Center(
+                          child: TextButton(
+                            onPressed: () => setState(() {
+                              _isSignUp = !_isSignUp;
+                              _errorMessage = null;
+                            }),
+                            child: Text(
+                              _isSignUp
+                                  ? 'Already have an account? Sign In'
+                                  : 'Need a new account? Sign Up',
+                            ),
+                          ),
+                        ),
                       ],
                     ),
                   ),
@@ -1108,7 +773,7 @@ class _LoginScreenState extends State<LoginScreen> {
                               height: 18,
                               child: CircularProgressIndicator(strokeWidth: 2),
                             )
-                          : const BrandLogo(brand: 'google', size: 22),
+                          : const BrandLogo(brand: 'google', size: 20),
                       label: const Text(
                         'Continue with Google',
                         style: TextStyle(
@@ -1125,116 +790,40 @@ class _LoginScreenState extends State<LoginScreen> {
                       ),
                     ),
                   ),
-                ],
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
+                  const SizedBox(height: 14),
 
-  Widget _buildDemoTile({
-    required Key tileKey,
-    required String label,
-    required IconData icon,
-    required Color iconColor,
-    required bool isBusy,
-    required VoidCallback onTap,
-  }) {
-    return Expanded(
-      child: Semantics(
-        button: true,
-        label: label,
-        child: InkWell(
-          key: tileKey,
-          onTap: _isLoading ? null : onTap,
-          borderRadius: BorderRadius.circular(10),
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(minHeight: 54),
-            child: Container(
-              padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
-              decoration: BoxDecoration(
-                color: AppColors.porcelainBg,
-                borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: AppColors.slateBorder),
-              ),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  if (isBusy)
-                    SizedBox(
-                      width: 16,
-                      height: 16,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        color: iconColor,
+                  // Non-blocking evaluation access links
+                  Wrap(
+                    alignment: WrapAlignment.center,
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    spacing: 4,
+                    children: [
+                      const Text(
+                        'Preview:',
+                        style: TextStyle(
+                          color: AppColors.slateMuted,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                        ),
                       ),
-                    )
-                  else
-                    Icon(icon, color: iconColor, size: 18),
-                  const SizedBox(height: 4),
-                  FittedBox(
-                    fit: BoxFit.scaleDown,
-                    child: Text(
-                      label,
-                      textAlign: TextAlign.center,
-                      style: const TextStyle(
-                        color: AppColors.chassisText,
-                        fontSize: 11,
-                        fontWeight: FontWeight.w800,
+                      TextButton(
+                        key: const Key('demo_motorist_btn'),
+                        onPressed: _isLoading ? null : _loginAsDemoMotorist,
+                        child: const Text('Demo Motorist'),
                       ),
-                    ),
+                      TextButton(
+                        key: const Key('demo_technician_btn'),
+                        onPressed: _isLoading ? null : _loginAsDemoTechnician,
+                        child: const Text('Demo Technician'),
+                      ),
+                      TextButton(
+                        key: const Key('demo_guest_btn'),
+                        onPressed: _isLoading ? null : _openGuestSosSheet,
+                        child: const Text('Guest SOS'),
+                      ),
+                    ],
                   ),
                 ],
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildAuthTab({
-    required String label,
-    required bool selected,
-    required VoidCallback onTap,
-  }) {
-    return Expanded(
-      child: Semantics(
-        button: true,
-        selected: selected,
-        label: label,
-        child: InkWell(
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(9),
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(minHeight: 48),
-            child: Container(
-              alignment: Alignment.center,
-              padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 6),
-              decoration: BoxDecoration(
-                color: selected ? AppColors.cardWhite : Colors.transparent,
-                borderRadius: BorderRadius.circular(9),
-                boxShadow: selected
-                    ? [
-                        BoxShadow(
-                          color: Colors.black.withAlpha(8),
-                          blurRadius: 4,
-                          offset: const Offset(0, 1),
-                        ),
-                      ]
-                    : null,
-              ),
-              child: Text(
-                label,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  color: selected ? AppColors.chassisText : AppColors.slateMuted,
-                  fontSize: 12.5,
-                  fontWeight: selected ? FontWeight.w800 : FontWeight.w600,
-                ),
               ),
             ),
           ),
@@ -1266,15 +855,6 @@ class _LoginScreenState extends State<LoginScreen> {
               decoration: BoxDecoration(
                 color: selected ? AppColors.cardWhite : Colors.transparent,
                 borderRadius: BorderRadius.circular(9),
-                boxShadow: selected
-                    ? [
-                        BoxShadow(
-                          color: AppColors.chassisText.withAlpha(10),
-                          blurRadius: 4,
-                          offset: const Offset(0, 1),
-                        ),
-                      ]
-                    : null,
               ),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.center,

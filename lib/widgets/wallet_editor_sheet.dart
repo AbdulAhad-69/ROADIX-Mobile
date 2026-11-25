@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import '../src/core/utils/phone_utils.dart';
 import '../theme/app_colors.dart';
 import 'brand_logo.dart';
 
@@ -106,10 +107,11 @@ class _WalletEditorSheetState extends State<WalletEditorSheet> {
 
   Future<void> _addWallet() async {
     final num = _numberController.text.trim();
-    if (num.length < 11) {
+    final digits = PhoneUtils.normalize(num);
+    if (!PhoneUtils.isValidBangladeshPhone(digits)) {
       setState(() {
         _errorMessage =
-            'Please enter an 11-digit mobile wallet number (e.g. 017XXXXXXXX)';
+            'Please enter a valid 11-digit mobile wallet number (e.g. 017XXXXXXXX)';
       });
       return;
     }
@@ -381,17 +383,17 @@ class _WalletEditorSheetState extends State<WalletEditorSheet> {
                   ),
                   const SizedBox(width: 8),
                   SizedBox(
-                    height: 44,
+                    height: 48,
                     child: ElevatedButton(
                       onPressed: _isAdding ? null : _addWallet,
                       style: ElevatedButton.styleFrom(
                         backgroundColor: AppColors.caliperCrimson,
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                         padding: const EdgeInsets.symmetric(horizontal: 16),
                       ),
                       child: _isAdding
                           ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                          : const Text('Add', style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
+                          : const Text('Add', style: TextStyle(color: Colors.white, fontSize: 12.5, fontWeight: FontWeight.bold)),
                     ),
                   ),
                 ],

@@ -334,7 +334,7 @@ void main() {
       await E2ETestHarness.cleanUp(tester);
     });
 
-    testWidgets('T2.10.3: Commercial vehicle displays specific attributes ("Up to 3.5 Ton • Flatbed") and maps to Light Commercial',
+    testWidgets('T2.10.3: Commercial vehicle displays Pickup / Covered Van and maps to Light Commercial',
         (WidgetTester tester) async {
       await tester.pumpWidget(
         E2ETestHarness.wrapWithApp(
@@ -345,11 +345,11 @@ void main() {
       );
       await tester.pump();
 
-      expect(find.text('Up to 3.5 Ton • Flatbed'), findsOneWidget);
       expect(find.text('Pickup / Covered Van'), findsOneWidget);
 
-      // Select Commercial
+      // Select Commercial & enter plate
       await tester.tap(E2EFinders.commercialCard);
+      await tester.enterText(E2EFinders.licensePlateField, 'Dhaka Metro TA-11-2034');
       await tester.pump();
 
       // Proceed to FaultDetailsScreen
@@ -363,7 +363,7 @@ void main() {
       await E2ETestHarness.cleanUp(tester);
     });
 
-    testWidgets('T2.10.4: Empty or pure whitespace license plate falls back to default plate and allows proceeding',
+    testWidgets('T2.10.4: Empty or pure whitespace license plate blocks proceeding and prompts user',
         (WidgetTester tester) async {
       await tester.pumpWidget(
         E2ETestHarness.wrapWithApp(
@@ -374,7 +374,7 @@ void main() {
       );
       await tester.pump();
 
-      // Clear text field to empty string
+      // Clear text field to whitespace only
       await tester.enterText(find.byType(TextField), '    ');
       await tester.pump();
 
@@ -383,9 +383,12 @@ void main() {
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 200));
 
-      // Proceeds with default fallback plate without blocking
-      expect(find.byType(FaultDetailsScreen), findsOneWidget);
-      expect(find.textContaining('Dhaka Metro GA-11-2034'), findsWidgets);
+      // Validation blocks advancing and prompts for license plate
+      expect(find.byType(FaultDetailsScreen), findsNothing);
+      expect(
+        find.text('Enter your vehicle license or registration plate to continue.'),
+        findsOneWidget,
+      );
 
       await E2ETestHarness.cleanUp(tester);
     });
@@ -524,10 +527,9 @@ void main() {
       await tester.pump();
 
       expect(
-        find.textContaining('HIGH ROADWAY HAZARD: Priority dispatch queue activated'),
+        find.textContaining('Priority hazard dispatch activated'),
         findsOneWidget,
       );
-      expect(find.text('URGENT'), findsOneWidget);
 
       await E2ETestHarness.cleanUp(tester);
     });
@@ -628,18 +630,18 @@ void main() {
       );
       await tester.pump();
 
-      final phoneInput = find.byType(TextField).first;
-      await tester.enterText(phoneInput, '12345');
+      final emailInput = find.byType(TextField).first;
+      await tester.enterText(emailInput, 'not-an-email');
       await tester.pump();
 
-      // Tap Send Verification Code button
-      final sendCodeButton = find.widgetWithText(ElevatedButton, 'SEND VERIFICATION CODE');
-      expect(sendCodeButton, findsOneWidget);
-      await tester.tap(sendCodeButton);
+      // Tap Sign In button
+      final signInBtn = find.byType(ElevatedButton).first;
+      expect(signInBtn, findsOneWidget);
+      await tester.tap(signInBtn);
       await tester.pump();
 
       expect(
-        find.textContaining('Enter a valid 11-digit Bangladesh phone'),
+        find.text('Please enter a valid email address.'),
         findsWidgets,
       );
 
@@ -664,10 +666,6 @@ void main() {
         );
         await tester.pump();
 
-        // Switch to Email tab
-        await tester.tap(E2EFinders.emailAuthTab);
-        await tester.pump();
-
         // Switch to Sign Up mode
         await tester.tap(find.textContaining('Sign Up'));
         await tester.pump();
@@ -687,7 +685,7 @@ void main() {
       }
     });
 
-    testWidgets('T2.12.3: Switching rapidly between Mobile OTP and Email Account tabs preserves form stability without exceptions',
+    testWidgets('T2.12.3: Switching rapidly between Sign In and Sign Up role toggles preserves form stability without exceptions',
         (WidgetTester tester) async {
       await tester.pumpWidget(
         E2ETestHarness.wrapWithApp(
@@ -698,10 +696,13 @@ void main() {
       );
       await tester.pump();
 
+      await tester.tap(find.textContaining('Sign Up'));
+      await tester.pump();
+
       for (int i = 0; i < 4; i++) {
-        await tester.tap(E2EFinders.emailAuthTab);
+        await tester.tap(E2EFinders.mechanicRoleTab);
         await tester.pump();
-        await tester.tap(E2EFinders.phoneAuthTab);
+        await tester.tap(E2EFinders.motoristRoleTab);
         await tester.pump();
       }
 
@@ -785,12 +786,8 @@ void main() {
       );
       await tester.pump();
 
-      // Switch to Email tab
-      await tester.tap(E2EFinders.emailAuthTab);
-      await tester.pump();
-
       // Tap Sign In button with empty fields
-      final signInBtn = find.widgetWithText(ElevatedButton, 'SIGN IN');
+      final signInBtn = find.byType(ElevatedButton).first;
       expect(signInBtn, findsOneWidget);
       await tester.tap(signInBtn);
       await tester.pump();
@@ -820,7 +817,7 @@ void main() {
       await tester.pump(const Duration(milliseconds: 100));
 
       expect(find.byType(CircleAvatar), findsWidgets);
-      expect(find.byIcon(Icons.person), findsWidgets);
+      expect(find.text('M'), findsOneWidget);
 
       await E2ETestHarness.cleanUp(tester);
     });
@@ -931,7 +928,7 @@ void main() {
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 100));
 
-      expect(find.text('UNVERIFIED MOTORIST'), findsOneWidget);
+      expect(find.text('Unverified Motorist'), findsOneWidget);
 
       await E2ETestHarness.cleanUp(tester);
     });

@@ -23,7 +23,13 @@ class _ContactEditorSheetState extends State<ContactEditorSheet> {
   late TextEditingController _phoneController;
   late String _selectedRelation;
 
-  final List<String> _relations = ['Primary', 'Family', 'Spouse', 'Roadside Buddy'];
+  final List<String> _relations = [
+    'Primary',
+    'Family',
+    'Spouse',
+    'Brother',
+    'Roadside Buddy',
+  ];
 
   bool get _isEditing => widget.initialContact != null;
 
@@ -32,7 +38,16 @@ class _ContactEditorSheetState extends State<ContactEditorSheet> {
     super.initState();
     _nameController = TextEditingController(text: widget.initialContact?['name'] ?? '');
     _phoneController = TextEditingController(text: widget.initialContact?['phone'] ?? '');
-    _selectedRelation = widget.initialContact?['relation'] ?? 'Family';
+    final initialRelation = widget.initialContact?['relation']?.trim();
+    if (initialRelation != null &&
+        initialRelation.isNotEmpty &&
+        !_relations.contains(initialRelation)) {
+      _relations.add(initialRelation);
+    }
+    _selectedRelation =
+        (initialRelation != null && initialRelation.isNotEmpty)
+            ? initialRelation
+            : 'Family';
   }
 
   @override
@@ -123,23 +138,40 @@ class _ContactEditorSheetState extends State<ContactEditorSheet> {
                   ),
                   if (_isEditing && widget.onDelete != null)
                     IconButton(
+                      tooltip: 'Delete contact',
                       icon: const Icon(Icons.delete_outline, color: AppColors.caliperCrimson, size: 22),
-                      onPressed: () {
-                        widget.onDelete!();
-                        Navigator.pop(context);
-                      },
+                      onPressed: _isSubmitting
+                          ? null
+                          : () async {
+                              final messenger = ScaffoldMessenger.of(context);
+                              final nav = Navigator.of(context);
+                              setState(() => _isSubmitting = true);
+                              try {
+                                await widget.onDelete!();
+                                if (mounted) nav.pop();
+                              } catch (e) {
+                                if (mounted) {
+                                  setState(() => _isSubmitting = false);
+                                  messenger.showSnackBar(
+                                    SnackBar(
+                                      content: Text('Could not remove contact: $e'),
+                                      backgroundColor: AppColors.caliperCrimson,
+                                    ),
+                                  );
+                                }
+                              }
+                            },
                     ),
                 ],
               ),
               const SizedBox(height: 16),
 
               const Text(
-                'CONTACT NAME',
+                'Contact Name',
                 style: TextStyle(
-                  color: AppColors.slateMuted,
-                  fontSize: 9.5,
-                  fontWeight: FontWeight.w800,
-                  letterSpacing: 0.8,
+                  color: AppColors.chassisText,
+                  fontSize: 12.5,
+                  fontWeight: FontWeight.w700,
                 ),
               ),
               const SizedBox(height: 6),

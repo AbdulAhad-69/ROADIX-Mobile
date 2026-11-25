@@ -158,15 +158,18 @@ void main() {
       );
       await tester.pump();
 
-      expect(find.text('Edit Motorist Details'), findsOneWidget);
+      expect(find.text('Edit Profile Details'), findsOneWidget);
       expect(find.text('Aisha Rahman'), findsOneWidget);
       expect(find.text('+8801711223344'), findsOneWidget);
-      expect(find.text('CHOOSE AVATAR PRESET'), findsOneWidget);
-      expect(find.text('OR AVATAR IMAGE URL'), findsOneWidget);
+      expect(find.text('CHOOSE AVATAR PRESET'), findsNothing);
+      expect(find.text('OR AVATAR IMAGE URL'), findsNothing);
+      expect(find.text('Gallery'), findsOneWidget);
+      expect(find.text('Camera'), findsOneWidget);
 
-      // Verify preset tapping
-      final presetGesture = find.byType(InkWell).at(2); // First preset
-      await tester.tap(presetGesture);
+      await tester.enterText(
+        find.byKey(const Key('edit_profile_name_field')),
+        'Aisha Rahman Updated',
+      );
       await tester.pump();
 
       // Scroll and tap Save Changes
@@ -174,13 +177,12 @@ void main() {
       await tester.tap(find.text('SAVE CHANGES'));
       await tester.pump();
 
-      expect(savedName, 'Aisha Rahman');
+      expect(savedName, 'Aisha Rahman Updated');
       expect(savedPhone, '+8801711223344');
-      expect(savedAvatar, isNotNull);
-      expect(EditProfileSheet.avatarPresets.contains(savedAvatar), isTrue);
+      expect(savedAvatar, isNull);
     });
 
-    testWidgets('EditProfileSheet supports entering custom image URL', (tester) async {
+    testWidgets('EditProfileSheet Remove Photo clears current avatarUrl on save', (tester) async {
       tester.view.physicalSize = const Size(412, 915);
       tester.view.devicePixelRatio = 1.0;
       addTearDown(() {
@@ -188,7 +190,7 @@ void main() {
         tester.view.resetDevicePixelRatio();
       });
 
-      String? savedAvatar;
+      String? savedAvatar = 'https://res.cloudinary.com/demo/image/upload/v1/old.jpg';
 
       await tester.pumpWidget(
         MaterialApp(
@@ -196,6 +198,7 @@ void main() {
             body: EditProfileSheet(
               currentName: 'Tanvir Ahmed',
               currentPhone: '+8801711000001',
+              currentAvatarUrl: savedAvatar,
               onSave: (name, phone, avatar) {
                 savedAvatar = avatar;
               },
@@ -205,18 +208,14 @@ void main() {
       );
       await tester.pump();
 
-      const customUrl = 'https://cloudinary.com/roadix/avatar123.jpg';
-      await tester.enterText(
-        find.widgetWithText(TextField, 'https://example.com/avatar.jpg'),
-        customUrl,
-      );
+      await tester.tap(find.byKey(const Key('remove_avatar_btn')));
       await tester.pump();
 
       await tester.ensureVisible(find.text('SAVE CHANGES'));
       await tester.tap(find.text('SAVE CHANGES'));
       await tester.pump();
 
-      expect(savedAvatar, customUrl);
+      expect(savedAvatar, isNull);
     });
 
     testWidgets('EditProfileSheet is backwards compatible with onProfileSaved callback', (tester) async {
@@ -420,8 +419,8 @@ void main() {
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 300));
 
-      expect(find.text('LOCATION PICKER'), findsOneWidget);
-      expect(find.text('CUSTOM POSITION'), findsOneWidget);
+      expect(find.text('Location Picker'), findsOneWidget);
+      expect(find.text('Drag map pin'), findsOneWidget);
       expect(find.text('CONFIRM LOCATION'), findsOneWidget);
       expect(find.byIcon(Icons.check), findsOneWidget);
 
@@ -461,8 +460,8 @@ void main() {
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 300));
 
-      expect(find.text('STEP 1 OF 4'), findsOneWidget);
-      expect(find.text('LOCATION TRIAGE'), findsOneWidget);
+      expect(find.text('Step 1 of 4'), findsOneWidget);
+      expect(find.text('Location'), findsOneWidget);
       expect(find.byIcon(Icons.arrow_forward), findsOneWidget);
 
       await tester.tap(find.text('CONFIRM LOCATION'));
@@ -498,7 +497,7 @@ void main() {
       await tester.pump(const Duration(milliseconds: 300));
 
       // Confirms LocationConfirmScreen opened in selection-only mode
-      expect(find.text('LOCATION PICKER'), findsOneWidget);
+      expect(find.text('Location Picker'), findsOneWidget);
       expect(find.byIcon(Icons.check), findsOneWidget);
 
       // Confirming location returns to EmergencyHomeScreen

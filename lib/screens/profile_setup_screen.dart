@@ -57,7 +57,16 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
             type: _selectedVehicleType,
             fuel: _selectedFuelType,
           );
-        } catch (_) {}
+        } catch (e) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('Profile saved, but vehicle could not be saved: $e'),
+                backgroundColor: AppColors.crimsonHover,
+              ),
+            );
+          }
+        }
       }
 
       if (mounted) {
@@ -90,16 +99,16 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Bypass Option
+              // Skip option
               Align(
                 alignment: Alignment.centerRight,
                 child: TextButton(
                   onPressed: _finishSetup,
                   child: const Text(
-                    'Set Up Later ›',
+                    'Set up later',
                     style: TextStyle(
                       color: AppColors.slateMuted,
-                      fontSize: 12,
+                      fontSize: 13,
                       fontWeight: FontWeight.w700,
                     ),
                   ),
@@ -120,19 +129,18 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
               const SizedBox(height: 4),
               const Text(
                 'Add your vehicle details for rapid roadside technician triage.',
-                style: TextStyle(color: AppColors.slateMuted, fontSize: 12),
+                style: TextStyle(color: AppColors.slateMuted, fontSize: 12.5),
               ),
 
               const SizedBox(height: 22),
 
               // Full Name
               const Text(
-                'FULL NAME',
+                'Full Name',
                 style: TextStyle(
-                  color: AppColors.slateMuted,
-                  fontSize: 10,
-                  fontWeight: FontWeight.w800,
-                  letterSpacing: 0.8,
+                  color: AppColors.chassisText,
+                  fontSize: 12.5,
+                  fontWeight: FontWeight.w700,
                 ),
               ),
               const SizedBox(height: 6),

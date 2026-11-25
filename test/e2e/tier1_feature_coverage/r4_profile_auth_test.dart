@@ -40,7 +40,7 @@ void main() {
 
       expect(find.byType(ProfileScreen), findsOneWidget);
       expect(find.byType(CircleAvatar), findsWidgets);
-      expect(find.byIcon(Icons.person), findsWidgets);
+      expect(find.text('M'), findsOneWidget);
 
       await E2ETestHarness.cleanUp(tester);
     });
@@ -194,7 +194,7 @@ void main() {
       );
       await tester.pump();
 
-      expect(find.text('DEMO ONE-TAP ACCESS'), findsOneWidget);
+      expect(find.text('Preview:'), findsOneWidget);
 
       await tester.tap(E2EFinders.motoristDemoButton);
       await tester.pump();
@@ -295,14 +295,14 @@ void main() {
       );
       await tester.pump();
 
-      final guestSosPill = find.text('Continue as Guest • Instant Triage');
+      final guestSosPill = E2EFinders.guestSosButton;
       expect(guestSosPill, findsOneWidget);
 
       await tester.tap(guestSosPill);
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 100));
 
-      expect(find.text('GUEST SOS DISPATCH'), findsOneWidget);
+      expect(find.text('Guest SOS'), findsWidgets);
 
       await E2ETestHarness.cleanUp(tester);
     });
@@ -380,8 +380,9 @@ void main() {
       );
       await tester.pump();
 
-      // Tap SUV / Micro
+      // Tap SUV / Micro and provide license plate (validation rejects empty plate)
       await tester.tap(E2EFinders.suvCard);
+      await tester.enterText(E2EFinders.licensePlateField, 'Dhaka Metro GA-11-2034');
       await tester.pump();
 
       expect(E2EFinders.continueToFaultButton, findsOneWidget);
@@ -472,7 +473,9 @@ void main() {
       );
       await tester.pump();
 
-      // Advance to FaultDetailsScreen
+      // Enter plate and advance to FaultDetailsScreen
+      await tester.enterText(E2EFinders.licensePlateField, 'Dhaka Metro GA-11-2034');
+      await tester.pump();
       await tester.tap(E2EFinders.continueToFaultButton);
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 400));

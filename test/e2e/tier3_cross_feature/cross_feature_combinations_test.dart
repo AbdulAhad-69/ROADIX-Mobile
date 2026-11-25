@@ -9,6 +9,7 @@ import 'package:roadix_mobile/screens/mechanic_home_screen.dart';
 import 'package:roadix_mobile/screens/profile_screen.dart';
 import 'package:roadix_mobile/screens/sos_screen.dart';
 import 'package:roadix_mobile/screens/vehicle_select_screen.dart';
+import 'package:roadix_mobile/services/demo_session.dart';
 import 'package:roadix_mobile/services/supabase_service.dart';
 import 'package:roadix_mobile/widgets/brand_logo.dart';
 import 'package:roadix_mobile/widgets/edit_profile_sheet.dart';
@@ -51,8 +52,8 @@ void main() {
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 100));
 
-      // Initial detected location banner shows Uttara / Dhaka
-      expect(find.text('DETECTED LOCATION'), findsOneWidget);
+      // Initial detected location banner shows Uttara / Dhaka & GPS Locked
+      expect(find.textContaining('GPS Locked'), findsOneWidget);
       expect(find.textContaining('Uttara'), findsWidgets);
 
       // Now GPS updates to Gulshan, Dhaka
@@ -154,7 +155,7 @@ void main() {
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 100));
 
-      expect(find.text('± 12m accuracy'), findsOneWidget);
+      expect(find.textContaining('± 12m'), findsOneWidget);
       expect(find.textContaining('23.8759° N, 90.3795° E'), findsOneWidget);
 
       // GPS position updates with high accuracy
@@ -166,7 +167,7 @@ void main() {
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 200));
 
-      expect(find.text('± 4m accuracy'), findsOneWidget);
+      expect(find.textContaining('± 4m'), findsOneWidget);
       expect(find.textContaining('22.3569° N, 91.8215° E'), findsOneWidget);
 
       // Advance wizard to Step 2
@@ -218,7 +219,9 @@ void main() {
 
       expect(find.byType(VehicleSelectScreen), findsOneWidget);
 
-      // Continue to Fault Details
+      // Enter license plate & Continue to Fault Details
+      await tester.enterText(E2EFinders.licensePlateField, 'Chittagong Metro GA-12-3456');
+      await tester.pump();
       await tester.tap(E2EFinders.continueToFaultButton);
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 200));
@@ -283,7 +286,9 @@ void main() {
       expect(vScreen.breakdownLat, closeTo(sylhetLat, 0.0001));
       expect(vScreen.breakdownLng, closeTo(sylhetLng, 0.0001));
 
-      // Step 3: Advance to FaultDetailsScreen
+      // Step 3: Enter plate & Advance to FaultDetailsScreen
+      await tester.enterText(E2EFinders.licensePlateField, 'Sylhet Metro GA-11-2233');
+      await tester.pump();
       await tester.tap(E2EFinders.continueToFaultButton);
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 200));
@@ -345,6 +350,8 @@ void main() {
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 200));
 
+      await tester.enterText(E2EFinders.licensePlateField, 'Dhaka Metro GA-11-2034');
+      await tester.pump();
       await tester.tap(E2EFinders.continueToFaultButton);
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 200));
@@ -370,6 +377,9 @@ void main() {
     testWidgets(
         'T3.4: R1.2 + R2.1: Live dispatch tracking displays payment brand logo (e.g., bKash) on incoming mechanic quote',
         (WidgetTester tester) async {
+      DemoSession.startDemo(demoRole: 'motorist');
+      addTearDown(DemoSession.clear);
+
       final originalOnError = FlutterError.onError;
       FlutterError.onError = (FlutterErrorDetails details) {
         if (details.exceptionAsString().contains('overflowed by')) {
@@ -429,7 +439,7 @@ void main() {
 
       // Verify payment brand logo for bKash is displayed on invoice / settlement quote
       expect(E2EFinders.brandLogo('bkash'), findsWidgets);
-      expect(find.text('bKash MFS'), findsOneWidget);
+      expect(find.textContaining('bKash'), findsWidgets);
 
       await E2ETestHarness.cleanUp(tester);
     });
@@ -437,6 +447,9 @@ void main() {
     testWidgets(
         'T3.5: R1.2 + R3.3: DispatchScreen reflects selected vehicle classification (Motorcycle, Sedan, SUV, Commercial) in tracking header',
         (WidgetTester tester) async {
+      DemoSession.startDemo(demoRole: 'motorist');
+      addTearDown(DemoSession.clear);
+
       // 1. Verify Commercial vehicle tracking
       await tester.pumpWidget(
         E2ETestHarness.wrapWithApp(
@@ -456,7 +469,7 @@ void main() {
 
       expect(
         find.textContaining('Commercial • Dhaka Commercial TA-99-4411'),
-        findsOneWidget,
+        findsWidgets,
       );
 
       // 2. Verify Motorcycle vehicle tracking
@@ -507,9 +520,8 @@ void main() {
       await tester.tap(liveLaneSwitch);
       await tester.pump();
 
-      expect(find.text('URGENT'), findsOneWidget);
       expect(
-        find.textContaining('HIGH ROADWAY HAZARD: Priority dispatch queue activated'),
+        find.textContaining('Priority hazard dispatch activated'),
         findsOneWidget,
       );
 
@@ -542,8 +554,9 @@ void main() {
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 100));
 
-      // Tap Motorcycle card
+      // Tap Motorcycle card & enter plate
       await tester.tap(E2EFinders.motorcycleCard);
+      await tester.enterText(E2EFinders.licensePlateField, 'Dhaka Metro HA-12-3456');
       await tester.pump();
 
       // Continue to fault details
@@ -573,6 +586,9 @@ void main() {
     testWidgets(
         'T3.16: R3.3 + R4.3: Selecting "Commercial" passes commercial vehicle weight and plate into downstream dispatch',
         (WidgetTester tester) async {
+      DemoSession.startDemo(demoRole: 'motorist');
+      addTearDown(DemoSession.clear);
+
       await tester.pumpWidget(
         E2ETestHarness.wrapWithApp(
           const VehicleSelectScreen(selectedFault: 'Towing'),
@@ -587,11 +603,10 @@ void main() {
       await tester.tap(E2EFinders.commercialCard);
       await tester.pump();
 
-      expect(find.text('Up to 3.5 Ton • Flatbed'), findsWidgets);
+      expect(find.text('Pickup / Covered Van'), findsWidgets);
 
       // Enter custom commercial registration plate
-      final plateField = find.widgetWithText(TextField, 'Dhaka Metro GA-11-2034');
-      await tester.enterText(plateField, 'Dhaka Metro TA-77-5500');
+      await tester.enterText(E2EFinders.licensePlateField, 'Dhaka Metro TA-77-5500');
       await tester.pump();
 
       // Continue to Fault Details
@@ -600,10 +615,8 @@ void main() {
       await tester.pump(const Duration(milliseconds: 200));
 
       expect(find.byType(FaultDetailsScreen), findsOneWidget);
-      expect(
-        find.text('Light Commercial • Dhaka Metro TA-77-5500'),
-        findsOneWidget,
-      );
+      expect(find.textContaining('Light Commercial'), findsWidgets);
+      expect(find.textContaining('Dhaka Metro TA-77-5500'), findsWidgets);
 
       // Find nearby mechanics -> DispatchScreen
       await tester.tap(E2EFinders.requestMechanicButton);
@@ -662,6 +675,7 @@ void main() {
       // Step 2: VehicleSelectScreen
       expect(find.byType(VehicleSelectScreen), findsOneWidget);
       await tester.tap(E2EFinders.suvCard);
+      await tester.enterText(E2EFinders.licensePlateField, 'Dhaka Metro GA-11-2034');
       await tester.pump();
       await tester.tap(E2EFinders.continueToFaultButton);
       await tester.pump();
@@ -742,6 +756,9 @@ void main() {
     testWidgets(
         'T3.11: R2.1 + R3.6: Brand logos render correctly in Digital Garage / Payment Wallets section of ProfileScreen',
         (WidgetTester tester) async {
+      DemoSession.startDemo(demoRole: 'motorist');
+      addTearDown(DemoSession.clear);
+
       await tester.pumpWidget(
         E2ETestHarness.wrapWithApp(
           const ProfileScreen(showBackButton: false),
@@ -753,7 +770,7 @@ void main() {
       await tester.pump(const Duration(milliseconds: 200));
 
       expect(find.byType(ProfileScreen), findsOneWidget);
-      expect(find.text('PAYMENT & MFS WALLETS'), findsOneWidget);
+      expect(find.text('Payment Wallets'), findsOneWidget);
 
       // Primary wallet has authentic BrandLogo
       expect(E2EFinders.brandLogo('bKash'), findsWidgets);
@@ -764,6 +781,9 @@ void main() {
     testWidgets(
         'T3.12: R2.2 + R3.6: Scaled brand logos fit neatly within wallet list tiles without vertical overflow',
         (WidgetTester tester) async {
+      DemoSession.startDemo(demoRole: 'motorist');
+      addTearDown(DemoSession.clear);
+
       // Test on a narrow, compact 320x600 viewport
       await tester.pumpWidget(
         E2ETestHarness.wrapWithApp(
@@ -978,19 +998,12 @@ void main() {
 
       expect(find.byType(EditProfileSheet), findsOneWidget);
 
-      // Select first avatar preset
-      final presetUrl = EditProfileSheet.avatarPresets.first;
-      final presetFinder = find.byWidgetPredicate(
-        (widget) =>
-            widget is CircleAvatar &&
-            widget.backgroundImage is NetworkImage &&
-            (widget.backgroundImage as NetworkImage).url == presetUrl,
+      // Edit profile name cleanly without Unsplash preset clutter
+      expect(find.text('CHOOSE AVATAR PRESET'), findsNothing);
+      await tester.enterText(
+        find.byKey(const Key('edit_profile_name_field')),
+        'Tanvir Chowdhury Updated',
       );
-      if (presetFinder.evaluate().isNotEmpty) {
-        await tester.tap(presetFinder.first);
-      } else {
-        await tester.tap(find.byIcon(Icons.person_outline).first);
-      }
       await tester.pump();
 
       // Tap SAVE CHANGES

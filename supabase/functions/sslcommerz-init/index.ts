@@ -56,8 +56,8 @@ Deno.serve(async (req: Request) => {
     if (srErr || !sr || sr.motorist_id !== user.id) {
       return Response.json({ error: "Service request not found or forbidden." }, { status: 403, headers: corsHeaders });
     }
-    if (sr.status !== "servicing") {
-      return Response.json({ error: "Request must be in servicing state for payment." }, { status: 409, headers: corsHeaders });
+    if (sr.status !== "servicing" && sr.status !== "completed") {
+      return Response.json({ error: "Request must be in servicing or completed state for payment." }, { status: 409, headers: corsHeaders });
     }
 
     const quoteQuery = adminClient

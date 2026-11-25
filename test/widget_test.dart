@@ -11,7 +11,7 @@ void main() {
         AppRoutes.root,
         AppRoutes.splash,
         AppRoutes.login,
-        AppRoutes.otp,
+        AppRoutes.paymentCallback,
         AppRoutes.profileSetup,
         AppRoutes.home,
         AppRoutes.locationPermission,

@@ -20,6 +20,16 @@ class RoadixApp extends ConsumerWidget {
         useMaterial3: true,
         fontFamily: 'sans-serif',
         scaffoldBackgroundColor: AppColors.porcelainBg,
+        textSelectionTheme: TextSelectionThemeData(
+          cursorColor: AppColors.caliperCrimson,
+          selectionColor: AppColors.crimsonLight,
+          selectionHandleColor: AppColors.caliperCrimson,
+        ),
+        scrollbarTheme: ScrollbarThemeData(
+          thumbColor: WidgetStateProperty.all(AppColors.slateBorder),
+          radius: const Radius.circular(8),
+          thickness: WidgetStateProperty.all(4),
+        ),
         colorScheme: ColorScheme(
           brightness: Brightness.light,
           primary: AppColors.caliperCrimson,

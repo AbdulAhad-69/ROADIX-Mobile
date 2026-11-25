@@ -101,7 +101,7 @@ class _LocationPermissionScreenState extends State<LocationPermissionScreen> {
               selectedFault: widget.selectedFault,
               initialLat: 23.8759,
               initialLng: 90.3795,
-              accuracyMeters: 8,
+              accuracyMeters: null,
             ),
           ),
         );
@@ -396,7 +396,6 @@ class _LocationPermissionScreenState extends State<LocationPermissionScreen> {
                         style: ElevatedButton.styleFrom(
                           backgroundColor: AppColors.caliperCrimson,
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                          elevation: 4,
                         ),
                       ),
                     ),

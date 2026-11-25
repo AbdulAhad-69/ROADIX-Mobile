@@ -1,18 +1,20 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:geolocator/geolocator.dart';
-import 'package:maplibre_gl/maplibre_gl.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../services/demo_session.dart';
 import '../services/geocoding_service.dart';
 import '../services/supabase_service.dart';
 import '../src/core/config/app_config.dart';
+import '../src/core/models/geo_point.dart';
 import '../src/core/router/app_router.dart';
 import '../src/core/utils/geometry_utils.dart';
 import '../src/core/utils/phone_utils.dart';
 import '../theme/app_colors.dart';
+import '../widgets/roadix_map_view.dart';
 import 'emergency_home_screen.dart';
 import 'login_screen.dart';
 
@@ -72,6 +74,30 @@ class _MechanicHomeScreenState extends State<MechanicHomeScreen> {
   Future<void> _initMechanicState() async {
     setState(() => _isLoading = true);
     try {
+      if (!DemoSession.isActive && !_db.isAuthenticated) {
+        _profileId = 'offline-technician-preview';
+        if (mounted) {
+          setState(() {
+            _mechanicProfile = {
+              'profile_id': _profileId,
+              'workshop_name': 'ROADIX Partner Workshop',
+              'workshop_address': 'Dhaka',
+              'is_verified': false,
+              'is_on_duty': false,
+              'rating': 5.0,
+              'total_rescues': 0,
+              'vehicle_specializations': ['Passenger Car', 'Motorcycle'],
+              'specializations': ['General Automotive Breakdown'],
+            };
+            _isVerified = false;
+            _isOnDuty = false;
+            _vehicleSpecializations = ['Passenger Car', 'Motorcycle'];
+            _isLoading = false;
+          });
+        }
+        return;
+      }
+
       _profileId = _db.currentProfileId;
       if (_profileId.isEmpty) {
         _profileId = 'demo-technician-workshop';
@@ -205,14 +231,18 @@ class _MechanicHomeScreenState extends State<MechanicHomeScreen> {
     if (value && !_isVerified) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: const Text('Verification pending. An administrator must approve your workshop in Web Admin before you can go on duty.'),
+          content: const Text(
+            'Verification pending. An administrator must approve your workshop before going on duty.',
+          ),
           backgroundColor: AppColors.caliperCrimson,
           duration: const Duration(seconds: 5),
-          action: SnackBarAction(
-            label: 'SIMULATE',
-            textColor: Colors.white,
-            onPressed: _simulateAdminVerification,
-          ),
+          action: (!AppConfig.isProduction && kDebugMode && DemoSession.isActive)
+              ? SnackBarAction(
+                  label: 'SIMULATE',
+                  textColor: Colors.white,
+                  onPressed: _simulateAdminVerification,
+                )
+              : null,
         ),
       );
       return;
@@ -230,13 +260,13 @@ class _MechanicHomeScreenState extends State<MechanicHomeScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(value ? 'You are now ON DUTY (Receiving Dispatches)' : 'You are now OFF DUTY'),
-          backgroundColor: value ? AppColors.emeraldGps : AppColors.slateMuted,
+          backgroundColor: value ? AppColors.emeraldDark : AppColors.slateMuted,
           duration: const Duration(seconds: 2),
         ),
       );
     } catch (e) {
       if (!mounted) return;
-      if (_profileId.isEmpty || _profileId == 'demo-technician-workshop') {
+      if (DemoSession.isActive && !_db.isAuthenticated) {
         if (value) {
           _startTelemetryStream();
         } else {
@@ -245,7 +275,7 @@ class _MechanicHomeScreenState extends State<MechanicHomeScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(value ? 'You are now ON DUTY (Demo Mode)' : 'You are now OFF DUTY (Demo Mode)'),
-            backgroundColor: value ? AppColors.emeraldGps : AppColors.slateMuted,
+            backgroundColor: value ? AppColors.emeraldDark : AppColors.slateMuted,
             duration: const Duration(seconds: 2),
           ),
         );
@@ -294,28 +324,25 @@ class _MechanicHomeScreenState extends State<MechanicHomeScreen> {
 
       pos ??= await _tryGetLastKnownPosition();
 
-      double pushLat;
-      double pushLng;
+      double? pushLat;
+      double? pushLng;
       if (pos != null) {
         pushLat = pos.latitude;
         pushLng = pos.longitude;
         _lastKnownMechanicLat = pushLat;
         _lastKnownMechanicLng = pushLng;
       } else if (_lastKnownMechanicLat != null && _lastKnownMechanicLng != null) {
-        // Retain verified mechanic coordinates rather than forcing Dhaka
-        pushLat = _lastKnownMechanicLat!;
-        pushLng = _lastKnownMechanicLng!;
-      } else {
-        // Default fallback only if coordinates were never recorded
-        pushLat = 23.8103;
-        pushLng = 90.4125;
+        pushLat = _lastKnownMechanicLat;
+        pushLng = _lastKnownMechanicLng;
+      }
+
+      if (pushLat == null || pushLng == null) {
+        return;
       }
 
       try {
         await _db.updateMechanicLocation(lat: pushLat, lng: pushLng);
-      } catch (_) {
-        // Gracefully absorb offline or demo mode RPC failures
-      }
+      } catch (_) {}
     } finally {
       _isPushingLocation = false;
     }
@@ -529,47 +556,15 @@ class _MechanicHomeScreenState extends State<MechanicHomeScreen> {
             }
           },
         ),
-        title: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              'TECHNICIAN CONSOLE',
-              style: TextStyle(
-                color: AppColors.caliperCrimson,
-                fontSize: 10,
-                fontWeight: FontWeight.w900,
-                letterSpacing: 1.2,
-              ),
-            ),
-            Text(
-              workshopName,
-              style: const TextStyle(
-                color: AppColors.chassisText,
-                fontSize: 15,
-                fontWeight: FontWeight.w800,
-              ),
-            ),
-          ],
+        title: Text(
+          workshopName,
+          style: const TextStyle(
+            color: AppColors.chassisText,
+            fontSize: 16,
+            fontWeight: FontWeight.w800,
+          ),
         ),
         actions: [
-          if (DemoSession.isActive ||
-              (!AppConfig.isProduction && kDebugMode && !_db.isAuthenticated))
-            TextButton.icon(
-              onPressed: () {
-                Navigator.of(context).pushReplacement(
-                  MaterialPageRoute(builder: (_) => const EmergencyHomeScreen()),
-                );
-              },
-              icon: const Icon(Icons.swap_horiz, size: 16, color: AppColors.slateMuted),
-              label: const Text(
-                'Motorist',
-                style: TextStyle(
-                  color: AppColors.slateMuted,
-                  fontSize: 11,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-            ),
           IconButton(
             icon: const Icon(Icons.logout, color: AppColors.crimsonHover, size: 20),
             tooltip: 'Sign Out',
@@ -745,7 +740,7 @@ class _MechanicHomeScreenState extends State<MechanicHomeScreen> {
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceAround,
                     children: [
-                      Expanded(child: _buildMetricCol('Rating', '${rating.toStringAsFixed(1)} ★')),
+                      Expanded(child: _buildMetricCol('Rating', '${rating.toStringAsFixed(1)} avg')),
                       Expanded(child: _buildMetricCol('Completed', '$totalRescues Rescues')),
                       Expanded(child: _buildMetricCol('Status', _isOnDuty ? 'Available' : 'Paused')),
                     ],
@@ -1081,66 +1076,49 @@ class _MechanicHomeScreenState extends State<MechanicHomeScreen> {
                 children: [
                   const SizedBox(height: 12),
                   Container(
-                    height: 160,
+                    height: 170,
                     decoration: BoxDecoration(
                       borderRadius: BorderRadius.circular(12),
                       border: Border.all(color: AppColors.slateBorder),
                     ),
                     clipBehavior: Clip.antiAlias,
-                    child: MapLibreMap(
-                      styleString: AppConfig.mapStyleUrl,
-                      compassEnabled: true,
-                      initialCameraPosition: CameraPosition(
-                        target: LatLng(destLat, destLng),
-                        zoom: 14.5,
-                      ),
-                      onStyleLoadedCallback: () {},
-                      onMapCreated: (ctrl) async {
-                        try {
-                          await ctrl.addCircle(
-                            CircleOptions(
-                              geometry: LatLng(destLat, destLng),
-                              circleRadius: 8,
-                              circleColor: '#DC2626',
-                              circleStrokeWidth: 3,
-                              circleStrokeColor: '#FFFFFF',
-                            ),
-                          );
-                          if (_lastKnownMechanicLat != null &&
-                              _lastKnownMechanicLng != null) {
-                            await ctrl.addCircle(
-                              CircleOptions(
-                                geometry: LatLng(
-                                  _lastKnownMechanicLat!,
-                                  _lastKnownMechanicLng!,
-                                ),
-                                circleRadius: 7,
-                                circleColor: '#047857',
-                                circleStrokeWidth: 2.5,
-                                circleStrokeColor: '#FFFFFF',
-                              ),
-                            );
-                            final route = await GeocodingService.fetchDrivingRoute(
+                    child: FutureBuilder<RoadixRouteResult?>(
+                      future: (_lastKnownMechanicLat != null &&
+                              _lastKnownMechanicLng != null)
+                          ? GeocodingService.fetchDrivingRoute(
                               fromLat: _lastKnownMechanicLat!,
                               fromLng: _lastKnownMechanicLng!,
                               toLat: destLat,
                               toLng: destLng,
-                            );
-                            await ctrl.addLine(
-                              LineOptions(
-                                geometry: route.points,
-                                lineColor: '#B91C1C',
-                                lineWidth: 4.0,
-                              ),
-                            );
-                          }
-                        } catch (_) {}
+                            )
+                          : Future.value(null),
+                      builder: (context, snapshot) {
+                        final routePoints =
+                            snapshot.data?.geoPoints ?? const <RoadixGeoPoint>[];
+                        return RoadixMapView(
+                          initialCenter: RoadixGeoPoint(destLat, destLng),
+                          initialZoom: 14.5,
+                          breakdownPoint: RoadixGeoPoint(destLat, destLng),
+                          mechanicPoint: (_lastKnownMechanicLat != null &&
+                                  _lastKnownMechanicLng != null)
+                              ? RoadixGeoPoint(
+                                  _lastKnownMechanicLat!,
+                                  _lastKnownMechanicLng!,
+                                )
+                              : null,
+                          routePoints: routePoints,
+                          gestureRecognizers: const <Factory<OneSequenceGestureRecognizer>>{
+                            Factory<OneSequenceGestureRecognizer>(
+                              EagerGestureRecognizer.new,
+                            ),
+                          },
+                        );
                       },
                     ),
                   ),
                   const SizedBox(height: 8),
                   SizedBox(
-                    height: 42,
+                    height: 44,
                     child: OutlinedButton.icon(
                       onPressed: () async {
                         final uri = GeocodingService.buildGoogleMapsDirectionsUri(
@@ -1149,7 +1127,18 @@ class _MechanicHomeScreenState extends State<MechanicHomeScreen> {
                           originLat: _lastKnownMechanicLat,
                           originLng: _lastKnownMechanicLng,
                         );
-                        await launchUrl(uri, mode: LaunchMode.externalApplication);
+                        final launched = await launchUrl(
+                          uri,
+                          mode: LaunchMode.externalApplication,
+                        );
+                        if (!launched && context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('Could not open Google Maps directions.'),
+                              backgroundColor: AppColors.crimsonHover,
+                            ),
+                          );
+                        }
                       },
                       icon: const Icon(Icons.directions, size: 17),
                       label: const Text('Navigate in Google Maps'),
@@ -1299,19 +1288,19 @@ class _MechanicHomeScreenState extends State<MechanicHomeScreen> {
       case 'servicing':
         return SizedBox(
           width: double.infinity,
-          height: 46,
+          height: 48,
           child: ElevatedButton.icon(
             onPressed: () => _advanceRescueStatus('completed'),
             icon: const Icon(Icons.check_circle, color: Colors.white, size: 18),
             label: const Text('FINISH SERVICE & COMPLETE RESCUE', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-            style: ElevatedButton.styleFrom(backgroundColor: AppColors.emeraldGps),
+            style: ElevatedButton.styleFrom(backgroundColor: AppColors.emeraldDark),
           ),
         );
       case 'completed':
         return const Center(
           child: Text(
             'Rescue Completed! Motorist will complete payment.',
-            style: TextStyle(color: AppColors.emeraldGps, fontWeight: FontWeight.bold),
+            style: TextStyle(color: AppColors.emeraldDark, fontWeight: FontWeight.bold),
           ),
         );
       default:
@@ -1493,7 +1482,14 @@ class _QuotationBuilderSheetState extends State<_QuotationBuilderSheet> {
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                 ),
                 child: _isSubmitting
-                    ? const CircularProgressIndicator(color: Colors.white)
+                    ? const SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Colors.white,
+                        ),
+                      )
                     : const Text(
                         'SEND QUOTATION TO MOTORIST',
                         style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),

@@ -1,15 +1,18 @@
 import 'dart:async';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:maplibre_gl/maplibre_gl.dart';
-import 'package:url_launcher/url_launcher.dart';
+import '../services/demo_session.dart';
 import '../services/geocoding_service.dart';
 import '../services/sslcommerz_service.dart';
 import '../services/supabase_service.dart';
 import '../src/core/config/app_config.dart';
+import '../src/core/models/geo_point.dart';
 import '../src/core/utils/geometry_utils.dart';
 import '../src/core/utils/phone_utils.dart';
 import '../theme/app_colors.dart';
 import '../widgets/brand_logo.dart';
+import '../widgets/roadix_map_view.dart';
+import 'sslcommerz_checkout_screen.dart';
 
 class DispatchScreen extends StatefulWidget {
   final String selectedFault;
@@ -21,6 +24,7 @@ class DispatchScreen extends StatefulWidget {
   final double breakdownLng;
   final String breakdownAddress;
   final String diagnosticNotes;
+  final List<String> photoUrls;
   final String? existingRequestId;
 
   const DispatchScreen({
@@ -34,6 +38,7 @@ class DispatchScreen extends StatefulWidget {
     this.breakdownLng = 90.3795,
     this.breakdownAddress = 'Dhaka Region • Roadside Position',
     this.diagnosticNotes = '',
+    this.photoUrls = const [],
     this.existingRequestId,
   });
 
@@ -68,7 +73,7 @@ class _DispatchScreenState extends State<DispatchScreen>
   static const int maxTotalDispatchTimeoutSeconds = 180;
   bool _isDemoMode = false;
   bool _isAcceptingSimulation = false;
-  List<LatLng>? _routeGeometry;
+  List<RoadixGeoPoint> _routeGeometry = const [];
   double? _routeDistanceKm;
   int? _routeDurationMins;
   double? _lastRoutedMechLat;
@@ -114,18 +119,16 @@ class _DispatchScreenState extends State<DispatchScreen>
 
   String _currentServiceStatus = 'searching';
   Map<String, dynamic>? _activeQuotation;
+  Map<String, dynamic>? _acceptedQuotation;
   bool _paymentDone = false;
   StreamSubscription? _statusSubscription;
   Timer? _assignedPollTimer;
   final List<Timer> _simulationTimers = [];
 
-  MapLibreMapController? _assignedMapController;
+  RoadixMapController? _assignedMapController;
   double? _mechanicLat;
   double? _mechanicLng;
   Timer? _mechanicTelemetryTimer;
-  Line? _routeLine;
-  Circle? _breakdownCircle;
-  Circle? _mechanicCircle;
 
   final SupabaseService _supabaseService = SupabaseService();
 
@@ -142,6 +145,14 @@ class _DispatchScreenState extends State<DispatchScreen>
       _resumeExistingRequest();
     } else {
       _createAndDispatch();
+    }
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (MediaQuery.disableAnimationsOf(context)) {
+      _sonarController.stop();
     }
   }
 
@@ -223,6 +234,7 @@ class _DispatchScreenState extends State<DispatchScreen>
         faultType: widget.selectedFault,
         symptoms: widget.symptoms,
         diagnosticNotes: widget.diagnosticNotes,
+        photoUrls: widget.photoUrls,
         isHighPriority: widget.isHighPriority,
       );
 
@@ -237,8 +249,7 @@ class _DispatchScreenState extends State<DispatchScreen>
         await _dispatchNextCandidate();
       }
     } catch (e) {
-      if (!_supabaseService.isAuthenticated ||
-          e.toString().contains('Authentication required')) {
+      if (DemoSession.isActive && !_supabaseService.isAuthenticated) {
         _startDemoRadarSimulation();
         return;
       }
@@ -688,84 +699,34 @@ class _DispatchScreenState extends State<DispatchScreen>
   }
 
   Future<void> _syncMapVisuals() async {
-    final ctrl = _assignedMapController;
-    if (ctrl == null) return;
+    if (_mechanicLat == null || _mechanicLng == null) return;
+    final mechPos = RoadixGeoPoint(_mechanicLat!, _mechanicLng!);
 
+    final shouldFetchRoute = _routeGeometry.isEmpty ||
+        _lastRoutedMechLat == null ||
+        _lastRoutedMechLng == null ||
+        (mechPos.latitude - _lastRoutedMechLat!).abs() > 0.001 ||
+        (mechPos.longitude - _lastRoutedMechLng!).abs() > 0.001;
+
+    if (!shouldFetchRoute) return;
+
+    _lastRoutedMechLat = mechPos.latitude;
+    _lastRoutedMechLng = mechPos.longitude;
     try {
-      _breakdownCircle ??= await ctrl.addCircle(
-        CircleOptions(
-          geometry: LatLng(widget.breakdownLat, widget.breakdownLng),
-          circleRadius: 8.0,
-          circleColor: '#DC2626',
-          circleStrokeWidth: 3.0,
-          circleStrokeColor: '#FFFFFF',
-        ),
+      final routeResult = await GeocodingService.fetchDrivingRoute(
+        fromLat: mechPos.latitude,
+        fromLng: mechPos.longitude,
+        toLat: widget.breakdownLat,
+        toLng: widget.breakdownLng,
       );
-
-      if (_mechanicLat != null && _mechanicLng != null) {
-        final mechPos = LatLng(_mechanicLat!, _mechanicLng!);
-        if (_mechanicCircle != null) {
-          await ctrl.updateCircle(
-            _mechanicCircle!,
-            CircleOptions(geometry: mechPos),
-          );
-        } else {
-          _mechanicCircle = await ctrl.addCircle(
-            CircleOptions(
-              geometry: mechPos,
-              circleRadius: 8.0,
-              circleColor: '#10B981',
-              circleStrokeWidth: 3.0,
-              circleStrokeColor: '#FFFFFF',
-            ),
-          );
-        }
-
-        final shouldFetchRoute = _routeGeometry == null ||
-            _lastRoutedMechLat == null ||
-            _lastRoutedMechLng == null ||
-            (mechPos.latitude - _lastRoutedMechLat!).abs() > 0.001 ||
-            (mechPos.longitude - _lastRoutedMechLng!).abs() > 0.001;
-
-        if (shouldFetchRoute) {
-          _lastRoutedMechLat = mechPos.latitude;
-          _lastRoutedMechLng = mechPos.longitude;
-          final routeResult = await GeocodingService.fetchDrivingRoute(
-            fromLat: mechPos.latitude,
-            fromLng: mechPos.longitude,
-            toLat: widget.breakdownLat,
-            toLng: widget.breakdownLng,
-          );
-          if (mounted) {
-            setState(() {
-              _routeGeometry = routeResult.points;
-              _routeDistanceKm = routeResult.distanceKm;
-              _routeDurationMins = routeResult.durationMinutes;
-            });
-          }
-        }
-
-        final routeGeom = _routeGeometry ??
-            [mechPos, LatLng(widget.breakdownLat, widget.breakdownLng)];
-        if (_routeLine != null) {
-          await ctrl.updateLine(
-            _routeLine!,
-            LineOptions(geometry: routeGeom),
-          );
-        } else {
-          _routeLine = await ctrl.addLine(
-            LineOptions(
-              geometry: routeGeom,
-              lineColor: '#B91C1C',
-              lineWidth: 4.5,
-              lineOpacity: 0.9,
-            ),
-          );
-        }
+      if (mounted) {
+        setState(() {
+          _routeGeometry = routeResult.geoPoints;
+          _routeDistanceKm = routeResult.distanceKm;
+          _routeDurationMins = routeResult.durationMinutes;
+        });
       }
-    } catch (_) {
-      // Map may be unmounting or style still re-binding
-    }
+    } catch (_) {}
   }
 
   void _startStatusMonitoring() {
@@ -816,6 +777,44 @@ class _DispatchScreenState extends State<DispatchScreen>
         _showDigitalInvoiceAndPaymentSheet();
       }
     }
+  }
+
+  void _recordDemoCompletedRescue({
+    required double total,
+    required double diag,
+    required double labor,
+    required double parts,
+    required String paymentMethod,
+  }) {
+    if (!_isDemoMode) return;
+    DemoSession.serviceHistory.insert(0, {
+      'id': _requestId ?? 'demo-req-${DateTime.now().millisecondsSinceEpoch}',
+      'request_code': _requestCode ?? 'RDX-DEMO',
+      'fault_type': widget.selectedFault,
+      'breakdown_address': widget.breakdownAddress,
+      'created_at': DateTime.now().toIso8601String(),
+      'mechanic_name': _assignedMechanic?['full_name'] ?? 'Assigned Technician',
+      'status': 'completed',
+      'vehicle_snapshot': {
+        'vehicle_type': widget.vehicleType,
+        'plate': widget.licensePlate,
+      },
+      'quotations': [
+        {
+          'diagnostic_fee': diag,
+          'labor_fee': labor,
+          'parts_fee': parts,
+          'total_amount': total,
+        }
+      ],
+      'transactions': [
+        {
+          'amount': total,
+          'payment_method': paymentMethod,
+          'status': 'completed',
+        }
+      ],
+    });
   }
 
   void _showQuotationReviewSheet() {
@@ -893,26 +892,36 @@ class _DispatchScreenState extends State<DispatchScreen>
                 Expanded(
                   child: OutlinedButton(
                     onPressed: () async {
-                      Navigator.pop(ctx);
-                      if (!_isDemoMode) {
-                        await _supabaseService.respondToQuotation(
-                          quotationId: quoteId,
-                          decision: 'rejected',
+                      final messenger = ScaffoldMessenger.of(context);
+                      try {
+                        if (!_isDemoMode) {
+                          await _supabaseService.respondToQuotation(
+                            quotationId: quoteId,
+                            decision: 'rejected',
+                          );
+                        }
+                        if (ctx.mounted) Navigator.pop(ctx);
+                        if (!mounted) return;
+                        setState(() {
+                          _activeQuotation = null;
+                          _currentServiceStatus = 'diagnosing';
+                        });
+                        messenger.showSnackBar(
+                          const SnackBar(
+                            content: Text(
+                              'Quotation rejected. Technician will revise the estimate.',
+                            ),
+                            backgroundColor: AppColors.crimsonHover,
+                          ),
+                        );
+                      } catch (e) {
+                        messenger.showSnackBar(
+                          SnackBar(
+                            content: Text('Could not reject quotation: $e'),
+                            backgroundColor: AppColors.crimsonHover,
+                          ),
                         );
                       }
-                      if (!mounted) return;
-                      setState(() {
-                        _activeQuotation = null;
-                        _currentServiceStatus = 'diagnosing';
-                      });
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text(
-                            'Quotation rejected. Technician will revise the estimate.',
-                          ),
-                          backgroundColor: AppColors.crimsonHover,
-                        ),
-                      );
                     },
                     style: OutlinedButton.styleFrom(
                       side: const BorderSide(color: AppColors.caliperCrimson),
@@ -925,40 +934,49 @@ class _DispatchScreenState extends State<DispatchScreen>
                 Expanded(
                   child: ElevatedButton(
                     onPressed: () async {
-                      Navigator.pop(ctx);
-                      if (!_isDemoMode) {
-                        try {
-                          await _supabaseService.respondToQuotation(quotationId: quoteId, decision: 'accepted');
-                        } catch (_) {}
-                      }
-                      setState(() {
-                        _activeQuotation = null;
-                        _currentServiceStatus = 'servicing';
-                      });
-                      if (mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(
+                      final messenger = ScaffoldMessenger.of(context);
+                      try {
+                        if (!_isDemoMode) {
+                          await _supabaseService.respondToQuotation(
+                            quotationId: quoteId,
+                            decision: 'accepted',
+                          );
+                        }
+                        if (ctx.mounted) Navigator.pop(ctx);
+                        if (!mounted) return;
+                        setState(() {
+                          _acceptedQuotation = _activeQuotation;
+                          _activeQuotation = null;
+                          _currentServiceStatus = 'servicing';
+                        });
+                        messenger.showSnackBar(
                           const SnackBar(
                             content: Text('Quotation approved! Technician has commenced work.'),
-                            backgroundColor: AppColors.emeraldGps,
+                            backgroundColor: AppColors.emeraldDark,
+                          ),
+                        );
+
+                        if (_isDemoMode) {
+                          _scheduleSimulationTimer(const Duration(seconds: 5), () {
+                            if (mounted &&
+                                _phase == DispatchPhase.assigned &&
+                                _currentServiceStatus == 'servicing') {
+                              setState(() => _currentServiceStatus = 'completed');
+                              _showDigitalInvoiceAndPaymentSheet();
+                            }
+                          });
+                        }
+                      } catch (e) {
+                        messenger.showSnackBar(
+                          SnackBar(
+                            content: Text('Could not approve quotation: $e'),
+                            backgroundColor: AppColors.crimsonHover,
                           ),
                         );
                       }
-
-                      // Stage 9: In simulation/demo mode, after quotation approval, schedule a 5-second servicing timer
-                      // that automatically updates status to 'completed' and triggers _showDigitalInvoiceAndPaymentSheet()
-                      if (_isDemoMode) {
-                        _scheduleSimulationTimer(const Duration(seconds: 5), () {
-                          if (mounted && _phase == DispatchPhase.assigned && _currentServiceStatus == 'servicing') {
-                            setState(() {
-                              _currentServiceStatus = 'completed';
-                            });
-                            _showDigitalInvoiceAndPaymentSheet();
-                          }
-                        });
-                      }
                     },
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: AppColors.emeraldGps,
+                      backgroundColor: AppColors.emeraldDark,
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                     ),
                     child: const Text('APPROVE & START', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
@@ -973,19 +991,35 @@ class _DispatchScreenState extends State<DispatchScreen>
   }
 
   Future<void> _showDigitalInvoiceAndPaymentSheet() async {
-    if (_activeQuotation == null && _requestId != null) {
+    var quoteSource = _activeQuotation ?? _acceptedQuotation;
+    if (quoteSource == null && _requestId != null && !_isDemoMode) {
       final q = await _supabaseService.getQuotationForRequest(_requestId!);
-      if (mounted) setState(() => _activeQuotation = q);
+      if (mounted && q != null) {
+        setState(() => _acceptedQuotation = q);
+        quoteSource = q;
+      }
     }
 
-    final diag = (_activeQuotation?['diagnostic_fee'] as num?)?.toDouble() ?? 300.0;
-    final labor = (_activeQuotation?['labor_fee'] as num?)?.toDouble() ?? 500.0;
-    final parts = (_activeQuotation?['parts_fee'] as num?)?.toDouble() ?? 200.0;
-    final total = (_activeQuotation?['total_amount'] as num?)?.toDouble() ?? (diag + labor + parts);
-    final lineItems = _activeQuotation?['line_items'] as Map<String, dynamic>? ?? {};
-    final desc = lineItems['description'] as String? ?? 'Vehicle roadside breakdown recovery';
-    final quotationId = _activeQuotation?['id'] as String? ?? '00000000-0000-0000-0000-000000000000';
+    final diag = (quoteSource?['diagnostic_fee'] as num?)?.toDouble() ?? 300.0;
+    final labor = (quoteSource?['labor_fee'] as num?)?.toDouble() ?? 500.0;
+    final parts = (quoteSource?['parts_fee'] as num?)?.toDouble() ?? 200.0;
+    final total =
+        (quoteSource?['total_amount'] as num?)?.toDouble() ?? (diag + labor + parts);
+    final lineItems = quoteSource?['line_items'] as Map<String, dynamic>? ?? {};
+    final desc =
+        lineItems['description'] as String? ?? 'Vehicle roadside breakdown recovery';
+    final quotationId = quoteSource?['id'] as String? ?? '';
     final invoiceRef = 'INV-${_requestCode ?? 'RDX-SERVICE'}';
+
+    final profile = await _supabaseService.getProfile();
+    final customerName =
+        profile?['full_name']?.toString().trim().isNotEmpty == true
+            ? profile!['full_name'].toString().trim()
+            : 'Roadside Motorist';
+    final customerPhone =
+        profile?['phone']?.toString().trim().isNotEmpty == true
+            ? profile!['phone'].toString().trim()
+            : '+8801700000000';
 
     String selectedMethod = 'SSLCommerz-bKash';
     bool isProcessing = false;
@@ -1009,82 +1043,21 @@ class _DispatchScreenState extends State<DispatchScreen>
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Header Badge & Invoice Ref
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text(
-                        'ROADIX DIGITAL INVOICE',
-                        style: TextStyle(
-                          color: AppColors.caliperCrimson,
-                          fontSize: 11,
-                          fontWeight: FontWeight.w900,
-                          letterSpacing: 1.0,
-                        ),
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        invoiceRef,
-                        style: const TextStyle(
-                          color: AppColors.chassisText,
-                          fontSize: 15,
-                          fontWeight: FontWeight.w800,
-                        ),
-                      ),
-                    ],
+                  Text(
+                    invoiceRef,
+                    style: const TextStyle(
+                      color: AppColors.chassisText,
+                      fontSize: 17,
+                      fontWeight: FontWeight.w800,
+                    ),
                   ),
-                  Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      if (selectedMethod.contains('bKash')) ...[
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
-                          decoration: BoxDecoration(
-                            color: AppColors.bkashPink.withValues(alpha: 0.12),
-                            borderRadius: BorderRadius.circular(6),
-                            border: Border.all(color: AppColors.bkashCrimson.withValues(alpha: 0.4)),
-                          ),
-                          child: const Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              BrandLogo(brand: 'bkash', size: 14),
-                              SizedBox(width: 4),
-                              Text(
-                                'bKash MFS',
-                                style: TextStyle(
-                                  color: AppColors.bkashCrimson,
-                                  fontSize: 9,
-                                  fontWeight: FontWeight.w900,
-                                  letterSpacing: 0.5,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        const SizedBox(width: 6),
-                      ],
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFEFF6FF),
-                          borderRadius: BorderRadius.circular(6),
-                          border: Border.all(color: const Color(0xFF3B82F6)),
-                        ),
-                        child: const Text(
-                          'SSLCOMMERZ SANDBOX',
-                          style: TextStyle(
-                            color: Color(0xFF1E40AF),
-                            fontSize: 9,
-                            fontWeight: FontWeight.w900,
-                            letterSpacing: 0.5,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
+                  if (selectedMethod.contains('bKash'))
+                    const BrandLogo(brand: 'bkash', size: 22)
+                  else if (selectedMethod.contains('Nagad'))
+                    const BrandLogo(brand: 'nagad', size: 22),
                 ],
               ),
               const SizedBox(height: 12),
@@ -1186,40 +1159,158 @@ class _DispatchScreenState extends State<DispatchScreen>
                       ? null
                       : () async {
                           final messenger = ScaffoldMessenger.of(context);
+                          final navigator = Navigator.of(context);
                           setSheetState(() => isProcessing = true);
                           try {
+                            final isCash = selectedMethod == 'Cash Settlement';
+                            if (isCash) {
+                              if (!_isDemoMode && _requestId != null) {
+                                final cashRes =
+                                    await _supabaseService.confirmCashSettlement(
+                                  requestId: _requestId!,
+                                  quotationId: quotationId.isEmpty ? null : quotationId,
+                                );
+                                if (cashRes['status'] != 'completed') {
+                                  throw StateError('Cash settlement did not confirm.');
+                                }
+                              } else {
+                                _recordDemoCompletedRescue(
+                                  total: total,
+                                  diag: diag,
+                                  labor: labor,
+                                  parts: parts,
+                                  paymentMethod: 'Cash Settlement',
+                                );
+                              }
+
+                              if (ctx.mounted) Navigator.pop(ctx);
+                              if (mounted) {
+                                setState(() {
+                                  _paymentDone = true;
+                                  _currentServiceStatus = 'completed';
+                                });
+                                messenger.showSnackBar(
+                                  const SnackBar(
+                                    content: Text('Cash settlement recorded.'),
+                                    backgroundColor: AppColors.emeraldDark,
+                                  ),
+                                );
+                                _showRatingDialog();
+                              }
+                              return;
+                            }
+
+                            if (_isDemoMode) {
+                              _recordDemoCompletedRescue(
+                                total: total,
+                                diag: diag,
+                                labor: labor,
+                                parts: parts,
+                                paymentMethod: selectedMethod,
+                              );
+                              if (ctx.mounted) Navigator.pop(ctx);
+                              if (mounted) {
+                                setState(() {
+                                  _paymentDone = true;
+                                  _currentServiceStatus = 'completed';
+                                });
+                                messenger.showSnackBar(
+                                  const SnackBar(
+                                    content: Text('Demo checkout settled locally.'),
+                                    backgroundColor: AppColors.emeraldDark,
+                                  ),
+                                );
+                                _showRatingDialog();
+                              }
+                              return;
+                            }
+
                             final sslService = SSLCommerzService();
                             final sessionResult = await sslService.initiateSession(
                               requestId: _requestId ?? '',
                               amount: total,
-                              customerName: _assignedMechanic?['motorist_name'] ?? 'Roadside Motorist',
-                              customerPhone: '+8801700000000',
+                              customerName: customerName,
+                              customerPhone: customerPhone,
                             );
 
-                            if (sessionResult.isSuccess && sessionResult.gatewayPageUrl != null) {
-                              try {
-                                final uri = Uri.parse(sessionResult.gatewayPageUrl!);
-                                await launchUrl(uri, mode: LaunchMode.externalApplication);
-                              } catch (_) {}
-                            }
-
-                            if (_requestId != null) {
-                              await sslService.recordSettlement(
-                                requestId: _requestId!,
-                                quotationId: quotationId,
-                                amount: total,
-                                paymentMethod: selectedMethod,
-                                gatewayTransactionId: sessionResult.transactionId,
-                                additionalMetadata: {
-                                  'invoice_ref': invoiceRef,
-                                  'session_key': sessionResult.sessionKey ?? '',
-                                  'is_simulated_fallback': sessionResult.isSimulatedFallback,
-                                },
+                            if (!sessionResult.isSuccess ||
+                                sessionResult.gatewayPageUrl == null ||
+                                sessionResult.gatewayPageUrl!.isEmpty) {
+                              throw StateError(
+                                sessionResult.errorMessage ??
+                                    'Unable to initiate SSLCommerz checkout session.',
                               );
                             }
 
-                            if (ctx.mounted) Navigator.pop(ctx);
+                            final checkoutResult =
+                                await navigator.push<SslcommerzCheckoutResult>(
+                              MaterialPageRoute(
+                                builder: (_) => SslcommerzCheckoutScreen(
+                                  gatewayPageUrl: sessionResult.gatewayPageUrl!,
+                                  transactionId: sessionResult.transactionId,
+                                  amount: total,
+                                ),
+                              ),
+                            );
 
+                            if (checkoutResult == null ||
+                                checkoutResult.outcome == SslcommerzOutcome.cancelled) {
+                              if (mounted) {
+                                setSheetState(() => isProcessing = false);
+                                messenger.showSnackBar(
+                                  const SnackBar(
+                                    content: Text('Checkout cancelled before completion.'),
+                                  ),
+                                );
+                              }
+                              return;
+                            }
+
+                            if (checkoutResult.outcome == SslcommerzOutcome.failed) {
+                              throw StateError(
+                                checkoutResult.message ?? 'SSLCommerz transaction failed.',
+                              );
+                            }
+
+                            Map<String, dynamic>? settledTx;
+                            if (_requestId != null) {
+                              for (int attempt = 0; attempt < 3; attempt++) {
+                                final res = await sslService.recordSettlement(
+                                  requestId: _requestId!,
+                                  quotationId: quotationId,
+                                  amount: total,
+                                  paymentMethod: selectedMethod,
+                                  gatewayTransactionId: sessionResult.transactionId,
+                                  additionalMetadata: {
+                                    'invoice_ref': invoiceRef,
+                                    'session_key': sessionResult.sessionKey ?? '',
+                                    if (checkoutResult.valId != null)
+                                      'val_id': checkoutResult.valId,
+                                  },
+                                );
+                                if (res['status'] == 'completed') {
+                                  settledTx = res;
+                                  break;
+                                }
+                                await Future.delayed(const Duration(seconds: 1));
+                              }
+                            }
+
+                            if (settledTx == null ||
+                                settledTx['status'] != 'completed') {
+                              if (ctx.mounted) Navigator.pop(ctx);
+                              messenger.showSnackBar(
+                                const SnackBar(
+                                  content: Text(
+                                    'Payment submitted; awaiting SSLCommerz IPN confirmation.',
+                                  ),
+                                  backgroundColor: AppColors.amberDark,
+                                ),
+                              );
+                              return;
+                            }
+
+                            if (ctx.mounted) Navigator.pop(ctx);
                             if (mounted) {
                               setState(() {
                                 _paymentDone = true;
@@ -1227,8 +1318,8 @@ class _DispatchScreenState extends State<DispatchScreen>
                               });
                               messenger.showSnackBar(
                                 const SnackBar(
-                                  content: Text('Payment settled via SSLCommerz Sandbox!'),
-                                  backgroundColor: AppColors.emeraldGps,
+                                  content: Text('Payment verified and settled via SSLCommerz.'),
+                                  backgroundColor: AppColors.emeraldDark,
                                 ),
                               );
                               _showRatingDialog();
@@ -1238,15 +1329,20 @@ class _DispatchScreenState extends State<DispatchScreen>
                               setSheetState(() => isProcessing = false);
                               messenger.showSnackBar(
                                 SnackBar(
-                                  content: Text('Settlement error: $e'),
-                                  backgroundColor: AppColors.caliperCrimson,
+                                  content: Text(
+                                    e
+                                        .toString()
+                                        .replaceAll('Bad state: ', '')
+                                        .replaceAll('Exception: ', ''),
+                                  ),
+                                  backgroundColor: AppColors.crimsonHover,
                                 ),
                               );
                             }
                           }
                         },
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.emeraldGps,
+                    backgroundColor: AppColors.emeraldDark,
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                   ),
                   child: isProcessing
@@ -1256,7 +1352,9 @@ class _DispatchScreenState extends State<DispatchScreen>
                           child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
                         )
                       : Text(
-                          'SETTLE ৳ ${total.toStringAsFixed(2)} VIA SSLCOMMERZ',
+                          selectedMethod == 'Cash Settlement'
+                              ? 'CONFIRM CASH ৳ ${total.toStringAsFixed(0)}'
+                              : 'PAY ৳ ${total.toStringAsFixed(0)} VIA SSLCOMMERZ',
                           style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
                         ),
                 ),
@@ -1321,11 +1419,9 @@ class _DispatchScreenState extends State<DispatchScreen>
               onPressed: () {
                 final nav = Navigator.of(context);
                 Navigator.pop(ctx);
-                Future.delayed(const Duration(milliseconds: 600), () {
-                  if (mounted) {
-                    nav.popUntil((route) => route.isFirst);
-                  }
-                });
+                if (mounted) {
+                  nav.popUntil((route) => route.isFirst);
+                }
               },
               child: const Text('LATER', style: TextStyle(color: AppColors.slateMuted)),
             ),
@@ -1336,29 +1432,33 @@ class _DispatchScreenState extends State<DispatchScreen>
                       final messenger = ScaffoldMessenger.of(context);
                       final nav = Navigator.of(context);
                       setDialogState(() => isSubmitting = true);
-                      if (_requestId != null && _assignedMechanicId != null && !_isDemoMode) {
-                        try {
+                      try {
+                        if (_requestId != null && _assignedMechanicId != null && !_isDemoMode) {
                           await _supabaseService.submitReview(
                             requestId: _requestId!,
                             mechanicId: _assignedMechanicId!,
                             rating: selectedRating,
                             comment: commentController.text.trim(),
                           );
-                        } catch (_) {}
-                      }
-                      if (ctx.mounted) Navigator.pop(ctx);
-                      if (mounted) {
+                        }
+                        if (ctx.mounted) Navigator.pop(ctx);
+                        if (mounted) {
+                          messenger.showSnackBar(
+                            const SnackBar(
+                              content: Text('Thank you! Your rating has been recorded.'),
+                              backgroundColor: AppColors.emeraldDark,
+                            ),
+                          );
+                          nav.popUntil((route) => route.isFirst);
+                        }
+                      } catch (e) {
+                        setDialogState(() => isSubmitting = false);
                         messenger.showSnackBar(
-                          const SnackBar(
-                            content: Text('Thank you! Your feedback has updated the technician trust score.'),
-                            backgroundColor: AppColors.emeraldGps,
+                          SnackBar(
+                            content: Text('Could not submit rating: $e'),
+                            backgroundColor: AppColors.crimsonHover,
                           ),
                         );
-                        Future.delayed(const Duration(milliseconds: 1200), () {
-                          if (mounted) {
-                            nav.popUntil((route) => route.isFirst);
-                          }
-                        });
                       }
                     },
               style: ElevatedButton.styleFrom(backgroundColor: AppColors.caliperCrimson),
@@ -1824,11 +1924,11 @@ class _DispatchScreenState extends State<DispatchScreen>
               ),
               const SizedBox(height: 16),
 
-              // Requirements 3 & 4: Candidate Queue & Prominent Manual Simulation Trigger
-              for (int i = 0; i < _demoCandidates.length; i++)
-                _buildCandidateCard(_demoCandidates[i], isPrimary: i == 0),
-
-              const SizedBox(height: 6),
+              if (_isDemoMode) ...[
+                for (int i = 0; i < _demoCandidates.length; i++)
+                  _buildCandidateCard(_demoCandidates[i], isPrimary: i == 0),
+                const SizedBox(height: 6),
+              ],
               _buildVehicleBadge(),
             ],
 
@@ -2437,24 +2537,25 @@ class _DispatchScreenState extends State<DispatchScreen>
             clipBehavior: Clip.antiAlias,
             child: Stack(
               children: [
-                if (!WidgetsBinding.instance.runtimeType.toString().contains('Test'))
-                  MapLibreMap(
-                    styleString: AppConfig.mapStyleUrl,
-                    initialCameraPosition: CameraPosition(
-                      target: LatLng(widget.breakdownLat, widget.breakdownLng),
-                      zoom: 14.0,
-                    ),
-                    compassEnabled: false,
-                    onMapCreated: (ctrl) => _assignedMapController = ctrl,
-                    onStyleLoadedCallback: _syncMapVisuals,
-                  )
-                else
-                  Container(
-                    color: const Color(0xFFE2E8F0),
-                    child: const Center(
-                      child: Icon(Icons.map, color: AppColors.slateMuted, size: 36),
-                    ),
+                RoadixMapView(
+                  initialCenter: RoadixGeoPoint(
+                    widget.breakdownLat,
+                    widget.breakdownLng,
                   ),
+                  initialZoom: 14.0,
+                  breakdownPoint: RoadixGeoPoint(
+                    widget.breakdownLat,
+                    widget.breakdownLng,
+                  ),
+                  mechanicPoint: (_mechanicLat != null && _mechanicLng != null)
+                      ? RoadixGeoPoint(_mechanicLat!, _mechanicLng!)
+                      : null,
+                  routePoints: _routeGeometry,
+                  onMapCreated: (ctrl) {
+                    _assignedMapController = ctrl;
+                    _syncMapVisuals();
+                  },
+                ),
                 // Dynamic Telemetry & ETA HUD
                 Positioned(
                   top: 10,
@@ -2465,20 +2566,13 @@ class _DispatchScreenState extends State<DispatchScreen>
                     decoration: BoxDecoration(
                       color: AppColors.cardWhite.withAlpha(240),
                       borderRadius: BorderRadius.circular(8),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withAlpha(20),
-                          blurRadius: 4,
-                          offset: const Offset(0, 2),
-                        ),
-                      ],
                       border: Border.all(color: AppColors.slateBorder),
                     ),
                     child: Row(
                       children: [
                         const CircleAvatar(
                           radius: 4,
-                          backgroundColor: AppColors.emeraldGps,
+                          backgroundColor: AppColors.emeraldDark,
                         ),
                         const SizedBox(width: 6),
                         Expanded(
@@ -2488,8 +2582,9 @@ class _DispatchScreenState extends State<DispatchScreen>
                                 : 'Awaiting technician GPS signal...',
                             style: const TextStyle(
                               color: AppColors.chassisText,
-                              fontSize: 11.5,
+                              fontSize: 12,
                               fontWeight: FontWeight.w700,
+                              fontFeatures: [FontFeature.tabularFigures()],
                             ),
                             overflow: TextOverflow.ellipsis,
                           ),
@@ -2497,20 +2592,19 @@ class _DispatchScreenState extends State<DispatchScreen>
                         if (_mechanicLat != null)
                           Container(
                             padding: const EdgeInsets.symmetric(
-                              horizontal: 6,
+                              horizontal: 7,
                               vertical: 2,
                             ),
                             decoration: BoxDecoration(
                               color: AppColors.emeraldLight,
-                              borderRadius: BorderRadius.circular(4),
+                              borderRadius: BorderRadius.circular(6),
                             ),
                             child: const Text(
-                              'LIVE GPS',
+                              'Live GPS',
                               style: TextStyle(
                                 color: AppColors.emeraldDark,
-                                fontSize: 9.5,
-                                fontWeight: FontWeight.w900,
-                                letterSpacing: 0.4,
+                                fontSize: 11,
+                                fontWeight: FontWeight.w700,
                               ),
                             ),
                           ),
@@ -2518,33 +2612,53 @@ class _DispatchScreenState extends State<DispatchScreen>
                     ),
                   ),
                 ),
-                // Recenter Camera Button
+                // Recenter Camera Button (48x48dp accessible hit target)
                 Positioned(
                   bottom: 10,
                   right: 10,
-                  child: FloatingActionButton.small(
-                    heroTag: 'recenter_assigned_map',
-                    backgroundColor: AppColors.cardWhite,
-                    foregroundColor: AppColors.chassisText,
-                    elevation: 2,
-                    onPressed: () {
-                      if (_assignedMapController != null) {
-                        if (_mechanicLat != null && _mechanicLng != null) {
-                          _assignedMapController!.animateCamera(
-                            CameraUpdate.newLatLng(
-                              LatLng(_mechanicLat!, _mechanicLng!),
+                  child: Semantics(
+                    button: true,
+                    label: 'Recenter tracking map',
+                    child: Tooltip(
+                      message: 'Recenter tracking map',
+                      child: Material(
+                        color: AppColors.cardWhite,
+                        elevation: 2,
+                        borderRadius: BorderRadius.circular(12),
+                        child: InkWell(
+                          borderRadius: BorderRadius.circular(12),
+                          onTap: () {
+                            if (_assignedMapController != null) {
+                              if (_mechanicLat != null && _mechanicLng != null) {
+                                _assignedMapController!.animateCamera(
+                                  RoadixGeoPoint(_mechanicLat!, _mechanicLng!),
+                                );
+                              } else {
+                                _assignedMapController!.animateCamera(
+                                  RoadixGeoPoint(
+                                    widget.breakdownLat,
+                                    widget.breakdownLng,
+                                  ),
+                                );
+                              }
+                            }
+                          },
+                          child: Container(
+                            width: 48,
+                            height: 48,
+                            decoration: BoxDecoration(
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(color: AppColors.slateBorder),
                             ),
-                          );
-                        } else {
-                          _assignedMapController!.animateCamera(
-                            CameraUpdate.newLatLng(
-                              LatLng(widget.breakdownLat, widget.breakdownLng),
+                            child: const Icon(
+                              Icons.my_location,
+                              color: AppColors.chassisText,
+                              size: 20,
                             ),
-                          );
-                        }
-                      }
-                    },
-                    child: const Icon(Icons.my_location, size: 18),
+                          ),
+                        ),
+                      ),
+                    ),
                   ),
                 ),
               ],
@@ -2655,35 +2769,44 @@ class _DispatchScreenState extends State<DispatchScreen>
             ),
           ],
 
-          if (_currentServiceStatus == 'completed' && !_paymentDone) ...[
+          if ((_currentServiceStatus == 'servicing' ||
+                  _currentServiceStatus == 'completed') &&
+              !_paymentDone &&
+              _activeQuotation == null) ...[
             const SizedBox(height: 14),
             Container(
               padding: const EdgeInsets.all(14),
               decoration: BoxDecoration(
-                color: const Color(0xFFECFDF5),
+                color: AppColors.emeraldLight,
                 borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: AppColors.emeraldGps),
+                border: Border.all(color: AppColors.emeraldDark),
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text(
-                    'Rescue Complete! Settle Digital Invoice',
-                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: AppColors.emeraldGps),
+                  Text(
+                    _currentServiceStatus == 'completed'
+                        ? 'Rescue Complete • Settle Invoice'
+                        : 'Quotation Approved • Ready to Settle',
+                    style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 13.5,
+                      color: AppColors.emeraldDark,
+                    ),
                   ),
                   const SizedBox(height: 4),
                   const Text(
-                    'Review official digital invoice and complete settlement via SSLCommerz Sandbox.',
-                    style: TextStyle(color: AppColors.slateMuted, fontSize: 11),
+                    'Review itemized digital invoice and complete settlement via SSLCommerz or cash.',
+                    style: TextStyle(color: AppColors.slateMuted, fontSize: 12),
                   ),
                   const SizedBox(height: 10),
                   SizedBox(
                     width: double.infinity,
-                    height: 40,
+                    height: 48,
                     child: ElevatedButton(
                       onPressed: _showDigitalInvoiceAndPaymentSheet,
-                      style: ElevatedButton.styleFrom(backgroundColor: AppColors.emeraldGps),
-                      child: const Text('VIEW INVOICE & SETTLE (SSLCOMMERZ)', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 11)),
+                      style: ElevatedButton.styleFrom(backgroundColor: AppColors.emeraldDark),
+                      child: const Text('VIEW INVOICE & SETTLE (SSLCOMMERZ)', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12)),
                     ),
                   ),
                 ],
@@ -2866,26 +2989,31 @@ class _DispatchScreenState extends State<DispatchScreen>
               style: ElevatedButton.styleFrom(backgroundColor: AppColors.caliperCrimson),
               child: const Text('Retry Search', style: TextStyle(color: Colors.white)),
             ),
-            const SizedBox(height: 10),
-            OutlinedButton.icon(
-              onPressed: _startDemoRadarSimulation,
-              icon: const Icon(Icons.play_arrow, size: 16, color: AppColors.chassisText),
-              label: const Text(
-                'Run Interactive Demo Simulation',
-                style: TextStyle(
-                  color: AppColors.chassisText,
-                  fontWeight: FontWeight.bold,
-                  fontSize: 11.5,
+            if (DemoSession.isActive ||
+                (!AppConfig.isProduction &&
+                    kDebugMode &&
+                    !_supabaseService.isAuthenticated)) ...[
+              const SizedBox(height: 10),
+              OutlinedButton.icon(
+                onPressed: _startDemoRadarSimulation,
+                icon: const Icon(Icons.play_arrow, size: 16, color: AppColors.chassisText),
+                label: const Text(
+                  'Run Interactive Demo Simulation',
+                  style: TextStyle(
+                    color: AppColors.chassisText,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 12,
+                  ),
+                ),
+                style: OutlinedButton.styleFrom(
+                  side: const BorderSide(color: AppColors.slateBorder),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  backgroundColor: AppColors.cardWhite,
                 ),
               ),
-              style: OutlinedButton.styleFrom(
-                side: const BorderSide(color: AppColors.slateBorder),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                backgroundColor: AppColors.cardWhite,
-              ),
-            ),
+            ],
             const SizedBox(height: 8),
             TextButton(
               onPressed: () => Navigator.of(context).pop(),

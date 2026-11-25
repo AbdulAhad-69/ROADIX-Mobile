@@ -1,35 +1,14 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:roadix_mobile/src/core/config/app_config.dart';
 import 'package:roadix_mobile/screens/dispatch_screen.dart';
 import 'package:roadix_mobile/screens/vehicle_select_screen.dart';
+import 'package:roadix_mobile/services/demo_session.dart';
 import 'package:roadix_mobile/widgets/vehicle_editor_sheet.dart';
+import '../e2e/helpers/test_app_harness.dart';
 
 void main() {
   setUpAll(() async {
-    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-        .setMockMethodCallHandler(
-      const MethodChannel('plugins.flutter.io/shared_preferences'),
-      (MethodCall methodCall) async {
-        if (methodCall.method == 'getAll') {
-          return <String, dynamic>{};
-        }
-        return true;
-      },
-    );
-
-    await AppConfig.initialize();
-    try {
-      await Supabase.initialize(
-        url: AppConfig.supabaseUrl,
-        // ignore: deprecated_member_use
-        anonKey: AppConfig.supabaseAnonKey,
-      );
-    } catch (_) {
-      // Supabase already initialized or offline mock active
-    }
+    await E2ETestHarness.initializeAppEnvironment();
   });
   group('Phase 4: Dispatch Flow Parameter & SRS Category Verification', () {
     test('VehicleSelectScreen maps UI categories to exact SRS categories', () {
@@ -270,6 +249,9 @@ void main() {
     });
 
     testWidgets('Renders on 360x800 and 390x844 viewports without RenderFlex overflow', (WidgetTester tester) async {
+      DemoSession.startDemo(demoRole: 'motorist');
+      addTearDown(DemoSession.clear);
+
       tester.view.physicalSize = const Size(360, 800);
       tester.view.devicePixelRatio = 1.0;
       addTearDown(() {
@@ -323,6 +305,9 @@ void main() {
     });
 
     testWidgets('Teardown during demo simulation cancels all simulation timers without leakage', (WidgetTester tester) async {
+      DemoSession.startDemo(demoRole: 'motorist');
+      addTearDown(DemoSession.clear);
+
       tester.view.physicalSize = const Size(390, 844);
       tester.view.devicePixelRatio = 1.0;
       addTearDown(() {
@@ -369,6 +354,9 @@ void main() {
     });
 
     testWidgets('Renders on 390x844 and 320x640 viewports without RenderFlex overflow', (WidgetTester tester) async {
+      DemoSession.startDemo(demoRole: 'motorist');
+      addTearDown(DemoSession.clear);
+
       for (final size in [const Size(390, 844), const Size(320, 640)]) {
         tester.view.physicalSize = size;
         tester.view.devicePixelRatio = 1.0;
@@ -416,6 +404,9 @@ void main() {
     });
 
     testWidgets('Cancellation stops and clears all simulation timers cleanly', (WidgetTester tester) async {
+      DemoSession.startDemo(demoRole: 'motorist');
+      addTearDown(DemoSession.clear);
+
       tester.view.physicalSize = const Size(390, 844);
       tester.view.devicePixelRatio = 1.0;
       addTearDown(() {

@@ -91,7 +91,7 @@ class _VehicleSelectScreenState extends State<VehicleSelectScreen> {
   @override
   void initState() {
     super.initState();
-    _plateController = TextEditingController(text: 'Dhaka Metro GA-11-2034');
+    _plateController = TextEditingController();
     _loadSavedGarage();
   }
 
@@ -188,30 +188,21 @@ class _VehicleSelectScreenState extends State<VehicleSelectScreen> {
           });
         },
         borderRadius: BorderRadius.circular(16),
-        child: AnimatedContainer(
-          duration: animDuration,
-          curve: const Cubic(0.23, 1, 0.32, 1),
-          padding: const EdgeInsets.all(12),
-          decoration: BoxDecoration(
-            color: isSelected
-                ? AppColors.crimsonLight.withAlpha(150)
-                : AppColors.cardWhite,
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(
-              color:
-                  isSelected ? AppColors.caliperCrimson : AppColors.slateBorder,
-              width: isSelected ? 2.0 : 1.0,
-            ),
-            boxShadow: [
-              BoxShadow(
-                color: isSelected
-                    ? AppColors.caliperCrimson.withAlpha(24)
-                    : Colors.black.withAlpha(6),
-                blurRadius: isSelected ? 8 : 4,
-                offset: const Offset(0, 2),
+          child: AnimatedContainer(
+            duration: animDuration,
+            curve: const Cubic(0.23, 1, 0.32, 1),
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: isSelected
+                  ? AppColors.crimsonLight
+                  : AppColors.cardWhite,
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(
+                color:
+                    isSelected ? AppColors.caliperCrimson : AppColors.slateBorder,
+                width: isSelected ? 1.5 : 1.0,
               ),
-            ],
-          ),
+            ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -278,13 +269,8 @@ class _VehicleSelectScreenState extends State<VehicleSelectScreen> {
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
                       color: AppColors.slateMuted,
-                      fontSize: 10.5,
+                      fontSize: 11.5,
                     ),
-                  ),
-                  const SizedBox(height: 6),
-                  VehicleSpecBadge(
-                    label: (item['specs'] ?? '') as String,
-                    isSelected: isSelected,
                   ),
                 ],
               ),
@@ -434,26 +420,18 @@ class _VehicleSelectScreenState extends State<VehicleSelectScreen> {
                       children: [
                         const Flexible(
                           child: Text(
-                            'SAVED DIGITAL GARAGE',
+                            'Saved Garage',
                             overflow: TextOverflow.ellipsis,
                             style: TextStyle(
-                              color: AppColors.slateMuted,
-                              fontSize: 9.5,
+                              color: AppColors.chassisText,
+                              fontSize: 13.5,
                               fontWeight: FontWeight.w800,
-                              letterSpacing: 0.8,
                             ),
                           ),
                         ),
-                        InkWell(
-                          onTap: _openAddVehicleSheet,
-                          child: const Text(
-                            '+ Add Vehicle',
-                            style: TextStyle(
-                              color: AppColors.caliperCrimson,
-                              fontSize: 11,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
+                        TextButton(
+                          onPressed: _openAddVehicleSheet,
+                          child: const Text('+ Add Vehicle'),
                         ),
                       ],
                     ),
@@ -519,12 +497,11 @@ class _VehicleSelectScreenState extends State<VehicleSelectScreen> {
 
                     // 4-Card Vehicle Type Responsive 2x2 Layout (no nested scrollables)
                     const Text(
-                      'OR SELECT CATEGORY',
+                      'Select Category',
                       style: TextStyle(
-                        color: AppColors.slateMuted,
-                        fontSize: 10.5,
+                        color: AppColors.chassisText,
+                        fontSize: 13.5,
                         fontWeight: FontWeight.w800,
-                        letterSpacing: 0.7,
                       ),
                     ),
                     const SizedBox(height: 10),
@@ -558,56 +535,25 @@ class _VehicleSelectScreenState extends State<VehicleSelectScreen> {
 
                     // License Plate Number Field
                     const Text(
-                      'LICENSE / REGISTRATION PLATE',
+                      'License / Registration Plate',
                       style: TextStyle(
-                        color: AppColors.slateMuted,
-                        fontSize: 9.5,
+                        color: AppColors.chassisText,
+                        fontSize: 13.5,
                         fontWeight: FontWeight.w800,
-                        letterSpacing: 0.8,
                       ),
                     ),
                     const SizedBox(height: 6),
                     TextField(
                       controller: _plateController,
+                      textCapitalization: TextCapitalization.characters,
                       style: const TextStyle(
                         color: AppColors.chassisText,
-                        fontSize: 13.5,
+                        fontSize: 14,
                         fontWeight: FontWeight.w700,
-                        fontFamily: 'monospace',
                       ),
-                      decoration: InputDecoration(
-                        filled: true,
-                        fillColor: AppColors.cardWhite,
+                      decoration: const InputDecoration(
                         hintText: 'e.g., Dhaka Metro GA-11-2034',
-                        hintStyle: const TextStyle(
-                          color: AppColors.slateMuted,
-                          fontSize: 12,
-                          fontFamily: 'sans-serif',
-                        ),
-                        prefixIcon: const Icon(Icons.pin, color: AppColors.slateMuted, size: 18),
-                        contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 14,
-                          vertical: 12,
-                        ),
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                          borderSide: const BorderSide(
-                            color: AppColors.slateBorder,
-                          ),
-                        ),
-                        enabledBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                          borderSide: const BorderSide(
-                            color: AppColors.slateBorder,
-                          ),
-                        ),
-                        focusedBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                          borderSide: const BorderSide(
-                            color: AppColors.caliperCrimson,
-                            width: 1.5,
-                          ),
-                        ),
+                        prefixIcon: Icon(Icons.pin, color: AppColors.slateMuted, size: 18),
                       ),
                     ),
 
@@ -615,12 +561,11 @@ class _VehicleSelectScreenState extends State<VehicleSelectScreen> {
 
                     // Fuel Type Chips
                     const Text(
-                      'PROPULSION / FUEL TYPE',
+                      'Propulsion / Fuel Type',
                       style: TextStyle(
-                        color: AppColors.slateMuted,
-                        fontSize: 9.5,
+                        color: AppColors.chassisText,
+                        fontSize: 13.5,
                         fontWeight: FontWeight.w800,
-                        letterSpacing: 0.8,
                       ),
                     ),
                     const SizedBox(height: 8),
@@ -679,9 +624,18 @@ class _VehicleSelectScreenState extends State<VehicleSelectScreen> {
                     height: 50,
                     child: ElevatedButton(
                       onPressed: () {
-                        final plate = _plateController.text.trim().isNotEmpty
-                            ? _plateController.text.trim()
-                            : 'Dhaka Metro GA-11-2034';
+                        final plate = _plateController.text.trim();
+                        if (plate.isEmpty) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text(
+                                'Enter your vehicle license or registration plate to continue.',
+                              ),
+                              backgroundColor: AppColors.crimsonHover,
+                            ),
+                          );
+                          return;
+                        }
 
                         HapticFeedback.mediumImpact();
                         Navigator.of(context).push(
@@ -693,6 +647,7 @@ class _VehicleSelectScreenState extends State<VehicleSelectScreen> {
                                     as String,
                               ),
                               licensePlate: plate,
+                              fuelType: _selectedFuelType,
                               breakdownLat: widget.breakdownLat,
                               breakdownLng: widget.breakdownLng,
                               breakdownAddress: widget.breakdownAddress,
@@ -700,13 +655,6 @@ class _VehicleSelectScreenState extends State<VehicleSelectScreen> {
                           ),
                         );
                       },
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: AppColors.caliperCrimson,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        elevation: 3,
-                      ),
                       child: Row(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: const [
@@ -750,60 +698,56 @@ class _VehicleSelectScreenState extends State<VehicleSelectScreen> {
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(10),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
-        decoration: BoxDecoration(
-          color: isSelected ? const Color(0xFFFEF2F2) : AppColors.cardWhite,
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(
-            color: isSelected
-                ? AppColors.caliperCrimson
-                : AppColors.slateBorder,
-            width: isSelected ? 1.5 : 1.0,
-          ),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withAlpha(2),
-              blurRadius: 2,
-              offset: const Offset(0, 1),
-            ),
-          ],
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              Icons.directions_car,
-              size: 14,
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(minHeight: 48),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          decoration: BoxDecoration(
+            color: isSelected ? AppColors.crimsonLight : AppColors.cardWhite,
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(
               color: isSelected
                   ? AppColors.caliperCrimson
-                  : AppColors.slateMuted,
+                  : AppColors.slateBorder,
+              width: isSelected ? 1.5 : 1.0,
             ),
-            const SizedBox(width: 6),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  name,
-                  style: TextStyle(
-                    color: isSelected
-                        ? AppColors.caliperCrimson
-                        : AppColors.chassisText,
-                    fontSize: 10.5,
-                    fontWeight: FontWeight.w700,
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                Icons.directions_car,
+                size: 16,
+                color: isSelected
+                    ? AppColors.caliperCrimson
+                    : AppColors.slateMuted,
+              ),
+              const SizedBox(width: 8),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text(
+                    name,
+                    style: TextStyle(
+                      color: isSelected
+                          ? AppColors.crimsonHover
+                          : AppColors.chassisText,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                    ),
                   ),
-                ),
-                Text(
-                  plate,
-                  style: const TextStyle(
-                    color: AppColors.slateMuted,
-                    fontSize: 8.5,
-                    fontFamily: 'monospace',
+                  Text(
+                    plate,
+                    style: const TextStyle(
+                      color: AppColors.slateMuted,
+                      fontSize: 11,
+                    ),
                   ),
-                ),
-              ],
-            ),
-          ],
+                ],
+              ),
+            ],
+          ),
         ),
       ),
     );

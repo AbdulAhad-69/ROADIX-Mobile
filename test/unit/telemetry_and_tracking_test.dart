@@ -404,7 +404,7 @@ void main() {
       await tester.pump(const Duration(milliseconds: 200));
 
       // Accuracy pill should update to mock accuracy 4m
-      expect(find.text('± 4m accuracy'), findsOneWidget);
+      expect(find.textContaining('± 4m'), findsOneWidget);
 
       await tester.pumpWidget(const SizedBox());
       await tester.pump(const Duration(milliseconds: 100));
@@ -434,7 +434,7 @@ void main() {
       await tester.pump(const Duration(milliseconds: 200));
 
       expect(find.text('Location services are disabled on your device. Please turn on GPS.'), findsOneWidget);
-      expect(find.text('± 8m accuracy'), findsOneWidget);
+      expect(find.textContaining('± 8m'), findsOneWidget);
 
       await tester.pumpWidget(const SizedBox());
       await tester.pump(const Duration(milliseconds: 100));
@@ -465,7 +465,7 @@ void main() {
       await tester.pump(const Duration(milliseconds: 200));
 
       expect(find.text('Location permission denied. Showing preset location.'), findsOneWidget);
-      expect(find.text('± 8m accuracy'), findsOneWidget);
+      expect(find.textContaining('± 8m'), findsOneWidget);
 
       await tester.pumpWidget(const SizedBox());
       await tester.pump(const Duration(milliseconds: 100));
@@ -575,7 +575,7 @@ void main() {
       await tester.pump(const Duration(seconds: 1));
 
       expect(tester.takeException(), isNull);
-      expect(find.text('TECHNICIAN CONSOLE'), findsOneWidget);
+      expect(find.text('ROADIX Partner Workshop'), findsOneWidget);
 
       await tester.pumpWidget(const SizedBox());
       await tester.pump(const Duration(seconds: 60));

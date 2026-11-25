@@ -105,7 +105,7 @@ void main() {
     });
 
     testWidgets(
-        'T5.1.3: Rapid tab and role switching (20x) on LoginScreen preserves controller integrity and causes zero exceptions',
+        'T5.1.3: Rapid role switching (20x) on LoginScreen preserves controller integrity and causes zero exceptions',
         (WidgetTester tester) async {
       await tester.pumpWidget(
         E2ETestHarness.wrapWithApp(
@@ -117,20 +117,18 @@ void main() {
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 100));
 
-      // Switch to Email Account Sign Up so role toggle chips are active
-      await tester.tap(E2EFinders.emailAuthTab);
-      await tester.pump();
+      // Switch to Sign Up so role toggle chips are active
       await tester.tap(find.text('Need a new account? Sign Up'));
       await tester.pump();
 
-      // Alternating 20 rapid taps between Sign-Up roles and auth tabs
+      // Alternating 20 rapid taps between Sign-Up roles
       for (int i = 0; i < 10; i++) {
         await tester.tap(E2EFinders.mechanicRoleTab, warnIfMissed: false);
         await tester.pump(const Duration(milliseconds: 10));
         await tester.tap(E2EFinders.motoristRoleTab, warnIfMissed: false);
         await tester.pump(const Duration(milliseconds: 10));
       }
-      await tester.tap(E2EFinders.phoneAuthTab);
+      await tester.tap(find.text('Already have an account? Sign In'));
       await tester.pump(const Duration(milliseconds: 300));
 
       expect(tester.takeException(), isNull);
@@ -594,7 +592,7 @@ void main() {
       await tester.pump();
 
       // Error message displayed
-      expect(find.textContaining('Please enter an 11-digit mobile wallet number'), findsOneWidget);
+      expect(find.textContaining('Please enter a valid 11-digit mobile wallet number'), findsOneWidget);
 
       // Enter valid 11-digit number
       await tester.enterText(input, '01711223344');

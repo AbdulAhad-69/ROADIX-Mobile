@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 import '../theme/app_colors.dart';
 
 /// Shared avatar widget and image-provider resolver handling local bytes preview,
-/// `data:` base64 URIs, Supabase Storage / Unsplash `https:` URLs, asset paths,
+/// `data:` base64 URIs, Cloudinary / Supabase Storage `https:` URLs, asset paths,
 /// and accessible monogram fallback on error.
 class RoadixAvatar extends StatefulWidget {
   final String? avatarUrl;

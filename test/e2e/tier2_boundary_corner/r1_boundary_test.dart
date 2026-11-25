@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:roadix_mobile/screens/dispatch_screen.dart';
 import 'package:roadix_mobile/screens/location_confirm_screen.dart';
+import 'package:roadix_mobile/services/demo_session.dart';
 import 'package:roadix_mobile/services/geocoding_service.dart';
 import 'package:roadix_mobile/src/core/utils/geometry_utils.dart';
 import '../helpers/e2e_finders.dart';
@@ -123,7 +124,6 @@ void main() {
       await tester.pump(const Duration(milliseconds: 100));
 
       expect(find.textContaining('20.5000° N, 90.0000° E'), findsWidgets);
-      expect(find.text('20.5000° N, 90.0000° E'), findsOneWidget);
       expect(tester.takeException(), isNull);
 
       await E2ETestHarness.cleanUp(tester);
@@ -152,8 +152,7 @@ void main() {
       await tester.pump(const Duration(milliseconds: 100));
 
       expect(find.textContaining('26.6340° N, 88.5530° E'), findsWidgets);
-      expect(find.text('26.6340° N, 88.5530° E'), findsOneWidget);
-      expect(find.text('± 6m accuracy'), findsOneWidget);
+      expect(find.textContaining('± 6m'), findsOneWidget);
 
       await E2ETestHarness.cleanUp(tester);
     });
@@ -200,7 +199,7 @@ void main() {
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 100));
 
-      expect(find.text('± 0m accuracy'), findsOneWidget);
+      expect(find.textContaining('± 0m'), findsOneWidget);
       expect(find.textContaining('NaN'), findsNothing);
 
       await E2ETestHarness.cleanUp(tester);
@@ -246,6 +245,9 @@ void main() {
 
     testWidgets('T2.2.3: Radar search radius expands from 5.0 km to 10.0 km and caps at 15.0 km ceiling at Offered phase',
         (WidgetTester tester) async {
+      DemoSession.startDemo(demoRole: 'motorist');
+      addTearDown(DemoSession.clear);
+
       await tester.pumpWidget(
         E2ETestHarness.wrapWithApp(
           const DispatchScreen(
@@ -277,6 +279,9 @@ void main() {
 
     testWidgets('T2.2.4: Technician status progression handles sequential transitions across Assigned, En Route, and Arrived',
         (WidgetTester tester) async {
+      DemoSession.startDemo(demoRole: 'motorist');
+      addTearDown(DemoSession.clear);
+
       await tester.pumpWidget(
         E2ETestHarness.wrapWithApp(
           const DispatchScreen(
@@ -412,8 +417,8 @@ void main() {
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 100));
 
-      // Final coordinates reflect Gulshan 2 (23.7985° N, 90.4143° E)
-      expect(find.textContaining('23.7985° N, 90.4143° E'), findsWidgets);
+      // Final coordinates reflect Gulshan 2 (23.7985° N, 90.4150° E)
+      expect(find.textContaining('23.7985° N, 90.4150° E'), findsWidgets);
 
       await E2ETestHarness.cleanUp(tester);
     });
@@ -469,7 +474,6 @@ void main() {
       await tester.pump(const Duration(milliseconds: 100));
 
       expect(find.textContaining('0.0000° N, 0.0000° E'), findsWidgets);
-      expect(find.text('0.0000° N, 0.0000° E'), findsOneWidget);
       expect(find.textContaining('-0.0'), findsNothing);
 
       await E2ETestHarness.cleanUp(tester);

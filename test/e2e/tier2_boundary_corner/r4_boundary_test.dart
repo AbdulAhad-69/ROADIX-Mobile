@@ -110,10 +110,9 @@ void main() {
       );
       await tester.pump();
 
-      // Enter new name (TextField index 1) and phone (TextField index 2)
-      final textFields = find.byType(TextField);
-      await tester.enterText(textFields.at(1), 'Updated Name');
-      await tester.enterText(textFields.at(2), '+8801722222222');
+      // Enter new name and phone via keyed EditProfileSheet fields
+      await tester.enterText(find.byKey(const Key('edit_profile_name_field')), 'Updated Name');
+      await tester.enterText(find.byKey(const Key('edit_profile_phone_field')), '+8801722222222');
       await tester.pump();
 
       await tester.tap(find.text('SAVE CHANGES'));
@@ -154,9 +153,9 @@ void main() {
       expect(profile?['full_name'], equals('Name C'));
     });
 
-    testWidgets('T2.14.6: Avatar preset selection in EditProfileSheet updates the active avatar preview immediately',
+    testWidgets('T2.14.6: Remove Photo clears custom avatar in EditProfileSheet and omits Unsplash presets',
         (WidgetTester tester) async {
-      String? selectedAvatar;
+      String? selectedAvatar = 'https://res.cloudinary.com/demo/image/upload/v1/profile.jpg';
 
       await tester.pumpWidget(
         E2ETestHarness.wrapWithApp(
@@ -164,7 +163,7 @@ void main() {
             body: EditProfileSheet(
               currentName: 'Tanvir Ahmed',
               currentPhone: '+8801711223344',
-              currentAvatarUrl: null,
+              currentAvatarUrl: selectedAvatar,
               onSave: (name, phone, avatar) {
                 selectedAvatar = avatar;
               },
@@ -176,20 +175,16 @@ void main() {
       );
       await tester.pump();
 
-      // Tap first avatar preset thumbnail (ClipOval)
-      final presetThumbnails = find.byType(ClipOval);
-      expect(presetThumbnails, findsWidgets);
-
-      // Tap preset
-      await tester.tap(presetThumbnails.first);
+      expect(find.text('CHOOSE AVATAR PRESET'), findsNothing);
+      expect(find.text('OR AVATAR IMAGE URL'), findsNothing);
+      await tester.tap(find.byKey(const Key('remove_avatar_btn')));
       await tester.pump();
 
       // Tap Save Changes
       await tester.tap(find.text('SAVE CHANGES'));
       await tester.pump();
 
-      expect(selectedAvatar, isNotNull);
-      expect(selectedAvatar, contains('images.unsplash.com'));
+      expect(selectedAvatar, isNull);
 
       await E2ETestHarness.cleanUp(tester);
     });
@@ -357,24 +352,23 @@ void main() {
       );
       await tester.pump();
 
-      final guestSosPill = find.text('Continue as Guest • Instant Triage');
+      final guestSosPill = E2EFinders.guestSosButton;
       expect(guestSosPill, findsOneWidget);
 
       await tester.tap(guestSosPill);
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 200));
 
-      expect(find.text('GUEST SOS DISPATCH'), findsOneWidget);
+      expect(find.text('Guest SOS'), findsWidgets);
 
-      // Skip phone entry directly
-      final skipButton = find.text('Skip phone entry (Proceed in Guest Demo)');
-      expect(skipButton, findsOneWidget);
-      await tester.tap(skipButton);
+      // Proceed via Guest button
+      final continueGuestBtn = find.widgetWithText(ElevatedButton, 'CONTINUE AS GUEST');
+      expect(continueGuestBtn, findsOneWidget);
+      await tester.tap(continueGuestBtn);
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 300));
 
       // Guest sheet closes cleanly and proceeds to EmergencyHomeScreen
-      expect(find.text('GUEST SOS DISPATCH'), findsNothing);
       expect(find.byType(EmergencyHomeScreen), findsOneWidget);
 
       await E2ETestHarness.cleanUp(tester);
@@ -432,8 +426,9 @@ void main() {
       );
       await tester.pump();
 
-      // Select SUV / Micro
+      // Select SUV / Micro & enter license plate
       await tester.tap(E2EFinders.suvCard);
+      await tester.enterText(E2EFinders.licensePlateField, 'Dhaka Metro GA-11-2034');
       await tester.pump();
 
       // Advance to FaultDetailsScreen
@@ -585,8 +580,9 @@ void main() {
       await tester.pump(const Duration(milliseconds: 300));
       expect(find.byType(VehicleSelectScreen), findsOneWidget);
 
-      // Select SUV
+      // Select SUV & enter license plate
       await tester.tap(E2EFinders.suvCard);
+      await tester.enterText(E2EFinders.licensePlateField, 'Dhaka Metro GA-11-2034');
       await tester.pump();
 
       // Step 2 -> Step 3

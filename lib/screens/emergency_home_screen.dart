@@ -1,20 +1,18 @@
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:geolocator/geolocator.dart';
-import '../services/demo_session.dart';
 import '../services/geocoding_service.dart';
+import '../services/notifications_service.dart';
 import '../services/supabase_service.dart';
-import '../src/core/config/app_config.dart';
 import '../theme/app_colors.dart';
 import 'activity_screen.dart';
 import 'dispatch_screen.dart';
 import 'location_confirm_screen.dart';
 import 'location_permission_screen.dart';
-import 'mechanic_home_screen.dart';
 import 'profile_screen.dart';
 import 'sos_screen.dart';
 import '../widgets/roadix_avatar.dart';
+import '../widgets/roadix_pressable.dart';
 import '../widgets/search_bottom_sheet.dart';
 import '../widgets/notifications_bottom_sheet.dart';
 
@@ -30,7 +28,7 @@ class _EmergencyHomeScreenState extends State<EmergencyHomeScreen>
   late AnimationController _pulseController;
   late Animation<double> _scaleAnimation;
   int _activeNavIndex = 0;
-  bool _hasUnreadAlerts = true;
+  bool _hasUnreadAlerts = false;
   Map<String, dynamic>? _activeRescueRequest;
 
   // Dynamic user & location telemetry
@@ -59,6 +57,7 @@ class _EmergencyHomeScreenState extends State<EmergencyHomeScreen>
     _checkActiveRescue();
     _loadUserProfile();
     _detectCurrentLocation();
+    _refreshUnreadAlerts();
   }
 
   @override
@@ -173,18 +172,24 @@ class _EmergencyHomeScreenState extends State<EmergencyHomeScreen>
     );
   }
 
-  void _openNotificationsSheet() {
+  Future<void> _openNotificationsSheet() async {
     HapticFeedback.lightImpact();
-    showModalBottomSheet(
+    final stillUnread = await showModalBottomSheet<bool>(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (ctx) => NotificationsBottomSheet(
-        onMarkAllRead: () {
-          setState(() => _hasUnreadAlerts = false);
-        },
-      ),
+      builder: (_) => const NotificationsBottomSheet(),
     );
+    if (stillUnread != null && mounted) {
+      setState(() => _hasUnreadAlerts = stillUnread);
+    } else if (mounted) {
+      _refreshUnreadAlerts();
+    }
+  }
+
+  Future<void> _refreshUnreadAlerts() async {
+    final unread = await NotificationsService.hasUnreadNotifications();
+    if (mounted) setState(() => _hasUnreadAlerts = unread);
   }
 
   void _showSosConfirmationModal() {
@@ -531,7 +536,7 @@ class _EmergencyHomeScreenState extends State<EmergencyHomeScreen>
                                           const SizedBox(width: 3),
                                           const Icon(
                                             Icons.verified,
-                                            color: AppColors.emeraldGps,
+                                            color: AppColors.emeraldDark,
                                             size: 12,
                                           ),
                                         ],
@@ -560,119 +565,57 @@ class _EmergencyHomeScreenState extends State<EmergencyHomeScreen>
                     ),
                     const SizedBox(width: 4),
 
-                    // Top Right: Demo/Debug Technician Console Switcher, Notifications & Search
-                    Flexible(
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          if (DemoSession.isActive ||
-                              (!AppConfig.isProduction &&
-                                  kDebugMode &&
-                                  !SupabaseService().isAuthenticated)) ...[
-                            Flexible(
-                              child: InkWell(
-                                onTap: () {
-                                  HapticFeedback.selectionClick();
-                                  Navigator.of(context).push(
-                                    MaterialPageRoute(
-                                      builder: (_) => const MechanicHomeScreen(),
-                                    ),
-                                  );
-                                },
-                                borderRadius: BorderRadius.circular(14),
-                                child: Container(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 8,
-                                    vertical: 5,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    color: AppColors.chassisText,
-                                    borderRadius: BorderRadius.circular(14),
-                                  ),
-                                  child: FittedBox(
-                                    fit: BoxFit.scaleDown,
-                                    child: Row(
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: const [
-                                        Icon(
-                                          Icons.engineering_outlined,
-                                          color: Colors.white,
-                                          size: 13,
-                                        ),
-                                        SizedBox(width: 4),
-                                        Text(
-                                          'Tech Console',
-                                          style: TextStyle(
-                                            color: Colors.white,
-                                            fontSize: 10.5,
-                                            fontWeight: FontWeight.w800,
-                                          ),
-                                        ),
-                                      ],
+                    // Top Right: Notifications & Search (48dp accessible touch targets)
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Stack(
+                          clipBehavior: Clip.none,
+                          children: [
+                            IconButton(
+                              tooltip: 'Notifications',
+                              onPressed: _openNotificationsSheet,
+                              icon: const Icon(
+                                Icons.notifications_outlined,
+                                color: AppColors.chassisText,
+                                size: 22,
+                              ),
+                            ),
+                            if (_hasUnreadAlerts)
+                              Positioned(
+                                top: 10,
+                                right: 10,
+                                child: IgnorePointer(
+                                  child: Container(
+                                    width: 8,
+                                    height: 8,
+                                    decoration: BoxDecoration(
+                                      color: AppColors.caliperCrimson,
+                                      shape: BoxShape.circle,
+                                      border: Border.all(
+                                        color: AppColors.porcelainBg,
+                                        width: 1.5,
+                                      ),
                                     ),
                                   ),
                                 ),
                               ),
-                            ),
-                            const SizedBox(width: 4),
                           ],
-
-                        // Notification Bell
-                        InkWell(
-                          onTap: _openNotificationsSheet,
-                          borderRadius: BorderRadius.circular(20),
-                          child: Padding(
-                            padding: const EdgeInsets.all(5.0),
-                            child: Stack(
-                              clipBehavior: Clip.none,
-                              children: [
-                                const Icon(
-                                  Icons.notifications_outlined,
-                                  color: AppColors.chassisText,
-                                  size: 20,
-                                ),
-                                if (_hasUnreadAlerts)
-                                  Positioned(
-                                    top: 0,
-                                    right: 0,
-                                    child: Container(
-                                      width: 7,
-                                      height: 7,
-                                      decoration: BoxDecoration(
-                                        color: AppColors.caliperCrimson,
-                                        shape: BoxShape.circle,
-                                        border: Border.all(
-                                          color: AppColors.porcelainBg,
-                                          width: 1.5,
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                              ],
-                            ),
-                          ),
                         ),
-                        const SizedBox(width: 2),
-
-                        // Search Icon
-                        InkWell(
-                          onTap: _openSearchSheet,
-                          borderRadius: BorderRadius.circular(20),
-                          child: const Padding(
-                            padding: EdgeInsets.all(5.0),
-                            child: Icon(
-                              Icons.search,
-                              color: AppColors.chassisText,
-                              size: 20,
-                            ),
+                        IconButton(
+                          tooltip: 'Search nearby services',
+                          onPressed: _openSearchSheet,
+                          icon: const Icon(
+                            Icons.search,
+                            color: AppColors.chassisText,
+                            size: 22,
                           ),
                         ),
                       ],
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
-            ),
 
             // Tab Body (IndexedStack switching between Home, Activity, and Profile)
             Expanded(
@@ -686,69 +629,18 @@ class _EmergencyHomeScreenState extends State<EmergencyHomeScreen>
               ),
             ),
 
-            // Modern 3-Tab Bottom Navigation Bar
+            // Clean 3-Tab Bottom Navigation Bar
             Container(
-              height: 62,
-              decoration: BoxDecoration(
+              height: 64,
+              decoration: const BoxDecoration(
                 color: AppColors.cardWhite,
-                border: const Border(top: BorderSide(color: AppColors.slateBorder)),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withAlpha(6),
-                    blurRadius: 10,
-                    offset: const Offset(0, -2),
-                  ),
-                ],
+                border: Border(top: BorderSide(color: AppColors.slateBorder)),
               ),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceAround,
                 children: [
-                  // Tab 0: Home (ROADIX Emblem)
-                  InkWell(
-                    onTap: () {
-                      HapticFeedback.selectionClick();
-                      setState(() => _activeNavIndex = 0);
-                    },
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Image.asset(
-                          'assets/images/logo.png',
-                          width: 22,
-                          height: 22,
-                          fit: BoxFit.contain,
-                          color: _activeNavIndex == 0
-                              ? AppColors.caliperCrimson
-                              : AppColors.slateMuted,
-                          errorBuilder: (_, _, _) => Icon(
-                            Icons.alt_route,
-                            size: 22,
-                            color: _activeNavIndex == 0
-                                ? AppColors.caliperCrimson
-                                : AppColors.slateMuted,
-                          ),
-                        ),
-                        const SizedBox(height: 3),
-                        Text(
-                          'Home',
-                          style: TextStyle(
-                            fontSize: 10,
-                            fontWeight: _activeNavIndex == 0
-                                ? FontWeight.w800
-                                : FontWeight.w600,
-                            color: _activeNavIndex == 0
-                                ? AppColors.caliperCrimson
-                                : AppColors.slateMuted,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-
-                  // Tab 1: Activity
+                  _buildBottomNavItem(Icons.home_outlined, 'Home', 0),
                   _buildBottomNavItem(Icons.history, 'Activity', 1),
-
-                  // Tab 2: Profile
                   _buildBottomNavItem(Icons.person_outline, 'Profile', 2),
                 ],
               ),
@@ -859,23 +751,16 @@ class _EmergencyHomeScreenState extends State<EmergencyHomeScreen>
             const SizedBox(height: 10),
           ],
 
-          // Dynamic Location Indicator Card
-          InkWell(
+          // Clean Dynamic Location Indicator Bar
+          RoadixPressable(
             onTap: _openLocationConfirm,
-            borderRadius: BorderRadius.circular(16),
+            borderRadius: BorderRadius.circular(14),
             child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
               decoration: BoxDecoration(
                 color: AppColors.cardWhite,
-                borderRadius: BorderRadius.circular(16),
+                borderRadius: BorderRadius.circular(14),
                 border: Border.all(color: AppColors.slateBorder),
-                boxShadow: [
-                  BoxShadow(
-                    color: AppColors.caliperCrimson.withAlpha(12),
-                    blurRadius: 10,
-                    offset: const Offset(0, 3),
-                  ),
-                ],
               ),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -887,12 +772,8 @@ class _EmergencyHomeScreenState extends State<EmergencyHomeScreen>
                           width: 36,
                           height: 36,
                           decoration: BoxDecoration(
-                            color: const Color(0xFFFEF2F2),
-                            borderRadius: BorderRadius.circular(11),
-                            border: Border.all(
-                              color: AppColors.caliperCrimson.withAlpha(35),
-                              width: 1.0,
-                            ),
+                            color: AppColors.crimsonLight,
+                            borderRadius: BorderRadius.circular(10),
                           ),
                           child: const Icon(
                             Icons.location_on,
@@ -905,38 +786,37 @@ class _EmergencyHomeScreenState extends State<EmergencyHomeScreen>
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Row(
-                                children: const [
-                                  Flexible(
-                                    child: Text(
-                                      'DETECTED LOCATION',
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: TextStyle(
-                                        color: AppColors.slateMuted,
-                                        fontSize: 9,
-                                        fontWeight: FontWeight.w800,
-                                        letterSpacing: 0.8,
-                                      ),
-                                    ),
-                                  ),
-                                  SizedBox(width: 5),
-                                  CircleAvatar(
-                                    radius: 3.5,
-                                    backgroundColor: AppColors.emeraldGps,
-                                  ),
-                                ],
-                              ),
-                              const SizedBox(height: 2),
                               Text(
                                 _isLoadingLocation ? 'Locating vehicle...' : _currentLocationName,
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
                                 style: const TextStyle(
                                   color: AppColors.chassisText,
-                                  fontSize: 12.5,
+                                  fontSize: 13.5,
                                   fontWeight: FontWeight.w700,
                                 ),
+                              ),
+                              const SizedBox(height: 1),
+                              Row(
+                                children: [
+                                  CircleAvatar(
+                                    radius: 3.5,
+                                    backgroundColor: _hasLiveGpsLock
+                                        ? AppColors.emeraldDark
+                                        : AppColors.amberDark,
+                                  ),
+                                  const SizedBox(width: 5),
+                                  Text(
+                                    _hasLiveGpsLock && _currentAccuracyMeters != null
+                                        ? 'GPS Locked (±${_currentAccuracyMeters}m)'
+                                        : 'Tap Change to pin exact spot',
+                                    style: const TextStyle(
+                                      color: AppColors.slateMuted,
+                                      fontSize: 11.5,
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                                  ),
+                                ],
                               ),
                             ],
                           ),
@@ -945,14 +825,14 @@ class _EmergencyHomeScreenState extends State<EmergencyHomeScreen>
                     ),
                   ),
                   const SizedBox(width: 8),
-                  Row(
-                    children: const [
+                  const Row(
+                    children: [
                       Text(
                         'Change',
                         style: TextStyle(
                           color: AppColors.caliperCrimson,
-                          fontSize: 11.5,
-                          fontWeight: FontWeight.bold,
+                          fontSize: 12.5,
+                          fontWeight: FontWeight.w700,
                         ),
                       ),
                       SizedBox(width: 2),
@@ -968,9 +848,8 @@ class _EmergencyHomeScreenState extends State<EmergencyHomeScreen>
             ),
           ),
 
-          const SizedBox(height: 14),
+          const SizedBox(height: 16),
 
-          // Primary Header Copy
           const Text(
             'Stranded on the road?',
             style: TextStyle(
@@ -982,17 +861,17 @@ class _EmergencyHomeScreenState extends State<EmergencyHomeScreen>
           ),
           const SizedBox(height: 3),
           const Text(
-            'Dispatch certified mechanics with specialized tools across Dhaka within minutes.',
+            'Dispatch certified mechanics with specialized tools across Bangladesh within minutes.',
             style: TextStyle(
               color: AppColors.slateMuted,
-              fontSize: 12,
+              fontSize: 12.5,
               height: 1.35,
             ),
           ),
 
           const Spacer(),
 
-          // Dominant Centerpiece: Multi-Ring Breathing SOS Trigger with Dual-Ring Radial Glow
+          // Clean Architectural SOS Trigger (57efb64 heritage)
           Center(
             child: Column(
               mainAxisSize: MainAxisSize.min,
@@ -1002,140 +881,55 @@ class _EmergencyHomeScreenState extends State<EmergencyHomeScreen>
                   child: Stack(
                     alignment: Alignment.center,
                     children: [
-                      // Outermost Atmospheric Aura Ring
                       Container(
-                        width: 204,
-                        height: 204,
+                        width: 184,
+                        height: 184,
                         decoration: BoxDecoration(
                           shape: BoxShape.circle,
                           border: Border.all(
-                            color: AppColors.caliperCrimson.withAlpha(45),
+                            color: AppColors.crimsonBorder,
                             width: 1.5,
                           ),
-                          gradient: RadialGradient(
-                            colors: [
-                              AppColors.caliperCrimson.withAlpha(0),
-                              AppColors.caliperCrimson.withAlpha(30),
-                            ],
-                          ),
+                          color: AppColors.crimsonLight.withAlpha(90),
                         ),
                       ),
-                      // Middle Tactical Pulse Ring with Accent Dash Border
-                      Container(
-                        width: 172,
-                        height: 172,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          border: Border.all(
-                            color: const Color(0xFFF87171).withAlpha(160),
-                            width: 2,
-                          ),
-                          color: AppColors.crimsonLight.withAlpha(140),
-                        ),
-                      ),
-                      // Inner Glow Foundation with Dual Drop Shadow
-                      Container(
-                        width: 144,
-                        height: 144,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          boxShadow: [
-                            BoxShadow(
-                              color: AppColors.caliperCrimson.withAlpha(140),
-                              blurRadius: 30,
-                              spreadRadius: 2,
-                              offset: const Offset(0, 8),
-                            ),
-                            BoxShadow(
-                              color: Colors.black.withAlpha(50),
-                              blurRadius: 10,
-                              offset: const Offset(0, 4),
-                            ),
-                          ],
-                        ),
-                      ),
-                      // Core High-Impact Action Button
-                      Semantics(
-                        button: true,
-                        label: 'Trigger Emergency SOS options',
-                        child: InkWell(
-                          onTap: _showSosConfirmationModal,
-                          borderRadius: BorderRadius.circular(68),
+                      RoadixPressable(
+                        onTap: _showSosConfirmationModal,
+                        borderRadius: BorderRadius.circular(72),
+                        child: Semantics(
+                          button: true,
+                          label: 'Trigger Emergency SOS options',
                           child: Container(
-                            width: 136,
-                            height: 136,
-                            padding: const EdgeInsets.all(10),
-                            decoration: BoxDecoration(
+                            width: 140,
+                            height: 140,
+                            decoration: const BoxDecoration(
                               shape: BoxShape.circle,
-                              gradient: const RadialGradient(
-                                center: Alignment(-0.25, -0.35),
-                                radius: 0.95,
-                                colors: [
-                                  Color(0xFFFF5252),
-                                  AppColors.caliperCrimson,
-                                  Color(0xFF881337),
-                                ],
-                              ),
-                              border: Border.all(
-                                color: Colors.white.withAlpha(80),
-                                width: 2,
-                              ),
+                              color: AppColors.caliperCrimson,
                             ),
-                            child: FittedBox(
-                              fit: BoxFit.scaleDown,
-                              child: Column(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  const Text(
-                                    'SOS',
-                                    style: TextStyle(
-                                      color: Colors.white,
-                                      fontSize: 38,
-                                      fontWeight: FontWeight.w900,
-                                      letterSpacing: -0.5,
-                                      height: 1.0,
-                                      shadows: [
-                                        Shadow(
-                                          color: Colors.black45,
-                                          blurRadius: 8,
-                                          offset: Offset(0, 2),
-                                        ),
-                                      ],
-                                    ),
+                            child: const Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Text(
+                                  'SOS',
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 38,
+                                    fontWeight: FontWeight.w900,
+                                    letterSpacing: -0.5,
+                                    height: 1.0,
                                   ),
-                                  const SizedBox(height: 5),
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 8,
-                                      vertical: 3,
-                                    ),
-                                    decoration: BoxDecoration(
-                                      color: Colors.white.withAlpha(35),
-                                      borderRadius: BorderRadius.circular(10),
-                                    ),
-                                    child: Row(
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: const [
-                                        Icon(
-                                          Icons.touch_app,
-                                          color: Colors.white,
-                                          size: 10,
-                                        ),
-                                        SizedBox(width: 3),
-                                        Text(
-                                          'PRESS FOR HELP',
-                                          style: TextStyle(
-                                            color: Colors.white,
-                                            fontSize: 9,
-                                            fontWeight: FontWeight.w900,
-                                            letterSpacing: 1.0,
-                                          ),
-                                        ),
-                                      ],
-                                    ),
+                                ),
+                                SizedBox(height: 4),
+                                Text(
+                                  'TAP FOR HELP',
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w800,
+                                    letterSpacing: 1.1,
                                   ),
-                                ],
-                              ),
+                                ),
+                              ],
                             ),
                           ),
                         ),
@@ -1143,22 +937,21 @@ class _EmergencyHomeScreenState extends State<EmergencyHomeScreen>
                     ],
                   ),
                 ),
-                const SizedBox(height: 14),
+                const SizedBox(height: 12),
                 const Text(
-                  'ROADSIDE EMERGENCY DISPATCH',
+                  'Get Roadside Help',
                   style: TextStyle(
-                    color: AppColors.caliperCrimson,
-                    fontSize: 13,
-                    fontWeight: FontWeight.w900,
-                    letterSpacing: 0.8,
+                    color: AppColors.chassisText,
+                    fontSize: 15,
+                    fontWeight: FontWeight.w800,
                   ),
                 ),
                 const SizedBox(height: 2),
                 const Text(
-                  'Tap button to choose breakdown service',
+                  'Tap SOS for dispatch or Highway 999 emergency',
                   style: TextStyle(
                     color: AppColors.slateMuted,
-                    fontSize: 11,
+                    fontSize: 12,
                     fontWeight: FontWeight.w500,
                   ),
                 ),
@@ -1168,60 +961,36 @@ class _EmergencyHomeScreenState extends State<EmergencyHomeScreen>
 
           const Spacer(),
 
-          // Defect Categories Header & Clean Grid
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: const [
-              Flexible(
-                child: Text(
-                  'What do you need help with?',
-                  style: TextStyle(
-                    color: AppColors.chassisText,
-                    fontSize: 13,
-                    fontWeight: FontWeight.w800,
-                  ),
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
-              SizedBox(width: 8),
-              Text(
-                'Instant triage',
-                style: TextStyle(
-                  color: AppColors.slateMuted,
-                  fontSize: 10.5,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ],
+          // Balanced Breakdown Category Grid
+          const Text(
+            'What do you need help with?',
+            style: TextStyle(
+              color: AppColors.chassisText,
+              fontSize: 14,
+              fontWeight: FontWeight.w800,
+            ),
           ),
           const SizedBox(height: 10),
 
-          // 2-Row Responsive Breakdown Cards Layout with Elevated Modern Styling
           Column(
             children: [
               Row(
                 children: [
                   _buildCategoryCard(
                     title: 'Battery',
-                    badge: 'Jump / 12V',
                     icon: Icons.battery_charging_full,
-                    accentColor: const Color(0xFFD97706),
                     fullFault: 'Dead Battery',
                   ),
                   const SizedBox(width: 8),
                   _buildCategoryCard(
                     title: 'Flat Tire',
-                    badge: 'Puncture',
                     icon: Icons.album_outlined,
-                    accentColor: AppColors.caliperCrimson,
                     fullFault: 'Flat Tire',
                   ),
                   const SizedBox(width: 8),
                   _buildCategoryCard(
                     title: 'Engine',
-                    badge: 'Thermal',
                     icon: Icons.warning_amber_rounded,
-                    accentColor: const Color(0xFFEA580C),
                     fullFault: 'Engine Trouble',
                   ),
                 ],
@@ -1230,19 +999,21 @@ class _EmergencyHomeScreenState extends State<EmergencyHomeScreen>
               Row(
                 children: [
                   _buildCategoryCard(
-                    title: 'Fuel',
-                    badge: '5L Delivery',
+                    title: 'Out of Fuel',
                     icon: Icons.local_gas_station_outlined,
-                    accentColor: const Color(0xFF0284C7),
                     fullFault: 'Out of Fuel',
                   ),
                   const SizedBox(width: 8),
                   _buildCategoryCard(
                     title: 'Towing',
-                    badge: 'Flatbed',
                     icon: Icons.local_shipping_outlined,
-                    accentColor: const Color(0xFF4F46E5),
                     fullFault: 'Towing',
+                  ),
+                  const SizedBox(width: 8),
+                  _buildCategoryCard(
+                    title: 'Other Issue',
+                    icon: Icons.build_outlined,
+                    fullFault: 'General Breakdown',
                   ),
                 ],
               ),
@@ -1260,31 +1031,22 @@ class _EmergencyHomeScreenState extends State<EmergencyHomeScreen>
 
   Widget _buildCategoryCard({
     required String title,
-    required String badge,
     required IconData icon,
-    required Color accentColor,
     required String fullFault,
   }) {
     return Expanded(
-      child: InkWell(
+      child: RoadixPressable(
         onTap: () {
           HapticFeedback.lightImpact();
           _startEmergencyTriage(fullFault);
         },
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(14),
         child: Container(
-          padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 6),
+          padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 6),
           decoration: BoxDecoration(
             color: AppColors.cardWhite,
-            borderRadius: BorderRadius.circular(16),
+            borderRadius: BorderRadius.circular(14),
             border: Border.all(color: AppColors.slateBorder),
-            boxShadow: [
-              BoxShadow(
-                color: accentColor.withAlpha(20),
-                blurRadius: 8,
-                offset: const Offset(0, 2),
-              ),
-            ],
           ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -1293,45 +1055,21 @@ class _EmergencyHomeScreenState extends State<EmergencyHomeScreen>
                 width: 36,
                 height: 36,
                 decoration: BoxDecoration(
-                  color: accentColor.withAlpha(24),
+                  color: AppColors.porcelainBg,
                   borderRadius: BorderRadius.circular(10),
                 ),
-                child: Icon(icon, color: accentColor, size: 20),
+                child: Icon(icon, color: AppColors.caliperCrimson, size: 20),
               ),
-              const SizedBox(height: 5),
-              FittedBox(
-                fit: BoxFit.scaleDown,
-                child: Text(
-                  title,
-                  textAlign: TextAlign.center,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    color: AppColors.chassisText,
-                    fontSize: 12.0,
-                    fontWeight: FontWeight.w800,
-                    height: 1.1,
-                  ),
-                ),
-              ),
-              const SizedBox(height: 3),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                decoration: BoxDecoration(
-                  color: accentColor.withAlpha(20),
-                  borderRadius: BorderRadius.circular(6),
-                ),
-                child: FittedBox(
-                  fit: BoxFit.scaleDown,
-                  child: Text(
-                    badge,
-                    style: TextStyle(
-                      color: accentColor,
-                      fontSize: 10.0,
-                      fontWeight: FontWeight.w800,
-                      letterSpacing: 0.1,
-                    ),
-                  ),
+              const SizedBox(height: 6),
+              Text(
+                title,
+                textAlign: TextAlign.center,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  color: AppColors.chassisText,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
                 ),
               ),
             ],
