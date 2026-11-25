@@ -1,7 +1,11 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../theme/app_colors.dart';
+import '../services/demo_session.dart';
 import '../services/supabase_service.dart';
+import '../src/core/config/app_config.dart';
+import '../src/core/router/app_router.dart';
 import 'login_screen.dart';
 import 'mechanic_home_screen.dart';
 import '../widgets/edit_profile_sheet.dart';
@@ -9,6 +13,7 @@ import '../widgets/vehicle_editor_sheet.dart';
 import '../widgets/contact_editor_sheet.dart';
 import '../widgets/wallet_editor_sheet.dart';
 import '../widgets/brand_logo.dart';
+import '../widgets/roadix_avatar.dart';
 
 class ProfileScreen extends StatefulWidget {
   final bool showBackButton;
@@ -23,9 +28,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
   final SupabaseService _db = SupabaseService();
 
   bool _isLoading = true;
-  String _userName = 'Loading...';
+  String _userName = '';
   String _userPhone = '';
   String? _avatarUrl;
+  String _userRole = 'motorist';
   bool _isNidVerified = false;
 
   List<Map<String, dynamic>> _savedGarage = [];
@@ -50,10 +56,20 @@ class _ProfileScreenState extends State<ProfileScreen> {
       if (mounted) {
         setState(() {
           if (profile != null) {
-            _userName = profile['full_name'] ?? 'Motorist';
-            _userPhone = profile['phone'] ?? '';
+            _userName = (profile['full_name'] as String?)?.trim().isNotEmpty == true
+                ? profile['full_name'] as String
+                : 'Motorist';
+            _userPhone = profile['phone'] as String? ?? '';
             _avatarUrl = profile['avatar_url'] as String?;
+            _userRole = profile['role'] as String? ?? 'motorist';
             _isNidVerified = profile['is_nid_verified'] ?? false;
+          } else {
+            _userName = DemoSession.isActive
+                ? DemoSession.fullName
+                : 'Guest / Demo Motorist';
+            _userPhone = DemoSession.isActive ? DemoSession.phone : '';
+            _avatarUrl = DemoSession.isActive ? DemoSession.avatarUrl : null;
+            _userRole = DemoSession.isActive ? DemoSession.role : 'motorist';
           }
           _savedGarage = vehicles;
           _emergencyContacts = contacts;
@@ -63,7 +79,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
       }
     } catch (e) {
       if (mounted) {
-        setState(() => _isLoading = false);
+        setState(() {
+          if (_userName.isEmpty) _userName = 'Guest / Demo Motorist';
+          _isLoading = false;
+        });
       }
     }
   }
@@ -79,29 +98,19 @@ class _ProfileScreenState extends State<ProfileScreen> {
         currentPhone: _userPhone,
         currentAvatarUrl: _avatarUrl,
         onSave: (newName, newPhone, newAvatarUrl) async {
-          setState(() {
-            _userName = newName;
-            _userPhone = newPhone;
-            _avatarUrl = newAvatarUrl;
-          });
           await _db.updateProfile(
             fullName: newName,
             phone: newPhone,
             avatarUrl: newAvatarUrl,
           );
-          _loadProfileData();
-        },
-        onProfileSaved: (newName, newPhone) async {
-          setState(() {
-            _userName = newName;
-            _userPhone = newPhone;
-          });
-          await _db.updateProfile(
-            fullName: newName,
-            phone: newPhone,
-            avatarUrl: _avatarUrl,
-          );
-          _loadProfileData();
+          if (mounted) {
+            setState(() {
+              _userName = newName;
+              _userPhone = newPhone;
+              _avatarUrl = newAvatarUrl;
+            });
+          }
+          await _loadProfileData();
         },
       ),
     );
@@ -321,59 +330,43 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     InkWell(
                       onTap: _openEditProfile,
                       borderRadius: BorderRadius.circular(32),
-                      child: Stack(
-                        alignment: Alignment.bottomRight,
-                        children: [
-                          Container(
-                            padding: const EdgeInsets.all(2.5),
-                            decoration: BoxDecoration(
-                              shape: BoxShape.circle,
-                              border: Border.all(
-                                color: AppColors.caliperCrimson.withAlpha(60),
-                                width: 1.5,
+                      child: Semantics(
+                        button: true,
+                        label: 'Edit profile photo and details',
+                        child: Stack(
+                          alignment: Alignment.bottomRight,
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.all(2.5),
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                border: Border.all(
+                                  color: AppColors.caliperCrimson.withAlpha(60),
+                                  width: 1.5,
+                                ),
+                              ),
+                              child: RoadixAvatar(
+                                displayName: _userName,
+                                avatarUrl: _avatarUrl,
+                                radius: 30,
+                                showInitialFallback: false,
                               ),
                             ),
-                            child: CircleAvatar(
-                              radius: 30,
-                              backgroundColor: AppColors.crimsonLight,
-                              backgroundImage: (_avatarUrl != null && _avatarUrl!.isNotEmpty)
-                                  ? (_avatarUrl!.startsWith('http')
-                                      ? NetworkImage(_avatarUrl!)
-                                      : AssetImage(_avatarUrl!) as ImageProvider)
-                                  : null,
-                              onBackgroundImageError: (_avatarUrl != null && _avatarUrl!.isNotEmpty)
-                                  ? (e, s) {}
-                                  : null,
-                              child: (_avatarUrl == null || _avatarUrl!.isEmpty)
-                                  ? const Icon(
-                                      Icons.person,
-                                      color: AppColors.caliperCrimson,
-                                      size: 32,
-                                    )
-                                  : null,
+                            Container(
+                              padding: const EdgeInsets.all(5),
+                              decoration: BoxDecoration(
+                                color: AppColors.caliperCrimson,
+                                shape: BoxShape.circle,
+                                border: Border.all(color: Colors.white, width: 1.5),
+                              ),
+                              child: const Icon(
+                                Icons.edit,
+                                size: 12,
+                                color: Colors.white,
+                              ),
                             ),
-                          ),
-                          Container(
-                            padding: const EdgeInsets.all(4),
-                            decoration: BoxDecoration(
-                              color: AppColors.caliperCrimson,
-                              shape: BoxShape.circle,
-                              border: Border.all(color: Colors.white, width: 1.5),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: Colors.black.withAlpha(20),
-                                  blurRadius: 3,
-                                  offset: const Offset(0, 1),
-                                ),
-                              ],
-                            ),
-                            child: const Icon(
-                              Icons.edit,
-                              size: 11,
-                              color: Colors.white,
-                            ),
-                          ),
-                        ],
+                          ],
+                        ),
                       ),
                     ),
                     const SizedBox(width: 14),
@@ -692,7 +685,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
               else
                 Material(
                   color: AppColors.cardWhite,
-                  borderRadius: BorderRadius.circular(14),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(14),
                     side: const BorderSide(color: AppColors.slateBorder),
@@ -891,96 +883,93 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 ),
               ),
 
-              const SizedBox(height: 20),
-
-              // Mechanic Workshop Mode Switcher Card
-              InkWell(
-                onTap: () {
-                  Navigator.of(context).push(
-                    MaterialPageRoute(builder: (_) => const MechanicHomeScreen()),
-                  );
-                },
-                borderRadius: BorderRadius.circular(16),
-                child: Container(
-                  padding: const EdgeInsets.all(14),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFF8FAFC),
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: AppColors.slateBorder),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withAlpha(5),
-                        blurRadius: 6,
-                        offset: const Offset(0, 2),
-                      ),
-                    ],
-                  ),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Expanded(
-                        child: Row(
-                          children: [
-                            Container(
-                              width: 38,
-                              height: 38,
-                              decoration: BoxDecoration(
-                                color: AppColors.caliperCrimson.withAlpha(20),
-                                borderRadius: BorderRadius.circular(10),
+              // Mechanic Workshop Mode Switcher Card (shown for verified/registered mechanics or non-prod debug/demo)
+              if (_userRole == 'mechanic' ||
+                  DemoSession.isActive ||
+                  (!AppConfig.isProduction && kDebugMode && !_db.isAuthenticated)) ...[
+                const SizedBox(height: 20),
+                InkWell(
+                  onTap: () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(builder: (_) => const MechanicHomeScreen()),
+                    );
+                  },
+                  borderRadius: BorderRadius.circular(16),
+                  child: Container(
+                    padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(
+                      color: AppColors.cardWhite,
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: AppColors.slateBorder),
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Expanded(
+                          child: Row(
+                            children: [
+                              Container(
+                                width: 40,
+                                height: 40,
+                                decoration: BoxDecoration(
+                                  color: AppColors.crimsonLight,
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                                child: const Icon(
+                                  Icons.build,
+                                  color: AppColors.crimsonHover,
+                                  size: 20,
+                                ),
                               ),
-                              child: const Icon(
-                                Icons.build,
-                                color: AppColors.caliperCrimson,
-                                size: 19,
-                              ),
-                            ),
-                            const SizedBox(width: 12),
-                            const Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    'Technician Console',
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: TextStyle(
-                                      color: AppColors.chassisText,
-                                      fontSize: 13,
-                                      fontWeight: FontWeight.w800,
+                              const SizedBox(width: 12),
+                              const Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      'Technician Console',
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: TextStyle(
+                                        color: AppColors.chassisText,
+                                        fontSize: 13.5,
+                                        fontWeight: FontWeight.w800,
+                                      ),
                                     ),
-                                  ),
-                                  SizedBox(height: 1),
-                                  Text(
-                                    'On-duty toggle, specializations & offers',
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: TextStyle(
-                                      color: AppColors.slateMuted,
-                                      fontSize: 10,
+                                    SizedBox(height: 2),
+                                    Text(
+                                      'On-duty toggle, specializations & offers',
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: TextStyle(
+                                        color: AppColors.slateMuted,
+                                        fontSize: 11,
+                                      ),
                                     ),
-                                  ),
-                                ],
+                                  ],
+                                ),
                               ),
-                            ),
-                          ],
+                            ],
+                          ),
                         ),
-                      ),
-                      const SizedBox(width: 8),
-                      const Icon(
-                        Icons.chevron_right,
-                        color: AppColors.slateMuted,
-                        size: 20,
-                      ),
-                    ],
+                        const SizedBox(width: 8),
+                        const Icon(
+                          Icons.chevron_right,
+                          color: AppColors.slateMuted,
+                          size: 20,
+                        ),
+                      ],
+                    ),
                   ),
                 ),
-              ),
+              ],
 
               const SizedBox(height: 28),
 
               // Log Out Action
               SizedBox(
                 width: double.infinity,
+                height: 48,
                 child: TextButton.icon(
                   onPressed: () async {
                     try {
@@ -989,24 +978,25 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       debugPrint('Profile Screen signOut error: $e');
                     } finally {
                       if (context.mounted) {
-                        Navigator.of(context).pushAndRemoveUntil(
-                          MaterialPageRoute(builder: (_) => const LoginScreen()),
-                          (route) => false,
+                        navigateRoot(
+                          context,
+                          route: AppRoutes.login,
+                          fallbackWidget: const LoginScreen(),
                         );
                       }
                     }
                   },
                   icon: const Icon(
                     Icons.logout,
-                    color: AppColors.caliperCrimson,
-                    size: 16,
+                    color: AppColors.crimsonHover,
+                    size: 18,
                   ),
                   label: const Text(
                     'Log Out & Return to Login',
                     style: TextStyle(
-                      color: AppColors.caliperCrimson,
-                      fontWeight: FontWeight.bold,
-                      fontSize: 12,
+                      color: AppColors.crimsonHover,
+                      fontWeight: FontWeight.w800,
+                      fontSize: 13,
                     ),
                   ),
                 ),

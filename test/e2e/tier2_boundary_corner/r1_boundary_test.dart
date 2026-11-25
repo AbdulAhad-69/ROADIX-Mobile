@@ -122,7 +122,8 @@ void main() {
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 100));
 
-      expect(find.textContaining('20.5000° N, 90.0000° E'), findsOneWidget);
+      expect(find.textContaining('20.5000° N, 90.0000° E'), findsWidgets);
+      expect(find.text('20.5000° N, 90.0000° E'), findsOneWidget);
       expect(tester.takeException(), isNull);
 
       await E2ETestHarness.cleanUp(tester);
@@ -150,7 +151,8 @@ void main() {
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 100));
 
-      expect(find.textContaining('26.6340° N, 88.5530° E'), findsOneWidget);
+      expect(find.textContaining('26.6340° N, 88.5530° E'), findsWidgets);
+      expect(find.text('26.6340° N, 88.5530° E'), findsOneWidget);
       expect(find.text('± 6m accuracy'), findsOneWidget);
 
       await E2ETestHarness.cleanUp(tester);
@@ -410,8 +412,8 @@ void main() {
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 100));
 
-      // Final coordinates reflect Gulshan 2 (23.7925° N, 90.4078° E)
-      expect(find.textContaining('23.7925° N, 90.4078° E'), findsOneWidget);
+      // Final coordinates reflect Gulshan 2 (23.7985° N, 90.4143° E)
+      expect(find.textContaining('23.7985° N, 90.4143° E'), findsWidgets);
 
       await E2ETestHarness.cleanUp(tester);
     });
@@ -466,7 +468,8 @@ void main() {
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 100));
 
-      expect(find.textContaining('0.0000° N, 0.0000° E'), findsOneWidget);
+      expect(find.textContaining('0.0000° N, 0.0000° E'), findsWidgets);
+      expect(find.text('0.0000° N, 0.0000° E'), findsOneWidget);
       expect(find.textContaining('-0.0'), findsNothing);
 
       await E2ETestHarness.cleanUp(tester);

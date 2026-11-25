@@ -77,10 +77,10 @@ class E2EFinders {
       find.widgetWithText(OutlinedButton, 'Continue with Google');
   static Finder get phoneAuthTab => find.text('Mobile OTP');
   static Finder get emailAuthTab => find.text('Email Account');
-  static Finder get motoristRoleTab => find.text('Motorist');
-  static Finder get mechanicRoleTab => find.text('Technician');
-  static Finder get motoristDemoButton => find.text('Motorist');
-  static Finder get mechanicDemoButton => find.text('Technician');
+  static Finder get motoristRoleTab => find.byKey(const Key('signup_role_motorist'));
+  static Finder get mechanicRoleTab => find.byKey(const Key('signup_role_technician'));
+  static Finder get motoristDemoButton => find.byKey(const Key('demo_motorist_btn'));
+  static Finder get mechanicDemoButton => find.byKey(const Key('demo_technician_btn'));
 
   // Profile Screen
   static Finder get editProfileButton => find.byIcon(Icons.edit);

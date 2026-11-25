@@ -117,15 +117,20 @@ void main() {
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 100));
 
-      // Alternating 20 rapid taps between tabs and roles
+      // Switch to Email Account Sign Up so role toggle chips are active
+      await tester.tap(E2EFinders.emailAuthTab);
+      await tester.pump();
+      await tester.tap(find.text('Need a new account? Sign Up'));
+      await tester.pump();
+
+      // Alternating 20 rapid taps between Sign-Up roles and auth tabs
       for (int i = 0; i < 10; i++) {
-        await tester.tap(E2EFinders.emailAuthTab, warnIfMissed: false);
-        await tester.tap(find.text('Technician').first, warnIfMissed: false);
+        await tester.tap(E2EFinders.mechanicRoleTab, warnIfMissed: false);
         await tester.pump(const Duration(milliseconds: 10));
-        await tester.tap(E2EFinders.phoneAuthTab, warnIfMissed: false);
-        await tester.tap(find.text('Motorist').first, warnIfMissed: false);
+        await tester.tap(E2EFinders.motoristRoleTab, warnIfMissed: false);
         await tester.pump(const Duration(milliseconds: 10));
       }
+      await tester.tap(E2EFinders.phoneAuthTab);
       await tester.pump(const Duration(milliseconds: 300));
 
       expect(tester.takeException(), isNull);
@@ -147,12 +152,12 @@ void main() {
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 100));
 
-      final demoBtn = find.text('Motorist');
-      expect(demoBtn, findsWidgets);
+      final demoBtn = E2EFinders.motoristDemoButton;
+      expect(demoBtn, findsOneWidget);
 
       // Tap demo button 5 times rapidly
       for (int i = 0; i < 5; i++) {
-        await tester.tap(demoBtn.first, warnIfMissed: false);
+        await tester.tap(demoBtn, warnIfMissed: false);
       }
       await tester.pump();
       await tester.pump(const Duration(seconds: 1));
@@ -716,7 +721,11 @@ void main() {
       expect(E2EFinders.commercialCard, findsOneWidget);
 
       // Select SUV
-      await tester.scrollUntilVisible(E2EFinders.suvCard, 200);
+      await tester.scrollUntilVisible(
+        E2EFinders.suvCard,
+        200,
+        scrollable: find.byType(Scrollable).first,
+      );
       await tester.tap(E2EFinders.suvCard);
       await tester.pump();
 

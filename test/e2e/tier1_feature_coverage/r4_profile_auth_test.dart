@@ -9,6 +9,7 @@ import 'package:roadix_mobile/screens/login_screen.dart';
 import 'package:roadix_mobile/screens/mechanic_home_screen.dart';
 import 'package:roadix_mobile/screens/profile_screen.dart';
 import 'package:roadix_mobile/screens/vehicle_select_screen.dart';
+import 'package:roadix_mobile/services/demo_session.dart';
 import 'package:roadix_mobile/services/supabase_service.dart';
 import 'package:roadix_mobile/widgets/edit_profile_sheet.dart';
 import '../helpers/e2e_finders.dart';
@@ -147,24 +148,29 @@ void main() {
       await E2ETestHarness.cleanUp(tester);
     });
 
-    test('T1.14.6: SupabaseService updateProfile updates mock profile state and persists avatarUrl', () async {
+    test('T1.14.6: SupabaseService updateProfile blocks unauthenticated REST writes and persists avatarUrl in Demo Mode', () async {
+      addTearDown(DemoSession.clear);
       const newAvatar = 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150';
       const newName = 'Asif Mahmud';
       const newPhone = '+8801799887766';
 
+      // 1. Signed-out safety: no unauthorized REST write to hardcoded demo-motorist
+      E2ETestHarness.lastRestPayload = null;
+      await SupabaseService().updateProfile(
+        fullName: newName,
+        phone: newPhone,
+        avatarUrl: newAvatar,
+      );
+      expect(E2ETestHarness.lastRestPayload, isNull);
+
+      // 2. Demo mode update reflects immediately via getProfile()
+      DemoSession.startDemo(demoRole: 'motorist');
       await SupabaseService().updateProfile(
         fullName: newName,
         phone: newPhone,
         avatarUrl: newAvatar,
       );
 
-      // 1. Verify outbound REST update payload
-      expect(E2ETestHarness.lastRestPayload, isNotNull);
-      expect(E2ETestHarness.lastRestPayload!['avatar_url'], equals(newAvatar));
-      expect(E2ETestHarness.lastRestPayload!['full_name'], equals(newName));
-      expect(E2ETestHarness.lastRestPayload!['phone'], equals(newPhone));
-
-      // 2. Verify state reflection via getProfile()
       final updatedProfile = await SupabaseService().getProfile();
       expect(updatedProfile, isNotNull);
       expect(updatedProfile!['avatar_url'], equals(newAvatar));
@@ -190,11 +196,7 @@ void main() {
 
       expect(find.text('DEMO ONE-TAP ACCESS'), findsOneWidget);
 
-      final motoristDemo = find.descendant(
-        of: find.byType(InkWell),
-        matching: find.text('Motorist'),
-      );
-      await tester.tap(motoristDemo.first);
+      await tester.tap(E2EFinders.motoristDemoButton);
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 200));
 
@@ -214,11 +216,7 @@ void main() {
       );
       await tester.pump();
 
-      final techDemo = find.descendant(
-        of: find.byType(InkWell),
-        matching: find.text('Technician'),
-      );
-      await tester.tap(techDemo.first);
+      await tester.tap(E2EFinders.mechanicDemoButton);
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 200));
 

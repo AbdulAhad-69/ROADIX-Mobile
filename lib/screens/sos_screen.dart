@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../services/geocoding_service.dart';
 import '../services/supabase_service.dart';
 import '../src/core/utils/phone_utils.dart';
@@ -170,6 +171,38 @@ class _SosScreenState extends State<SosScreen> with TickerProviderStateMixin {
     );
   }
 
+  Future<void> _sendSosSmsAlert() async {
+    if (_contacts.isEmpty) return;
+    HapticFeedback.mediumImpact();
+    final phones = _contacts
+        .map((c) => c['phone']?.toString().trim() ?? '')
+        .where((p) => p.isNotEmpty)
+        .join(',');
+    if (phones.isEmpty) return;
+
+    final mapLink =
+        'https://maps.google.com/?q=${_currentLat.toStringAsFixed(5)},${_currentLng.toStringAsFixed(5)}';
+    final msg =
+        'EMERGENCY SOS (ROADIX): I need urgent help near $_currentAddress. GPS: $mapLink';
+    final smsUri = Uri(
+      scheme: 'sms',
+      path: phones,
+      queryParameters: {'body': msg},
+    );
+    try {
+      await launchUrl(smsUri, mode: LaunchMode.externalApplication);
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Could not open SMS app. Dial 999 directly if urgent.'),
+            backgroundColor: AppColors.crimsonHover,
+          ),
+        );
+      }
+    }
+  }
+
   void _openAddContactSheet() {
     showModalBottomSheet(
       context: context,
@@ -182,7 +215,7 @@ class _SosScreenState extends State<SosScreen> with TickerProviderStateMixin {
             phone: savedData['phone']!,
             relation: savedData['relation']!,
           );
-          _loadEmergencyContacts();
+          await _loadEmergencyContacts();
         },
       ),
     );
@@ -380,6 +413,7 @@ class _SosScreenState extends State<SosScreen> with TickerProviderStateMixin {
                           child: Container(
                             width: 92,
                             height: 92,
+                            padding: const EdgeInsets.all(8),
                             decoration: BoxDecoration(
                               shape: BoxShape.circle,
                               color: AppColors.caliperCrimson,
@@ -392,32 +426,37 @@ class _SosScreenState extends State<SosScreen> with TickerProviderStateMixin {
                                 ),
                               ],
                             ),
-                            child: Column(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                const Text(
-                                  '999',
-                                  style: TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 28,
-                                    fontWeight: FontWeight.w900,
-                                    letterSpacing: -1,
-                                    height: 1.0,
+                            child: FittedBox(
+                              fit: BoxFit.scaleDown,
+                              child: Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  const Text(
+                                    '999',
+                                    style: TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 28,
+                                      fontWeight: FontWeight.w900,
+                                      letterSpacing: -1,
+                                      height: 1.0,
+                                    ),
                                   ),
-                                ),
-                                const SizedBox(height: 2),
-                                Text(
-                                  _isCancelled
-                                      ? 'CANCELLED'
-                                      : (remainingSeconds > 0 ? 'CALLING (${remainingSeconds}s)' : 'CONNECTED'),
-                                  style: const TextStyle(
-                                    color: Colors.white70,
-                                    fontSize: 8,
-                                    fontWeight: FontWeight.bold,
-                                    letterSpacing: 0.8,
+                                  const SizedBox(height: 3),
+                                  Text(
+                                    _isCancelled
+                                        ? 'CANCELLED'
+                                        : (remainingSeconds > 0
+                                            ? 'CALLING (${remainingSeconds}s)'
+                                            : 'CONNECTED'),
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 8.5,
+                                      fontWeight: FontWeight.w800,
+                                      letterSpacing: 0.7,
+                                    ),
                                   ),
-                                ),
-                              ],
+                                ],
+                              ),
                             ),
                           ),
                         ),
@@ -627,17 +666,28 @@ class _SosScreenState extends State<SosScreen> with TickerProviderStateMixin {
                       ),
                       const SizedBox(width: 8),
                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
                         decoration: BoxDecoration(
-                          color: const Color(0xFFECFDF5),
-                          borderRadius: BorderRadius.circular(4),
+                          color: _contacts.isNotEmpty
+                              ? AppColors.emeraldLight
+                              : AppColors.amberLight,
+                          borderRadius: BorderRadius.circular(5),
+                          border: Border.all(
+                            color: _contacts.isNotEmpty
+                                ? AppColors.emeraldBorder
+                                : AppColors.amberBorder,
+                          ),
                         ),
                         child: Text(
-                          '${_contacts.length} Configured ✓',
-                          style: const TextStyle(
-                            color: Color(0xFF059669),
-                            fontSize: 8.5,
-                            fontWeight: FontWeight.bold,
+                          _contacts.isNotEmpty
+                              ? '${_contacts.length} Contacts'
+                              : 'No Contacts Added',
+                          style: TextStyle(
+                            color: _contacts.isNotEmpty
+                                ? AppColors.emeraldDark
+                                : AppColors.amberDark,
+                            fontSize: 10,
+                            fontWeight: FontWeight.w800,
                           ),
                         ),
                       ),
@@ -645,8 +695,17 @@ class _SosScreenState extends State<SosScreen> with TickerProviderStateMixin {
                   ),
                   const SizedBox(height: 8),
                   if (_isLoadingContacts)
-                    const Center(child: SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.caliperCrimson)))
-                  else if (_contacts.isNotEmpty)
+                    const Center(
+                      child: SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: AppColors.caliperCrimson,
+                        ),
+                      ),
+                    )
+                  else if (_contacts.isNotEmpty) ...[
                     SingleChildScrollView(
                       scrollDirection: Axis.horizontal,
                       child: Row(
@@ -664,8 +723,18 @@ class _SosScreenState extends State<SosScreen> with TickerProviderStateMixin {
                           );
                         }).toList(),
                       ),
-                    )
-                  else
+                    ),
+                    const SizedBox(height: 8),
+                    SizedBox(
+                      width: double.infinity,
+                      height: 40,
+                      child: OutlinedButton.icon(
+                        onPressed: _sendSosSmsAlert,
+                        icon: const Icon(Icons.sms_outlined, size: 16),
+                        label: const Text('Alert Contacts via SMS with GPS'),
+                      ),
+                    ),
+                  ] else
                     InkWell(
                       onTap: _openAddContactSheet,
                       borderRadius: BorderRadius.circular(10),

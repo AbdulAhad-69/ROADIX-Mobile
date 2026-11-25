@@ -28,7 +28,7 @@ class RoadixApp extends ConsumerWidget {
           onSecondary: Colors.white,
           surface: AppColors.cardWhite,
           onSurface: AppColors.chassisText,
-          error: AppColors.caliperCrimson,
+          error: AppColors.crimsonHover,
           onError: Colors.white,
           outline: AppColors.slateBorder,
         ),
@@ -42,7 +42,7 @@ class RoadixApp extends ConsumerWidget {
           iconTheme: IconThemeData(color: AppColors.chassisText),
           titleTextStyle: TextStyle(
             color: AppColors.chassisText,
-            fontSize: 16,
+            fontSize: 17,
             fontWeight: FontWeight.w800,
             letterSpacing: -0.2,
           ),
@@ -61,6 +61,9 @@ class RoadixApp extends ConsumerWidget {
           style: ElevatedButton.styleFrom(
             backgroundColor: AppColors.caliperCrimson,
             foregroundColor: Colors.white,
+            disabledBackgroundColor: AppColors.slateBorder,
+            disabledForegroundColor: AppColors.slateMuted,
+            minimumSize: const Size(48, 48),
             elevation: 0,
             padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
             shape: RoundedRectangleBorder(
@@ -77,21 +80,23 @@ class RoadixApp extends ConsumerWidget {
           style: OutlinedButton.styleFrom(
             foregroundColor: AppColors.chassisText,
             side: const BorderSide(color: AppColors.slateBorder),
+            minimumSize: const Size(48, 44),
             padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(12),
             ),
             textStyle: const TextStyle(
-              fontSize: 12.5,
+              fontSize: 13,
               fontWeight: FontWeight.w700,
             ),
           ),
         ),
         textButtonTheme: TextButtonThemeData(
           style: TextButton.styleFrom(
-            foregroundColor: AppColors.caliperCrimson,
+            foregroundColor: AppColors.crimsonHover,
+            minimumSize: const Size(48, 44),
             textStyle: const TextStyle(
-              fontSize: 12.5,
+              fontSize: 13,
               fontWeight: FontWeight.w700,
             ),
           ),

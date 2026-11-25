@@ -695,7 +695,7 @@ void main() {
         await tester.pump();
 
         // Switch to Sign Up mode where role selector is active
-        await tester.tap(find.text('Sign Up'));
+        await tester.tap(find.text('Need a new account? Sign Up'));
         await tester.pump();
 
         expect(find.text('Motorist'), findsWidgets);
@@ -704,8 +704,8 @@ void main() {
         // Initially Motorist account title is shown
         expect(find.text('Create Motorist Account'), findsOneWidget);
 
-        // Tap Technician option in role selector (last widget matching Technician)
-        await tester.tap(find.text('Technician').last);
+        // Tap Technician option in role selector
+        await tester.tap(E2EFinders.mechanicRoleTab);
         await tester.pump();
 
         // Role switches to Technician account title
@@ -728,8 +728,8 @@ void main() {
       );
       await tester.pump();
 
-      expect(find.text('Motorist'), findsWidgets);
-      expect(find.text('Technician'), findsWidgets);
+      expect(E2EFinders.motoristDemoButton, findsOneWidget);
+      expect(E2EFinders.mechanicDemoButton, findsOneWidget);
       expect(find.text('Guest SOS'), findsWidgets);
 
       await E2ETestHarness.cleanUp(tester);

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../services/supabase_service.dart';
+import '../src/core/router/app_router.dart';
 import '../theme/app_colors.dart';
 import 'emergency_home_screen.dart';
 
@@ -60,9 +61,10 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
       }
 
       if (mounted) {
-        Navigator.of(context).pushAndRemoveUntil(
-          MaterialPageRoute(builder: (_) => const EmergencyHomeScreen()),
-          (route) => false,
+        navigateRoot(
+          context,
+          route: AppRoutes.home,
+          fallbackWidget: const EmergencyHomeScreen(),
         );
       }
     } catch (e) {

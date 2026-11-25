@@ -45,18 +45,18 @@ void main() {
   // TIER 1: FEATURE COVERAGE (Core Functional & Visual Elements)
   // =========================================================================
   group('Tier 1: Feature Coverage — Authentication, Branding & Dispatch Core', () {
-    test('T1.1: Google Sign-In Fallback initiates cleanly on unconfigured OAuth', () async {
-      // Verify AppConfig OAuth detection logic
-      expect(AppConfig.isGoogleAuthConfigured, isFalse,
-          reason: 'Default environment has placeholder OAuth IDs');
+    test('T1.1: Google Sign-In config and explicit demo role fallback work cleanly', () async {
+      expect(AppConfig.isGoogleAuthConfigured, equals(AppConfig.isConfigured));
+      expect(AppConfig.oauthRedirectUrl, equals('io.supabase.roadix://login-callback'));
 
-      // Verify SupabaseService.signInWithGoogleFallback interface contract
+      // Verify explicit demo-role helper initializes safely
       final service = SupabaseService();
       final motoristResponse = await service.signInWithGoogleFallback(role: 'motorist');
       expect(motoristResponse, isNotNull);
 
       final mechanicResponse = await service.signInWithGoogleFallback(role: 'mechanic');
       expect(mechanicResponse, isNotNull);
+      await service.signOut();
     });
 
     testWidgets('T1.2: LoginScreen displays Google Sign-In button with BrandLogo and handles fallback',

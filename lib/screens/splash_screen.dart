@@ -2,6 +2,8 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../services/demo_session.dart';
+import '../src/core/router/app_router.dart';
 import '../theme/app_colors.dart';
 import 'emergency_home_screen.dart';
 import 'login_screen.dart';
@@ -17,6 +19,7 @@ class SplashScreen extends StatefulWidget {
 class _SplashScreenState extends State<SplashScreen>
     with SingleTickerProviderStateMixin {
   late AnimationController _progressController;
+  Timer? _navTimer;
 
   @override
   void initState() {
@@ -33,11 +36,15 @@ class _SplashScreenState extends State<SplashScreen>
       duration: const Duration(milliseconds: 1800),
     )..repeat();
 
-    Timer(const Duration(milliseconds: 2000), () async {
-      if (!mounted) return;
-      final session = Supabase.instance.client.auth.currentSession;
+    _navTimer = Timer(const Duration(milliseconds: 1600), _routeFromSplash);
+  }
+
+  Future<void> _routeFromSplash() async {
+    if (!mounted) return;
+    final session = Supabase.instance.client.auth.currentSession;
+    if (session != null || DemoSession.isActive) {
+      String? role = DemoSession.isActive ? DemoSession.role : null;
       if (session != null) {
-        String? role;
         try {
           final res = await Supabase.instance.client
               .from('profiles')
@@ -46,33 +53,41 @@ class _SplashScreenState extends State<SplashScreen>
               .maybeSingle();
           role = res?['role'] as String?;
         } catch (_) {}
-        if (!mounted) return;
-        final targetWidget = role == 'mechanic'
-            ? const MechanicHomeScreen()
-            : const EmergencyHomeScreen();
-        Navigator.of(context).pushReplacement(
-          PageRouteBuilder(
-            pageBuilder: (_, _, _) => targetWidget,
-            transitionsBuilder: (_, animation, _, child) =>
-                FadeTransition(opacity: animation, child: child),
-            transitionDuration: const Duration(milliseconds: 350),
-          ),
+      }
+      if (!mounted) return;
+      if (role == 'mechanic') {
+        navigateRoot(
+          context,
+          route: AppRoutes.mechanic,
+          fallbackWidget: const MechanicHomeScreen(),
         );
       } else {
-        Navigator.of(context).pushReplacement(
-          PageRouteBuilder(
-            pageBuilder: (_, _, _) => const LoginScreen(),
-            transitionsBuilder: (_, animation, _, child) =>
-                FadeTransition(opacity: animation, child: child),
-            transitionDuration: const Duration(milliseconds: 350),
-          ),
+        navigateRoot(
+          context,
+          route: AppRoutes.home,
+          fallbackWidget: const EmergencyHomeScreen(),
         );
       }
-    });
+    } else {
+      navigateRoot(
+        context,
+        route: AppRoutes.login,
+        fallbackWidget: const LoginScreen(),
+      );
+    }
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (MediaQuery.disableAnimationsOf(context)) {
+      _progressController.stop();
+    }
   }
 
   @override
   void dispose() {
+    _navTimer?.cancel();
     _progressController.dispose();
     super.dispose();
   }
@@ -85,7 +100,6 @@ class _SplashScreenState extends State<SplashScreen>
         child: Column(
           children: [
             const Spacer(flex: 3),
-            // Centered Brand Presentation
             Center(
               child: Column(
                 mainAxisSize: MainAxisSize.min,
@@ -117,21 +131,20 @@ class _SplashScreenState extends State<SplashScreen>
                     "HELP WHEN THE ROAD DOESN'T.",
                     style: TextStyle(
                       color: AppColors.slateMuted,
-                      fontSize: 10.5,
+                      fontSize: 11,
                       fontWeight: FontWeight.w700,
-                      letterSpacing: 2.2,
+                      letterSpacing: 2.0,
                     ),
                   ),
                 ],
               ),
             ),
             const Spacer(flex: 3),
-            // Minimalist Linear Slide Loader
             Padding(
               padding: const EdgeInsets.only(bottom: 32.0),
               child: Container(
                 width: 112,
-                height: 2.5,
+                height: 3,
                 decoration: BoxDecoration(
                   color: AppColors.slateBorder,
                   borderRadius: BorderRadius.circular(2),

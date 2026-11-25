@@ -36,8 +36,8 @@ class VehicleSpecBadge extends StatelessWidget {
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
         style: TextStyle(
-          color: isSelected ? AppColors.caliperCrimson : AppColors.slateMuted,
-          fontSize: 9.0,
+          color: isSelected ? AppColors.crimsonHover : AppColors.slateMuted,
+          fontSize: 10.5,
           fontWeight: FontWeight.w700,
           letterSpacing: 0.2,
         ),

@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../services/supabase_service.dart';
 import '../theme/app_colors.dart';
-import '../widgets/brand_logo.dart';
 import '../widgets/vehicle_editor_sheet.dart';
+import '../widgets/vehicle_illustration.dart';
 import 'fault_details_screen.dart';
 
 class VehicleSelectScreen extends StatefulWidget {
@@ -164,6 +164,137 @@ class _VehicleSelectScreenState extends State<VehicleSelectScreen> {
     super.dispose();
   }
 
+  Widget _buildCategoryCard(int index) {
+    final bool isSelected = _selectedVehicleTypeIndex == index;
+    final item = _vehicleCategories[index];
+    final illustrationKey = (item['illustrationType'] ??
+        item['title'] ??
+        item['srsType'] ??
+        'Passenger Car') as String;
+    final animDuration = MediaQuery.disableAnimationsOf(context)
+        ? Duration.zero
+        : const Duration(milliseconds: 160);
+
+    return Semantics(
+      button: true,
+      selected: isSelected,
+      label: '${item['title']} vehicle category',
+      child: InkWell(
+        onTap: () {
+          HapticFeedback.selectionClick();
+          setState(() {
+            _selectedVehicleTypeIndex = index;
+            _selectedSavedVehicleId = null;
+          });
+        },
+        borderRadius: BorderRadius.circular(16),
+        child: AnimatedContainer(
+          duration: animDuration,
+          curve: const Cubic(0.23, 1, 0.32, 1),
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: isSelected
+                ? AppColors.crimsonLight.withAlpha(150)
+                : AppColors.cardWhite,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color:
+                  isSelected ? AppColors.caliperCrimson : AppColors.slateBorder,
+              width: isSelected ? 2.0 : 1.0,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: isSelected
+                    ? AppColors.caliperCrimson.withAlpha(24)
+                    : Colors.black.withAlpha(6),
+                blurRadius: isSelected ? 8 : 4,
+                offset: const Offset(0, 2),
+              ),
+            ],
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(6),
+                    decoration: BoxDecoration(
+                      color: isSelected ? Colors.white : AppColors.porcelainBg,
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: VehicleIllustration(
+                      vehicleType: illustrationKey,
+                      size: 32,
+                    ),
+                  ),
+                  Container(
+                    width: 22,
+                    height: 22,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: isSelected
+                          ? AppColors.caliperCrimson
+                          : Colors.transparent,
+                      border: Border.all(
+                        color: isSelected
+                            ? AppColors.caliperCrimson
+                            : AppColors.slateBorder,
+                        width: 1.5,
+                      ),
+                    ),
+                    child: isSelected
+                        ? const Icon(
+                            Icons.check,
+                            color: Colors.white,
+                            size: 14,
+                          )
+                        : null,
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    item['title'] as String,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: isSelected
+                          ? AppColors.crimsonHover
+                          : AppColors.chassisText,
+                      fontSize: 13.0,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    item['subtitle'] as String,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: AppColors.slateMuted,
+                      fontSize: 10.5,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  VehicleSpecBadge(
+                    label: (item['specs'] ?? '') as String,
+                    isSelected: isSelected,
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -181,6 +312,7 @@ class _VehicleSelectScreenState extends State<VehicleSelectScreen> {
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   IconButton(
+                    tooltip: 'Back',
                     icon: const Icon(
                       Icons.arrow_back,
                       color: AppColors.chassisText,
@@ -339,26 +471,22 @@ class _VehicleSelectScreenState extends State<VehicleSelectScreen> {
                         ),
                       )
                     else if (_savedVehicles.isNotEmpty)
-                      SingleChildScrollView(
-                        scrollDirection: Axis.horizontal,
-                        child: Row(
-                          children: _savedVehicles.map((car) {
-                            final isSelected = _selectedSavedVehicleId == car['id']?.toString() ||
-                                _plateController.text.trim() == car['plate']?.toString().trim();
-                            return Padding(
-                              padding: const EdgeInsets.only(right: 8.0),
-                              child: _buildSavedVehicleChip(
-                                car['model']?.toString() ?? 'Vehicle',
-                                car['plate']?.toString() ?? '',
-                                isSelected,
-                                () {
-                                  HapticFeedback.selectionClick();
-                                  setState(() => _applyVehicleToForm(car));
-                                },
-                              ),
-                            );
-                          }).toList(),
-                        ),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: _savedVehicles.map((car) {
+                          final isSelected = _selectedSavedVehicleId == car['id']?.toString() ||
+                              _plateController.text.trim() == car['plate']?.toString().trim();
+                          return _buildSavedVehicleChip(
+                            car['model']?.toString() ?? 'Vehicle',
+                            car['plate']?.toString() ?? '',
+                            isSelected,
+                            () {
+                              HapticFeedback.selectionClick();
+                              setState(() => _applyVehicleToForm(car));
+                            },
+                          );
+                        }).toList(),
                       )
                     else
                       Container(
@@ -374,17 +502,14 @@ class _VehicleSelectScreenState extends State<VehicleSelectScreen> {
                             const Flexible(
                               child: Text(
                                 'No saved vehicles in garage yet.',
-                                style: TextStyle(color: AppColors.slateMuted, fontSize: 11.5),
+                                style: TextStyle(color: AppColors.slateMuted, fontSize: 12),
                                 overflow: TextOverflow.ellipsis,
                               ),
                             ),
                             const SizedBox(width: 8),
-                            InkWell(
-                              onTap: _openAddVehicleSheet,
-                              child: const Text(
-                                'Save Now',
-                                style: TextStyle(color: AppColors.caliperCrimson, fontSize: 11, fontWeight: FontWeight.bold),
-                              ),
+                            TextButton(
+                              onPressed: _openAddVehicleSheet,
+                              child: const Text('Save Now'),
                             ),
                           ],
                         ),
@@ -392,176 +517,41 @@ class _VehicleSelectScreenState extends State<VehicleSelectScreen> {
 
                     const SizedBox(height: 22),
 
-                    // 4-Card Vehicle Type Grid
+                    // 4-Card Vehicle Type Responsive 2x2 Layout (no nested scrollables)
                     const Text(
                       'OR SELECT CATEGORY',
                       style: TextStyle(
                         color: AppColors.slateMuted,
-                        fontSize: 9.5,
+                        fontSize: 10.5,
                         fontWeight: FontWeight.w800,
-                        letterSpacing: 0.8,
+                        letterSpacing: 0.7,
                       ),
                     ),
                     const SizedBox(height: 10),
-                    GridView.builder(
-                      shrinkWrap: true,
-                      physics: const NeverScrollableScrollPhysics(),
-                      itemCount: _vehicleCategories.length,
-                      gridDelegate:
-                          const SliverGridDelegateWithFixedCrossAxisCount(
-                            crossAxisCount: 2,
-                            crossAxisSpacing: 10,
-                            mainAxisSpacing: 10,
-                            childAspectRatio: 0.94,
+                    Column(
+                      children: [
+                        IntrinsicHeight(
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              Expanded(child: _buildCategoryCard(0)),
+                              const SizedBox(width: 10),
+                              Expanded(child: _buildCategoryCard(1)),
+                            ],
                           ),
-                      itemBuilder: (context, index) {
-                        final bool isSelected =
-                            _selectedVehicleTypeIndex == index;
-                        final item = _vehicleCategories[index];
-                        final illustrationKey = (item['illustrationType'] ??
-                            item['title'] ??
-                            item['srsType'] ??
-                            'Passenger Car') as String;
-                        return InkWell(
-                          onTap: () {
-                            HapticFeedback.selectionClick();
-                            setState(() {
-                              _selectedVehicleTypeIndex = index;
-                              _selectedSavedVehicleId = null;
-                            });
-                          },
-                          borderRadius: BorderRadius.circular(16),
-                          child: AnimatedContainer(
-                            duration: const Duration(milliseconds: 180),
-                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
-                            decoration: BoxDecoration(
-                              color: isSelected
-                                  ? AppColors.crimsonLight.withAlpha(140)
-                                  : AppColors.cardWhite,
-                              borderRadius: BorderRadius.circular(16),
-                              border: Border.all(
-                                color: isSelected
-                                    ? AppColors.caliperCrimson
-                                    : AppColors.slateBorder,
-                                width: isSelected ? 2.0 : 1.0,
-                              ),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: isSelected
-                                      ? AppColors.caliperCrimson.withAlpha(28)
-                                      : Colors.black.withAlpha(5),
-                                  blurRadius: isSelected ? 8 : 4,
-                                  offset: const Offset(0, 2),
-                                ),
-                              ],
-                            ),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                Row(
-                                  mainAxisAlignment:
-                                      MainAxisAlignment.spaceBetween,
-                                  children: [
-                                    Container(
-                                      padding: const EdgeInsets.all(4),
-                                      decoration: BoxDecoration(
-                                        color: isSelected
-                                            ? Colors.white
-                                            : const Color(0xFFF8FAFC),
-                                        borderRadius: BorderRadius.circular(10),
-                                      ),
-                                      child: VehicleIllustration(
-                                        vehicleType: illustrationKey,
-                                        size: 32,
-                                      ),
-                                    ),
-                                    Container(
-                                      width: 20,
-                                      height: 20,
-                                      decoration: BoxDecoration(
-                                        shape: BoxShape.circle,
-                                        color: isSelected
-                                            ? AppColors.caliperCrimson
-                                            : Colors.transparent,
-                                        border: Border.all(
-                                          color: isSelected
-                                              ? AppColors.caliperCrimson
-                                              : AppColors.slateBorder,
-                                          width: 1.5,
-                                        ),
-                                      ),
-                                      child: isSelected
-                                          ? const Icon(
-                                              Icons.check,
-                                              color: Colors.white,
-                                              size: 13,
-                                            )
-                                          : null,
-                                    ),
-                                  ],
-                                ),
-                                const SizedBox(height: 4),
-                                Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    FittedBox(
-                                      fit: BoxFit.scaleDown,
-                                      alignment: Alignment.centerLeft,
-                                      child: Text(
-                                        item['title'] as String,
-                                        style: TextStyle(
-                                          color: isSelected
-                                              ? AppColors.caliperCrimson
-                                              : AppColors.chassisText,
-                                          fontSize: 12.0,
-                                          fontWeight: FontWeight.w800,
-                                        ),
-                                      ),
-                                    ),
-                                    const SizedBox(height: 1),
-                                    FittedBox(
-                                      fit: BoxFit.scaleDown,
-                                      alignment: Alignment.centerLeft,
-                                      child: Text(
-                                        item['subtitle'] as String,
-                                        style: const TextStyle(
-                                          color: AppColors.slateMuted,
-                                          fontSize: 9.0,
-                                        ),
-                                      ),
-                                    ),
-                                    const SizedBox(height: 4),
-                                    Container(
-                                      padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
-                                      decoration: BoxDecoration(
-                                        color: isSelected
-                                            ? AppColors.caliperCrimson.withAlpha(20)
-                                            : const Color(0xFFF1F5F9),
-                                        borderRadius: BorderRadius.circular(4),
-                                      ),
-                                      child: FittedBox(
-                                        fit: BoxFit.scaleDown,
-                                        alignment: Alignment.centerLeft,
-                                        child: Text(
-                                          (item['specs'] ?? '') as String,
-                                          style: TextStyle(
-                                            color: isSelected
-                                                ? AppColors.caliperCrimson
-                                                : AppColors.slateMuted,
-                                            fontSize: 8.0,
-                                            fontWeight: FontWeight.w700,
-                                          ),
-                                        ),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ],
-                            ),
+                        ),
+                        const SizedBox(height: 10),
+                        IntrinsicHeight(
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              Expanded(child: _buildCategoryCard(2)),
+                              const SizedBox(width: 10),
+                              Expanded(child: _buildCategoryCard(3)),
+                            ],
                           ),
-                        );
-                      },
+                        ),
+                      ],
                     ),
 
                     const SizedBox(height: 22),

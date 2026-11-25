@@ -416,81 +416,96 @@ class _FaultDetailsScreenState extends State<FaultDetailsScreen> {
                       ),
                       child: Column(
                         children: [
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Row(
+                          MergeSemantics(
+                            child: InkWell(
+                              onTap: () =>
+                                  setState(() => _isInLiveLane = !_isInLiveLane),
+                              borderRadius: BorderRadius.circular(12),
+                              child: Row(
+                                mainAxisAlignment:
+                                    MainAxisAlignment.spaceBetween,
+                                children: [
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
                                       children: [
-                                        const Flexible(
-                                          child: Text(
-                                            'Stranded in live highway lane',
-                                            style: TextStyle(
-                                              color: AppColors.chassisText,
-                                              fontSize: 12.5,
-                                              fontWeight: FontWeight.w700,
-                                            ),
-                                          ),
-                                        ),
-                                        if (_isInLiveLane) ...[
-                                          const SizedBox(width: 6),
-                                          Container(
-                                            padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
-                                            decoration: BoxDecoration(
-                                              color: AppColors.caliperCrimson,
-                                              borderRadius: BorderRadius.circular(4),
-                                            ),
-                                            child: const Text(
-                                              'URGENT',
-                                              style: TextStyle(
-                                                color: Colors.white,
-                                                fontSize: 7.5,
-                                                fontWeight: FontWeight.w900,
-                                                letterSpacing: 0.5,
+                                        Row(
+                                          children: [
+                                            const Flexible(
+                                              child: Text(
+                                                'Stranded in live highway lane',
+                                                style: TextStyle(
+                                                  color: AppColors.chassisText,
+                                                  fontSize: 13,
+                                                  fontWeight: FontWeight.w700,
+                                                ),
                                               ),
                                             ),
+                                            if (_isInLiveLane) ...[
+                                              const SizedBox(width: 6),
+                                              Container(
+                                                padding:
+                                                    const EdgeInsets.symmetric(
+                                                  horizontal: 6,
+                                                  vertical: 2,
+                                                ),
+                                                decoration: BoxDecoration(
+                                                  color: AppColors.caliperCrimson,
+                                                  borderRadius:
+                                                      BorderRadius.circular(4),
+                                                ),
+                                                child: const Text(
+                                                  'URGENT',
+                                                  style: TextStyle(
+                                                    color: Colors.white,
+                                                    fontSize: 9.5,
+                                                    fontWeight: FontWeight.w900,
+                                                    letterSpacing: 0.5,
+                                                  ),
+                                                ),
+                                              ),
+                                            ],
+                                          ],
+                                        ),
+                                        const SizedBox(height: 2),
+                                        const Text(
+                                          'High hazard risk: marks priority rescue',
+                                          style: TextStyle(
+                                            color: AppColors.slateMuted,
+                                            fontSize: 11.5,
                                           ),
-                                        ],
+                                        ),
                                       ],
                                     ),
-                                    const SizedBox(height: 2),
-                                    const Text(
-                                      'High hazard risk: marks priority rescue',
-                                      style: TextStyle(color: AppColors.slateMuted, fontSize: 10.5),
-                                    ),
-                                  ],
-                                ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Switch.adaptive(
+                                    value: _isInLiveLane,
+                                    activeTrackColor:
+                                        AppColors.caliperCrimson.withAlpha(120),
+                                    activeThumbColor: AppColors.caliperCrimson,
+                                    onChanged: (v) =>
+                                        setState(() => _isInLiveLane = v),
+                                  ),
+                                ],
                               ),
-                              const SizedBox(width: 8),
-                              Switch.adaptive(
-                                value: _isInLiveLane,
-                                activeTrackColor: AppColors.caliperCrimson.withAlpha(120),
-                                activeThumbColor: AppColors.caliperCrimson,
-                                onChanged: (v) => setState(() => _isInLiveLane = v),
-                              ),
-                            ],
+                            ),
                           ),
                           if (_isInLiveLane) ...[
                             const SizedBox(height: 10),
                             Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 12,
+                                vertical: 10,
+                              ),
                               decoration: BoxDecoration(
-                                color: const Color(0xFFFEF2F2),
+                                color: AppColors.crimsonLight,
                                 borderRadius: BorderRadius.circular(12),
                                 border: Border.all(
                                   color: AppColors.caliperCrimson,
                                   width: 1.5,
                                 ),
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: AppColors.caliperCrimson.withAlpha(16),
-                                    blurRadius: 6,
-                                    offset: const Offset(0, 2),
-                                  ),
-                                ],
                               ),
                               child: Row(
                                 children: [
@@ -511,8 +526,8 @@ class _FaultDetailsScreenState extends State<FaultDetailsScreen> {
                                     child: Text(
                                       'HIGH ROADWAY HAZARD: Priority dispatch queue activated. Mechanics alerted to exercise traffic caution.',
                                       style: TextStyle(
-                                        color: AppColors.caliperCrimson,
-                                        fontSize: 10.5,
+                                        color: AppColors.crimsonHover,
+                                        fontSize: 11.5,
                                         fontWeight: FontWeight.w800,
                                         height: 1.3,
                                       ),
@@ -523,36 +538,51 @@ class _FaultDetailsScreenState extends State<FaultDetailsScreen> {
                             ),
                           ],
                           const Divider(color: AppColors.slateBorder, height: 16),
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: const [
-                                    Text(
-                                      'Hazard lights functioning',
-                                      style: TextStyle(
-                                        color: AppColors.chassisText,
-                                        fontSize: 12.5,
-                                        fontWeight: FontWeight.w700,
-                                      ),
-                                    ),
-                                    Text(
-                                      'Vehicle visibility to oncoming traffic',
-                                      style: TextStyle(color: AppColors.slateMuted, fontSize: 10.5),
-                                    ),
-                                  ],
-                                ),
+                          MergeSemantics(
+                            child: InkWell(
+                              onTap: () => setState(
+                                () => _hazardsWorking = !_hazardsWorking,
                               ),
-                              const SizedBox(width: 8),
-                              Switch.adaptive(
-                                value: _hazardsWorking,
-                                activeTrackColor: AppColors.caliperCrimson.withAlpha(120),
-                                activeThumbColor: AppColors.caliperCrimson,
-                                onChanged: (v) => setState(() => _hazardsWorking = v),
+                              borderRadius: BorderRadius.circular(12),
+                              child: Row(
+                                mainAxisAlignment:
+                                    MainAxisAlignment.spaceBetween,
+                                children: [
+                                  const Expanded(
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          'Hazard lights functioning',
+                                          style: TextStyle(
+                                            color: AppColors.chassisText,
+                                            fontSize: 13,
+                                            fontWeight: FontWeight.w700,
+                                          ),
+                                        ),
+                                        Text(
+                                          'Vehicle visibility to oncoming traffic',
+                                          style: TextStyle(
+                                            color: AppColors.slateMuted,
+                                            fontSize: 11.5,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Switch.adaptive(
+                                    value: _hazardsWorking,
+                                    activeTrackColor:
+                                        AppColors.caliperCrimson.withAlpha(120),
+                                    activeThumbColor: AppColors.caliperCrimson,
+                                    onChanged: (v) =>
+                                        setState(() => _hazardsWorking = v),
+                                  ),
+                                ],
                               ),
-                            ],
+                            ),
                           ),
                         ],
                       ),

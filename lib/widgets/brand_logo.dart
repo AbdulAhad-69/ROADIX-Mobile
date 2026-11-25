@@ -46,7 +46,6 @@ class BrandLogo extends StatelessWidget {
       );
     }
 
-    final cdnUrl = CloudinaryService().getBrandLogoUrl(brand, size: (size * 2).round());
     final localFallback = CloudinaryService.getLocalAssetFallback(brand);
 
     return SizedBox(
@@ -60,22 +59,13 @@ class BrandLogo extends StatelessWidget {
           child: SizedBox(
             width: size,
             height: size,
-            child: Image.network(
-              cdnUrl,
+            child: Image.asset(
+              localFallback,
               width: size,
               height: size,
               fit: fit,
-              errorBuilder: (context, error, stackTrace) {
-                return Image.asset(
-                  localFallback,
-                  width: size,
-                  height: size,
-                  fit: fit,
-                  errorBuilder: (context, error, stackTrace) {
-                    return _buildVectorFallback();
-                  },
-                );
-              },
+              gaplessPlayback: true,
+              errorBuilder: (context, error, stackTrace) => _buildVectorFallback(),
             ),
           ),
         ),
@@ -150,35 +140,18 @@ class ServiceCategoryIllustration extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final cdnUrl = CloudinaryService().getServiceCategoryImageUrl(
-      category,
-      size: (size * 2).round(),
-    );
-    final localFallback = CloudinaryService.getLocalAssetFallback(category);
-
-    return SizedBox(
+    final accent = fallbackColor ?? AppColors.caliperCrimson;
+    return Container(
       width: size,
       height: size,
-      child: Image.network(
-        cdnUrl,
-        width: size,
-        height: size,
-        fit: fit,
-        errorBuilder: (context, error, stackTrace) {
-          return Image.asset(
-            localFallback,
-            width: size,
-            height: size,
-            fit: fit,
-            errorBuilder: (context, error, stackTrace) {
-              return Icon(
-                _getCategoryIcon(category),
-                size: size * 0.7,
-                color: fallbackColor ?? AppColors.caliperCrimson,
-              );
-            },
-          );
-        },
+      decoration: BoxDecoration(
+        color: accent.withAlpha(20),
+        borderRadius: BorderRadius.circular(size * 0.28),
+      ),
+      child: Icon(
+        _getCategoryIcon(category),
+        size: size * 0.56,
+        color: accent,
       ),
     );
   }
@@ -219,33 +192,22 @@ class VehicleIllustration extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final cdnUrl = CloudinaryService().getVehicleImageUrl(
-      vehicleType,
-      size: (size * 2).round(),
-    );
-    final localFallback = CloudinaryService.getLocalAssetFallback(vehicleType);
+    final localAsset = CloudinaryService.getLocalAssetFallback(vehicleType);
 
     return SizedBox(
       width: size,
       height: size,
-      child: Image.network(
-        cdnUrl,
+      child: Image.asset(
+        localAsset,
         width: size,
         height: size,
         fit: fit,
+        gaplessPlayback: true,
         errorBuilder: (context, error, stackTrace) {
-          return Image.asset(
-            localFallback,
-            width: size,
-            height: size,
-            fit: fit,
-            errorBuilder: (context, error, stackTrace) {
-              return Icon(
-                _getVehicleIcon(vehicleType),
-                size: size * 0.7,
-                color: AppColors.caliperCrimson,
-              );
-            },
+          return Icon(
+            _getVehicleIcon(vehicleType),
+            size: size * 0.7,
+            color: AppColors.caliperCrimson,
           );
         },
       ),

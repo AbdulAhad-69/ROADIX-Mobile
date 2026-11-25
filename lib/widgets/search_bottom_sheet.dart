@@ -1,12 +1,20 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import '../src/core/utils/geometry_utils.dart';
 import '../src/core/utils/phone_utils.dart';
 import '../theme/app_colors.dart';
 
 class SearchBottomSheet extends StatefulWidget {
   final Function(String facilityName, double lat, double lng)? onFacilitySelected;
+  final double currentLat;
+  final double currentLng;
 
-  const SearchBottomSheet({super.key, this.onFacilitySelected});
+  const SearchBottomSheet({
+    super.key,
+    this.onFacilitySelected,
+    this.currentLat = 23.8759,
+    this.currentLng = 90.3795,
+  });
 
   @override
   State<SearchBottomSheet> createState() => _SearchBottomSheetState();
@@ -28,7 +36,6 @@ class _SearchBottomSheetState extends State<SearchBottomSheet> {
     {
       'name': 'Uttara 24/7 Vulcanizing & Tire Hub',
       'category': '24/7 Tire Repair',
-      'distance': '0.8 km • ~3 mins',
       'address': 'House 14, Sector 7, Jashimuddin Ave, Uttara',
       'phone': '+880 1711-234567',
       'icon': Icons.album_outlined,
@@ -38,7 +45,6 @@ class _SearchBottomSheetState extends State<SearchBottomSheet> {
     {
       'name': 'Padma Oil & CNG Filling Station',
       'category': 'Fuel & CNG',
-      'distance': '1.4 km • ~6 mins',
       'address': 'Airport Road, Kawla, Dhaka',
       'phone': '+880 1819-345678',
       'icon': Icons.local_gas_station_outlined,
@@ -48,7 +54,6 @@ class _SearchBottomSheetState extends State<SearchBottomSheet> {
     {
       'name': 'Navana Toyota Certified Workshop',
       'category': 'Authorized Garages',
-      'distance': '2.1 km • ~8 mins',
       'address': 'Plot 4, Sector 9, Sonargaon Janapath, Uttara',
       'phone': '+880 1912-987654',
       'icon': Icons.car_repair,
@@ -58,7 +63,6 @@ class _SearchBottomSheetState extends State<SearchBottomSheet> {
     {
       'name': 'Highway Police Outpost (Abdullahpur)',
       'category': 'Highway Police',
-      'distance': '2.9 km • ~11 mins',
       'address': 'Abdullahpur Bus Stand, Dhaka-Mymensingh Hwy',
       'phone': '999',
       'icon': Icons.local_police_outlined,
@@ -68,7 +72,6 @@ class _SearchBottomSheetState extends State<SearchBottomSheet> {
     {
       'name': 'Mirpur Battery & Starter Clinic',
       'category': '24/7 Tire Repair',
-      'distance': '4.5 km • ~18 mins',
       'address': 'Section 10, Mirpur Roundabout',
       'phone': '+880 1622-445566',
       'icon': Icons.battery_charging_full,
@@ -77,15 +80,43 @@ class _SearchBottomSheetState extends State<SearchBottomSheet> {
     },
   ];
 
+  String _formatDistance(Map<String, dynamic> item) {
+    final km = GeometryUtils.calculateDistanceKm(
+      widget.currentLat,
+      widget.currentLng,
+      (item['lat'] as num).toDouble(),
+      (item['lng'] as num).toDouble(),
+    );
+    final mins = GeometryUtils.calculateEtaMinutes(km);
+    return '${km.toStringAsFixed(1)} km • ~$mins mins';
+  }
+
   List<Map<String, dynamic>> get _filteredFacilities {
     final query = _searchController.text.trim().toLowerCase();
-    return _facilities.where((item) {
-      final matchesCategory = _selectedCategory == 'All' || item['category'] == _selectedCategory;
+    final filtered = _facilities.where((item) {
+      final matchesCategory = _selectedCategory == 'All' ||
+          item['category'] == _selectedCategory;
       final matchesQuery = query.isEmpty ||
           item['name'].toString().toLowerCase().contains(query) ||
           item['address'].toString().toLowerCase().contains(query);
       return matchesCategory && matchesQuery;
     }).toList();
+    filtered.sort((a, b) {
+      final da = GeometryUtils.calculateDistanceKm(
+        widget.currentLat,
+        widget.currentLng,
+        (a['lat'] as num).toDouble(),
+        (a['lng'] as num).toDouble(),
+      );
+      final db = GeometryUtils.calculateDistanceKm(
+        widget.currentLat,
+        widget.currentLng,
+        (b['lat'] as num).toDouble(),
+        (b['lng'] as num).toDouble(),
+      );
+      return da.compareTo(db);
+    });
+    return filtered;
   }
 
   @override
@@ -99,14 +130,13 @@ class _SearchBottomSheetState extends State<SearchBottomSheet> {
     return Padding(
       padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
       child: Container(
-        height: MediaQuery.of(context).size.height * 0.82,
+        height: MediaQuery.of(context).size.height * 0.78,
         decoration: const BoxDecoration(
           color: AppColors.cardWhite,
           borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
         ),
         child: Column(
           children: [
-            // Handle Bar
             const SizedBox(height: 12),
             Center(
               child: Container(
@@ -118,19 +148,15 @@ class _SearchBottomSheetState extends State<SearchBottomSheet> {
                 ),
               ),
             ),
-            const SizedBox(height: 14),
-
-            // Title
+            const SizedBox(height: 16),
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20.0),
+              padding: const EdgeInsets.symmetric(horizontal: 20),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: const [
-                  Flexible(
+                children: [
+                  const Expanded(
                     child: Text(
-                      'Emergency Facilities',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
+                      'Find Roadside Service',
                       style: TextStyle(
                         color: AppColors.chassisText,
                         fontSize: 18,
@@ -138,66 +164,32 @@ class _SearchBottomSheetState extends State<SearchBottomSheet> {
                       ),
                     ),
                   ),
-                  SizedBox(width: 8),
-                  Text(
-                    'DHAKA NORTH REGION',
-                    style: TextStyle(
-                      color: AppColors.slateMuted,
-                      fontSize: 9.5,
-                      fontWeight: FontWeight.w800,
-                      letterSpacing: 0.8,
-                    ),
+                  IconButton(
+                    tooltip: 'Close search',
+                    onPressed: () => Navigator.pop(context),
+                    icon: const Icon(Icons.close, color: AppColors.slateMuted),
                   ),
                 ],
               ),
             ),
-
             const SizedBox(height: 12),
 
-            // Search Input Field
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20.0),
+              padding: const EdgeInsets.symmetric(horizontal: 20),
               child: TextField(
                 controller: _searchController,
                 onChanged: (_) => setState(() {}),
-                style: const TextStyle(color: AppColors.chassisText, fontSize: 13),
-                decoration: InputDecoration(
-                  hintText: 'Search garages, fuel depots, police posts...',
-                  hintStyle: const TextStyle(color: AppColors.slateMuted, fontSize: 12),
-                  prefixIcon: const Icon(Icons.search, color: AppColors.slateMuted, size: 20),
-                  suffixIcon: _searchController.text.isNotEmpty
-                      ? IconButton(
-                          icon: const Icon(Icons.clear, size: 16, color: AppColors.slateMuted),
-                          onPressed: () {
-                            _searchController.clear();
-                            setState(() {});
-                          },
-                        )
-                      : null,
-                  filled: true,
-                  fillColor: AppColors.porcelainBg,
-                  contentPadding: const EdgeInsets.symmetric(vertical: 10, horizontal: 14),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide: const BorderSide(color: AppColors.slateBorder),
-                  ),
-                  enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide: const BorderSide(color: AppColors.slateBorder),
-                  ),
-                  focusedBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide: const BorderSide(color: AppColors.caliperCrimson, width: 1.5),
-                  ),
+                style: const TextStyle(color: AppColors.chassisText, fontSize: 14),
+                decoration: const InputDecoration(
+                  hintText: 'Search area, garage, tire repair, fuel...',
+                  prefixIcon: Icon(Icons.search, color: AppColors.slateMuted),
                 ),
               ),
             ),
+            const SizedBox(height: 12),
 
-            const SizedBox(height: 10),
-
-            // Filter Chips
             SizedBox(
-              height: 34,
+              height: 38,
               child: ListView.separated(
                 scrollDirection: Axis.horizontal,
                 padding: const EdgeInsets.symmetric(horizontal: 20),
@@ -208,22 +200,32 @@ class _SearchBottomSheetState extends State<SearchBottomSheet> {
                   final isSelected = _selectedCategory == cat;
                   return InkWell(
                     onTap: () => setState(() => _selectedCategory = cat),
-                    borderRadius: BorderRadius.circular(16),
+                    borderRadius: BorderRadius.circular(18),
                     child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                      alignment: Alignment.center,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 14,
+                        vertical: 6,
+                      ),
                       decoration: BoxDecoration(
-                        color: isSelected ? AppColors.caliperCrimson : AppColors.porcelainBg,
-                        borderRadius: BorderRadius.circular(16),
+                        color: isSelected
+                            ? AppColors.caliperCrimson
+                            : AppColors.surfaceTint,
+                        borderRadius: BorderRadius.circular(18),
                         border: Border.all(
-                          color: isSelected ? AppColors.caliperCrimson : AppColors.slateBorder,
+                          color: isSelected
+                              ? AppColors.caliperCrimson
+                              : AppColors.slateBorder,
                         ),
                       ),
                       child: Text(
                         cat,
                         style: TextStyle(
-                          color: isSelected ? Colors.white : AppColors.chassisText,
-                          fontSize: 11,
-                          fontWeight: isSelected ? FontWeight.bold : FontWeight.w600,
+                          color:
+                              isSelected ? Colors.white : AppColors.chassisText,
+                          fontSize: 12,
+                          fontWeight:
+                              isSelected ? FontWeight.w800 : FontWeight.w600,
                         ),
                       ),
                     ),
@@ -235,41 +237,43 @@ class _SearchBottomSheetState extends State<SearchBottomSheet> {
             const SizedBox(height: 12),
             const Divider(color: AppColors.slateBorder, height: 1),
 
-            // Facilities List
             Expanded(
               child: _filteredFacilities.isEmpty
                   ? Center(
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
                         children: const [
-                          Icon(Icons.search_off, size: 38, color: AppColors.slateMuted),
+                          Icon(
+                            Icons.search_off,
+                            size: 38,
+                            color: AppColors.slateMuted,
+                          ),
                           SizedBox(height: 8),
                           Text(
                             'No roadside facilities match your search',
-                            style: TextStyle(color: AppColors.slateMuted, fontSize: 12),
+                            style: TextStyle(
+                              color: AppColors.slateMuted,
+                              fontSize: 13,
+                            ),
                           ),
                         ],
                       ),
                     )
                   : ListView.separated(
-                      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 20,
+                        vertical: 12,
+                      ),
                       itemCount: _filteredFacilities.length,
                       separatorBuilder: (_, _) => const SizedBox(height: 10),
                       itemBuilder: (context, idx) {
                         final item = _filteredFacilities[idx];
                         return Container(
-                          padding: const EdgeInsets.all(12),
+                          padding: const EdgeInsets.all(14),
                           decoration: BoxDecoration(
                             color: AppColors.cardWhite,
                             borderRadius: BorderRadius.circular(14),
                             border: Border.all(color: AppColors.slateBorder),
-                            boxShadow: [
-                              BoxShadow(
-                                color: AppColors.chassisText.withAlpha(4),
-                                blurRadius: 4,
-                                offset: const Offset(0, 1),
-                              ),
-                            ],
                           ),
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
@@ -277,38 +281,39 @@ class _SearchBottomSheetState extends State<SearchBottomSheet> {
                               Row(
                                 children: [
                                   Container(
-                                    width: 36,
-                                    height: 36,
+                                    width: 40,
+                                    height: 40,
                                     decoration: BoxDecoration(
                                       color: AppColors.crimsonLight,
-                                      borderRadius: BorderRadius.circular(8),
+                                      borderRadius: BorderRadius.circular(10),
                                     ),
                                     child: Icon(
                                       item['icon'] as IconData,
-                                      color: AppColors.caliperCrimson,
-                                      size: 18,
+                                      color: AppColors.crimsonHover,
+                                      size: 20,
                                     ),
                                   ),
                                   const SizedBox(width: 10),
                                   Expanded(
                                     child: Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
                                       children: [
                                         Text(
                                           item['name'] as String,
                                           style: const TextStyle(
                                             color: AppColors.chassisText,
-                                            fontSize: 13,
+                                            fontSize: 13.5,
                                             fontWeight: FontWeight.w800,
                                           ),
                                         ),
                                         const SizedBox(height: 2),
                                         Text(
-                                          item['distance'] as String,
+                                          _formatDistance(item),
                                           style: const TextStyle(
-                                            color: AppColors.emeraldGps,
-                                            fontSize: 10,
-                                            fontWeight: FontWeight.bold,
+                                            color: AppColors.emeraldDark,
+                                            fontSize: 11,
+                                            fontWeight: FontWeight.w700,
                                           ),
                                         ),
                                       ],
@@ -321,7 +326,7 @@ class _SearchBottomSheetState extends State<SearchBottomSheet> {
                                 item['address'] as String,
                                 style: const TextStyle(
                                   color: AppColors.slateMuted,
-                                  fontSize: 11,
+                                  fontSize: 12,
                                 ),
                               ),
                               const SizedBox(height: 10),
@@ -331,30 +336,25 @@ class _SearchBottomSheetState extends State<SearchBottomSheet> {
                                     child: OutlinedButton.icon(
                                       onPressed: () async {
                                         HapticFeedback.lightImpact();
-                                        final phone = item['phone'] as String? ?? '999';
-                                        final ok = await PhoneUtils.launchCall(phone);
+                                        final phone =
+                                            item['phone'] as String? ?? '999';
+                                        final ok =
+                                            await PhoneUtils.launchCall(phone);
                                         if (!ok && context.mounted) {
-                                          ScaffoldMessenger.of(context).showSnackBar(
+                                          ScaffoldMessenger.of(context)
+                                              .showSnackBar(
                                             SnackBar(
-                                              content: Text('Could not open phone dialer for $phone.'),
-                                              backgroundColor: AppColors.caliperCrimson,
+                                              content: Text(
+                                                'Could not open phone dialer for $phone.',
+                                              ),
+                                              backgroundColor:
+                                                  AppColors.crimsonHover,
                                             ),
                                           );
                                         }
                                       },
-                                      icon: const Icon(Icons.call, size: 14, color: AppColors.chassisText),
-                                      label: const Text(
-                                        'Call',
-                                        style: TextStyle(
-                                          color: AppColors.chassisText,
-                                          fontSize: 11,
-                                          fontWeight: FontWeight.bold,
-                                        ),
-                                      ),
-                                      style: OutlinedButton.styleFrom(
-                                        side: const BorderSide(color: AppColors.slateBorder),
-                                        padding: const EdgeInsets.symmetric(vertical: 6),
-                                      ),
+                                      icon: const Icon(Icons.call, size: 15),
+                                      label: const Text('Call'),
                                     ),
                                   ),
                                   const SizedBox(width: 8),
@@ -365,23 +365,12 @@ class _SearchBottomSheetState extends State<SearchBottomSheet> {
                                         Navigator.pop(context);
                                         widget.onFacilitySelected?.call(
                                           item['name'] as String,
-                                          item['lat'] as double,
-                                          item['lng'] as double,
+                                          (item['lat'] as num).toDouble(),
+                                          (item['lng'] as num).toDouble(),
                                         );
                                       },
-                                      icon: const Icon(Icons.near_me, size: 14, color: Colors.white),
-                                      label: const Text(
-                                        'Set Breakdown Spot',
-                                        style: TextStyle(
-                                          color: Colors.white,
-                                          fontSize: 11,
-                                          fontWeight: FontWeight.w800,
-                                        ),
-                                      ),
-                                      style: ElevatedButton.styleFrom(
-                                        backgroundColor: AppColors.caliperCrimson,
-                                        padding: const EdgeInsets.symmetric(vertical: 6),
-                                      ),
+                                      icon: const Icon(Icons.near_me, size: 15),
+                                      label: const Text('Set Breakdown Spot'),
                                     ),
                                   ),
                                 ],

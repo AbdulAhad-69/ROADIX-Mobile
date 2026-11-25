@@ -1,19 +1,22 @@
 import 'package:riverpod/riverpod.dart';
 import '../domain/models/triage_state.dart';
 
-/// StateNotifier that preserves emergency triage inputs across the multi-step wizard
+/// StateNotifier that preserves emergency triage inputs across the multi-step wizard.
 class TriageController extends StateNotifier<TriageState> {
   TriageController() : super(const TriageState());
 
-  static Map<String, dynamic>? _ephemeralDraft;
+  static Map<String, dynamic>? _draftCache;
 
-  /// Step 1: Select fault / emergency category
+  /// Clears cached draft on sign-out to prevent cross-account draft leakage.
+  static void clearCachedDraft() => _draftCache = null;
+
+  /// Step 1: Select fault / emergency category.
   void selectFault(String fault) {
     state = state.copyWith(selectedFault: fault);
     saveDraft();
   }
 
-  /// Step 2: Confirm breakdown GPS coordinates & textual address
+  /// Step 2: Confirm breakdown GPS coordinates & textual address.
   void updateLocation({
     required double latitude,
     required double longitude,
@@ -27,7 +30,7 @@ class TriageController extends StateNotifier<TriageState> {
     saveDraft();
   }
 
-  /// Step 3: Select vehicle type & license plate
+  /// Step 3: Select vehicle type & license plate.
   void selectVehicle({
     required String vehicleType,
     String? licensePlate,
@@ -39,7 +42,7 @@ class TriageController extends StateNotifier<TriageState> {
     saveDraft();
   }
 
-  /// Step 4: Add diagnostic details, symptoms, hazard flags
+  /// Step 4: Add diagnostic details, symptoms, hazard flags.
   void updateFaultDetails({
     List<String>? symptoms,
     String? notes,
@@ -57,39 +60,39 @@ class TriageController extends StateNotifier<TriageState> {
     saveDraft();
   }
 
-  /// Saves current triage state to ephemeral draft cache
+  /// Saves current triage state to the session draft cache.
   void saveDraft() {
-    _ephemeralDraft = state.toJson();
+    _draftCache = state.toJson();
   }
 
-  /// Restores triage state from ephemeral draft cache if present
+  /// Restores triage state from draft cache if present.
   bool restoreDraft() {
-    if (_ephemeralDraft != null) {
-      state = TriageState.fromJson(_ephemeralDraft!);
+    if (_draftCache != null) {
+      state = TriageState.fromJson(_draftCache!);
       return true;
     }
     return false;
   }
 
-  /// Clears draft cache upon request completion or cancellation
+  /// Clears draft cache upon request completion or cancellation.
   void clearDraft() {
-    _ephemeralDraft = null;
+    _draftCache = null;
     state = const TriageState();
   }
 
-  /// Set the active dispatch / service request ID created in backend
+  /// Set the active dispatch / service request ID created in backend.
   void setActiveRequestId(String id) {
     state = state.copyWith(activeRequestId: id);
     saveDraft();
   }
 
-  /// Reset state when request completes or is cancelled
+  /// Reset state when request completes or is cancelled.
   void reset() {
     clearDraft();
   }
 }
 
-/// Provider for triage state management across navigation
+/// Provider for triage state management across navigation.
 final triageControllerProvider =
     StateNotifierProvider<TriageController, TriageState>((ref) {
   return TriageController();

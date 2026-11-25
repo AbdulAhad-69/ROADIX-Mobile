@@ -1,10 +1,11 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import '../theme/app_colors.dart';
 
 class ContactEditorSheet extends StatefulWidget {
   final Map<String, String>? initialContact;
-  final Function(Map<String, String> contact) onSave;
-  final VoidCallback? onDelete;
+  final FutureOr<void> Function(Map<String, String> contact) onSave;
+  final FutureOr<void> Function()? onDelete;
 
   const ContactEditorSheet({
     super.key,
@@ -41,7 +42,10 @@ class _ContactEditorSheetState extends State<ContactEditorSheet> {
     super.dispose();
   }
 
-  void _submit() {
+  bool _isSubmitting = false;
+
+  Future<void> _submit() async {
+    if (_isSubmitting) return;
     final name = _nameController.text.trim();
     final phone = _phoneController.text.trim();
 
@@ -55,12 +59,25 @@ class _ContactEditorSheetState extends State<ContactEditorSheet> {
       return;
     }
 
-    widget.onSave({
-      'name': name,
-      'phone': phone,
-      'relation': _selectedRelation,
-    });
-    Navigator.pop(context);
+    setState(() => _isSubmitting = true);
+    try {
+      await widget.onSave({
+        'name': name,
+        'phone': phone,
+        'relation': _selectedRelation,
+      });
+      if (mounted) Navigator.pop(context);
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isSubmitting = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Could not save contact: $e'),
+            backgroundColor: AppColors.caliperCrimson,
+          ),
+        );
+      }
+    }
   }
 
   @override

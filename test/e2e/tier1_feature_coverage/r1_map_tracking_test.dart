@@ -368,7 +368,7 @@ void main() {
       // Tap Gulshan 2
       await tester.tap(E2EFinders.quickZoneChip('Gulshan 2'));
       await tester.pump();
-      expect(find.textContaining('23.7925° N'), findsOneWidget);
+      expect(find.textContaining('23.7985° N'), findsOneWidget);
 
       await E2ETestHarness.cleanUp(tester);
     });

@@ -1,4 +1,6 @@
-/// Immutable state representing an in-flight emergency triage session
+import 'package:flutter/foundation.dart';
+
+/// Immutable state representing an in-flight emergency triage session.
 class TriageState {
   final String? selectedFault;
   final double latitude;
@@ -58,7 +60,7 @@ class TriageState {
     );
   }
 
-  /// Whether essential triage info is ready for mechanic dispatch
+  /// Whether essential triage info is ready for mechanic dispatch.
   bool get isReadyForDispatch =>
       selectedFault != null &&
       vehicleType != null &&
@@ -90,7 +92,8 @@ class TriageState {
       pickupAddress: json['pickupAddress'] as String? ?? '',
       vehicleType: json['vehicleType'] as String?,
       licensePlate: json['licensePlate'] as String?,
-      symptoms: (json['symptoms'] as List?)?.map((e) => e.toString()).toList() ?? const [],
+      symptoms: (json['symptoms'] as List?)?.map((e) => e.toString()).toList() ??
+          const [],
       notes: json['notes'] as String? ?? '',
       isHighPriority: json['isHighPriority'] as bool? ?? false,
       isInLiveLane: json['isInLiveLane'] as bool? ?? false,
@@ -110,6 +113,7 @@ class TriageState {
           pickupAddress == other.pickupAddress &&
           vehicleType == other.vehicleType &&
           licensePlate == other.licensePlate &&
+          listEquals(symptoms, other.symptoms) &&
           notes == other.notes &&
           isHighPriority == other.isHighPriority &&
           isInLiveLane == other.isInLiveLane &&
@@ -124,6 +128,7 @@ class TriageState {
         pickupAddress,
         vehicleType,
         licensePlate,
+        Object.hashAll(symptoms),
         notes,
         isHighPriority,
         isInLiveLane,

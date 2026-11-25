@@ -2,8 +2,9 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../services/demo_session.dart';
 import '../services/supabase_service.dart';
-import '../src/core/config/app_config.dart';
+import '../src/core/router/app_router.dart';
 import '../src/core/utils/phone_utils.dart';
 import '../theme/app_colors.dart';
 import '../widgets/brand_logo.dart';
@@ -27,24 +28,28 @@ class _LoginScreenState extends State<LoginScreen> {
   bool _usePhoneAuth = true;
   bool _isSignUp = false;
   String _selectedRole = 'motorist'; // 'motorist' or 'mechanic'
-  bool _isLoading = false;
+  String? _activeAction;
   bool _obscurePassword = true;
   String? _errorMessage;
   StreamSubscription<AuthState>? _authSubscription;
   bool _isDemoActionInProgress = false;
+  bool _hasNavigated = false;
+
+  bool get _isLoading => _activeAction != null;
 
   @override
   void initState() {
     super.initState();
     _authSubscription = Supabase.instance.client.auth.onAuthStateChange.listen(
       (data) {
-        if (data.session != null && mounted && !_isDemoActionInProgress) {
+        if (data.session != null &&
+            mounted &&
+            !_isDemoActionInProgress &&
+            !_hasNavigated) {
           _proceedBasedOnRole();
         }
       },
-      onError: (e) {
-        // Auth state stream error handled gracefully
-      },
+      onError: (_) {},
     );
   }
 
@@ -59,153 +64,150 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   Future<void> _proceedBasedOnRole() async {
+    if (_hasNavigated) return;
     final user = Supabase.instance.client.auth.currentUser;
-    if (user == null) {
-      // Must not navigate to protected screens if no active user session
-      return;
-    }
+    if (user == null && !DemoSession.isActive) return;
 
     String? role;
     try {
       role = await SupabaseService().getUserRole();
     } catch (_) {}
 
-    if (role == null) {
-      // Profile does not exist yet (brand new OAuth or email registration)
+    if (role == null && user != null) {
       final meta = user.userMetadata;
+      final metaRole = meta?['role']?.toString();
+      final assignedRole = (metaRole == 'mechanic' || _selectedRole == 'mechanic')
+          ? 'mechanic'
+          : 'motorist';
       final fullName = meta?['full_name'] as String? ??
           meta?['name'] as String? ??
           (_nameController.text.trim().isNotEmpty
               ? _nameController.text.trim()
-              : user.email?.split('@').first ?? 'User');
-      final assignedRole = _selectedRole;
+              : user.email?.split('@').first ?? 'Motorist');
       try {
         await SupabaseService().createOrUpdateProfile(
           fullName: fullName,
           phone: user.phone,
           role: assignedRole,
+          avatarUrl: meta?['avatar_url']?.toString() ??
+              meta?['picture']?.toString(),
         );
-        role = assignedRole;
-      } catch (_) {
-        role = assignedRole;
-      }
+      } catch (_) {}
+      role = assignedRole;
     }
+    role ??= DemoSession.isActive ? DemoSession.role : 'motorist';
 
-    if (!mounted) return;
+    if (!mounted || _hasNavigated) return;
+    _hasNavigated = true;
     if (role == 'mechanic') {
-      Navigator.of(context).pushReplacement(
-        MaterialPageRoute(builder: (_) => const MechanicHomeScreen()),
+      navigateRoot(
+        context,
+        route: AppRoutes.mechanic,
+        fallbackWidget: const MechanicHomeScreen(),
       );
     } else {
-      Navigator.of(context).pushReplacement(
-        MaterialPageRoute(builder: (_) => const EmergencyHomeScreen()),
+      navigateRoot(
+        context,
+        route: AppRoutes.home,
+        fallbackWidget: const EmergencyHomeScreen(),
       );
     }
   }
 
-  void _proceedToHome() => _proceedBasedOnRole();
-
-  Future<void> _loginAsDemoMotorist() async {
+  Future<void> _enterDemoMode({
+    required String actionKey,
+    required String role,
+    required String fullName,
+    required String phone,
+    String? workshopName,
+    String? workshopAddress,
+  }) async {
+    if (_isLoading || _isDemoActionInProgress || _hasNavigated) return;
     setState(() {
-      _isLoading = true;
+      _activeAction = actionKey;
       _isDemoActionInProgress = true;
+      _errorMessage = null;
     });
     try {
       HapticFeedback.mediumImpact();
       try {
         await SupabaseService().signInAnonymously();
-      } catch (_) {}
-      try {
-        await SupabaseService().createOrUpdateProfile(
-          fullName: 'Tanvir Ahmed',
-          phone: '+8801711000001',
-          role: 'motorist',
+      } catch (_) {
+        // Anonymous auth may be disabled in dashboard; use explicit local demo session.
+      }
+
+      if (SupabaseService().currentUser == null) {
+        DemoSession.startDemo(
+          demoRole: role,
+          name: fullName,
+          phoneNumber: phone,
         );
-      } catch (_) {}
-      if (mounted) {
-        Navigator.of(context).pushReplacement(
-          MaterialPageRoute(builder: (_) => const EmergencyHomeScreen()),
+      } else {
+        try {
+          await SupabaseService().createOrUpdateProfile(
+            fullName: fullName,
+            phone: phone,
+            role: role,
+          );
+          if (role == 'mechanic') {
+            await SupabaseService().ensureMechanicProfile(
+              workshopName: workshopName,
+              workshopAddress: workshopAddress,
+            );
+          }
+        } catch (_) {}
+      }
+
+      if (!mounted || _hasNavigated) return;
+      _hasNavigated = true;
+      if (role == 'mechanic') {
+        navigateRoot(
+          context,
+          route: AppRoutes.mechanic,
+          fallbackWidget: const MechanicHomeScreen(),
+        );
+      } else {
+        navigateRoot(
+          context,
+          route: AppRoutes.home,
+          fallbackWidget: const EmergencyHomeScreen(),
         );
       }
     } finally {
       if (mounted) {
         setState(() {
-          _isLoading = false;
+          _activeAction = null;
           _isDemoActionInProgress = false;
         });
       }
     }
   }
 
-  Future<void> _loginAsDemoTechnician() async {
-    setState(() {
-      _isLoading = true;
-      _isDemoActionInProgress = true;
-    });
-    try {
-      HapticFeedback.mediumImpact();
-      try {
-        await SupabaseService().signInAnonymously();
-      } catch (_) {}
-      try {
-        await SupabaseService().createOrUpdateProfile(
-          fullName: 'Rahim Uddin',
-          phone: '+8801811000011',
-          role: 'mechanic',
-        );
-        await SupabaseService().ensureMechanicProfile(
-          workshopName: 'Gulshan Auto Clinic',
-          workshopAddress: 'Plot 14, Road 45, Gulshan 2, Dhaka',
-        );
-      } catch (_) {}
-      if (mounted) {
-        Navigator.of(context).pushReplacement(
-          MaterialPageRoute(builder: (_) => const MechanicHomeScreen()),
-        );
-      }
-    } finally {
-      if (mounted) {
-        setState(() {
-          _isLoading = false;
-          _isDemoActionInProgress = false;
-        });
-      }
-    }
-  }
+  Future<void> _loginAsDemoMotorist() => _enterDemoMode(
+        actionKey: 'demo_motorist',
+        role: 'motorist',
+        fullName: 'Tanvir Ahmed',
+        phone: '+8801711000001',
+      );
 
-  Future<void> _loginAsGuest() async {
-    setState(() {
-      _isLoading = true;
-      _isDemoActionInProgress = true;
-    });
-    try {
-      HapticFeedback.mediumImpact();
-      try {
-        await SupabaseService().signInAnonymously();
-      } catch (_) {}
-      try {
-        await SupabaseService().createOrUpdateProfile(
-          fullName: 'Guest Motorist',
-          phone: '+8801700000000',
-          role: 'motorist',
-        );
-      } catch (_) {}
-      if (mounted) {
-        Navigator.of(context).pushReplacement(
-          MaterialPageRoute(builder: (_) => const EmergencyHomeScreen()),
-        );
-      }
-    } finally {
-      if (mounted) {
-        setState(() {
-          _isLoading = false;
-          _isDemoActionInProgress = false;
-        });
-      }
-    }
-  }
+  Future<void> _loginAsDemoTechnician() => _enterDemoMode(
+        actionKey: 'demo_technician',
+        role: 'mechanic',
+        fullName: 'Rahim Uddin',
+        phone: '+8801811000011',
+        workshopName: 'Gulshan Auto Clinic',
+        workshopAddress: 'Plot 14, Road 45, Gulshan 2, Dhaka',
+      );
+
+  Future<void> _loginAsGuest() => _enterDemoMode(
+        actionKey: 'demo_guest',
+        role: 'motorist',
+        fullName: 'Guest Motorist',
+        phone: '+8801700000000',
+      );
 
   void _openGuestSosSheet() {
+    if (_isLoading || _isDemoActionInProgress || _hasNavigated) return;
     HapticFeedback.mediumImpact();
     final guestPhoneController = TextEditingController();
     String? localError;
@@ -239,16 +241,20 @@ class _LoginScreenState extends State<LoginScreen> {
                           Container(
                             padding: const EdgeInsets.all(6),
                             decoration: BoxDecoration(
-                              color: AppColors.caliperCrimson.withAlpha(20),
+                              color: AppColors.crimsonLight,
                               shape: BoxShape.circle,
                             ),
-                            child: const Icon(Icons.flash_on, color: AppColors.caliperCrimson, size: 20),
+                            child: const Icon(
+                              Icons.flash_on,
+                              color: AppColors.crimsonHover,
+                              size: 20,
+                            ),
                           ),
                           const SizedBox(width: 8),
                           const Text(
                             'GUEST SOS DISPATCH',
                             style: TextStyle(
-                              color: AppColors.caliperCrimson,
+                              color: AppColors.crimsonHover,
                               fontSize: 12,
                               fontWeight: FontWeight.w900,
                               letterSpacing: 1.0,
@@ -257,7 +263,12 @@ class _LoginScreenState extends State<LoginScreen> {
                         ],
                       ),
                       IconButton(
-                        icon: const Icon(Icons.close, color: AppColors.slateMuted, size: 20),
+                        tooltip: 'Close Guest SOS',
+                        icon: const Icon(
+                          Icons.close,
+                          color: AppColors.slateMuted,
+                          size: 22,
+                        ),
                         onPressed: () => Navigator.pop(ctx),
                       ),
                     ],
@@ -273,13 +284,17 @@ class _LoginScreenState extends State<LoginScreen> {
                   ),
                   const SizedBox(height: 4),
                   const Text(
-                    'No account or password required. Please provide an active callback phone number so dispatched mechanics can call you.',
-                    style: TextStyle(color: AppColors.slateMuted, fontSize: 12, height: 1.3),
+                    'Provide an active callback number so dispatched technicians can reach you quickly.',
+                    style: TextStyle(
+                      color: AppColors.slateMuted,
+                      fontSize: 13,
+                      height: 1.35,
+                    ),
                   ),
                   if (localError != null) ...[
                     const SizedBox(height: 10),
                     Container(
-                      padding: const EdgeInsets.all(8),
+                      padding: const EdgeInsets.all(10),
                       decoration: BoxDecoration(
                         color: AppColors.crimsonLight,
                         borderRadius: BorderRadius.circular(8),
@@ -287,7 +302,11 @@ class _LoginScreenState extends State<LoginScreen> {
                       ),
                       child: Text(
                         localError!,
-                        style: const TextStyle(color: AppColors.caliperCrimson, fontSize: 11),
+                        style: const TextStyle(
+                          color: AppColors.crimsonHover,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                        ),
                       ),
                     ),
                   ],
@@ -296,27 +315,16 @@ class _LoginScreenState extends State<LoginScreen> {
                     controller: guestPhoneController,
                     keyboardType: TextInputType.phone,
                     autofocus: true,
-                    style: const TextStyle(color: AppColors.chassisText, fontSize: 14, fontWeight: FontWeight.bold),
-                    decoration: InputDecoration(
+                    style: const TextStyle(
+                      color: AppColors.chassisText,
+                      fontSize: 14,
+                      fontWeight: FontWeight.bold,
+                    ),
+                    decoration: const InputDecoration(
                       labelText: 'Callback Mobile Number',
                       hintText: '017XXXXXXXX',
                       prefixText: '+880 ',
-                      prefixStyle: const TextStyle(color: AppColors.chassisText, fontWeight: FontWeight.bold),
-                      prefixIcon: const Icon(Icons.phone, color: AppColors.slateMuted, size: 20),
-                      filled: true,
-                      fillColor: AppColors.porcelainBg,
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        borderSide: const BorderSide(color: AppColors.slateBorder),
-                      ),
-                      enabledBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        borderSide: const BorderSide(color: AppColors.slateBorder),
-                      ),
-                      focusedBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        borderSide: const BorderSide(color: AppColors.caliperCrimson, width: 1.5),
-                      ),
+                      prefixIcon: Icon(Icons.phone, color: AppColors.slateMuted, size: 20),
                     ),
                   ),
                   const SizedBox(height: 18),
@@ -330,74 +338,47 @@ class _LoginScreenState extends State<LoginScreen> {
                               final normalized = PhoneUtils.normalize(raw);
                               if (!PhoneUtils.isValidBangladeshPhone(normalized)) {
                                 setSheetState(() {
-                                  localError = 'Please enter a valid 11-digit Bangladesh phone (e.g. 01712345678)';
+                                  localError =
+                                      'Enter a valid 11-digit Bangladesh phone (e.g. 01712345678).';
                                 });
                                 return;
                               }
-
                               setSheetState(() {
                                 isSubmitting = true;
                                 localError = null;
                               });
-
-                              try {
-                                HapticFeedback.mediumImpact();
-                                await SupabaseService().signInAnonymously();
-                                await SupabaseService().createOrUpdateProfile(
-                                  fullName: 'Guest Motorist',
-                                  phone: normalized,
-                                  role: 'motorist',
-                                );
-                                if (ctx.mounted) Navigator.pop(ctx);
-                                if (mounted) _proceedToHome();
-                              } catch (e) {
-                                setSheetState(() {
-                                  isSubmitting = false;
-                                  localError = e.toString().replaceAll('Exception: ', '');
-                                });
-                              }
+                              if (ctx.mounted) Navigator.pop(ctx);
+                              await _enterDemoMode(
+                                actionKey: 'demo_guest_sheet',
+                                role: 'motorist',
+                                fullName: 'Guest Motorist',
+                                phone: normalized,
+                              );
                             },
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: AppColors.caliperCrimson,
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                        elevation: 0,
-                      ),
                       child: isSubmitting
                           ? const SizedBox(
                               width: 20,
                               height: 20,
-                              child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                            )
-                          : const Text(
-                              'CONTINUE TO EMERGENCY MAP',
-                              style: TextStyle(
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
                                 color: Colors.white,
-                                fontSize: 13,
-                                fontWeight: FontWeight.w800,
-                                letterSpacing: 0.5,
                               ),
-                            ),
+                            )
+                          : const Text('CONTINUE TO EMERGENCY MAP'),
                     ),
                   ),
-                  const SizedBox(height: 10),
+                  const SizedBox(height: 8),
                   Center(
                     child: TextButton(
                       onPressed: isSubmitting
                           ? null
                           : () async {
-                              setSheetState(() => isSubmitting = true);
-                              try {
-                                await SupabaseService().signInAnonymously();
-                                if (ctx.mounted) Navigator.pop(ctx);
-                                if (mounted) _proceedToHome();
-                              } catch (_) {
-                                if (ctx.mounted) Navigator.pop(ctx);
-                                if (mounted) _proceedToHome();
-                              }
+                              if (ctx.mounted) Navigator.pop(ctx);
+                              await _loginAsGuest();
                             },
                       child: const Text(
-                        'Skip phone entry (Proceed directly)',
-                        style: TextStyle(color: AppColors.slateMuted, fontSize: 11),
+                        'Skip phone entry (Proceed in Guest Demo)',
+                        style: TextStyle(color: AppColors.slateMuted, fontSize: 12),
                       ),
                     ),
                   ),
@@ -407,19 +388,47 @@ class _LoginScreenState extends State<LoginScreen> {
           );
         },
       ),
-    );
+    ).whenComplete(() {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        guestPhoneController.dispose();
+      });
+    });
+  }
+
+  String _friendlyAuthError(Object e, {bool isPhone = false}) {
+    final raw = e
+        .toString()
+        .replaceAll('Exception: ', '')
+        .replaceAll('AuthException: ', '')
+        .replaceAll('AuthApiException(', '')
+        .trim();
+    final lower = raw.toLowerCase();
+    if (isPhone &&
+        (lower.contains('phone') && lower.contains('disabled') ||
+            lower.contains('unsupported phone provider') ||
+            lower.contains('sms'))) {
+      return 'SMS OTP is not yet enabled on Supabase Auth. Sign in via Email Account, Google, or Demo Mode.';
+    }
+    if (lower.contains('invalid login credentials')) {
+      return 'Incorrect email or password. Double-check your credentials or sign up.';
+    }
+    if (lower.contains('email not confirmed')) {
+      return 'Please verify your email link before signing in.';
+    }
+    return raw;
   }
 
   Future<void> _handlePhoneOtp() async {
+    if (_isLoading || _isDemoActionInProgress) return;
     final rawPhone = _phoneController.text.trim();
     final normalized = PhoneUtils.normalize(rawPhone);
     if (!PhoneUtils.isValidBangladeshPhone(normalized)) {
-      _showError('Please enter a valid 11-digit Bangladesh phone (e.g. 01712345678)');
+      _showError('Enter a valid 11-digit Bangladesh phone (e.g. 01712345678).');
       return;
     }
 
     setState(() {
-      _isLoading = true;
+      _activeAction = 'otp';
       _errorMessage = null;
     });
 
@@ -436,16 +445,14 @@ class _LoginScreenState extends State<LoginScreen> {
         );
       }
     } catch (e) {
-      if (mounted) {
-        final msg = e.toString().replaceAll('Exception: ', '').replaceAll('AuthException: ', '');
-        _showError(msg);
-      }
+      if (mounted) _showError(_friendlyAuthError(e, isPhone: true));
     } finally {
-      if (mounted) setState(() => _isLoading = false);
+      if (mounted) setState(() => _activeAction = null);
     }
   }
 
   Future<void> _handleEmailAuth() async {
+    if (_isLoading || _isDemoActionInProgress) return;
     final email = _emailController.text.trim();
     final password = _passwordController.text;
 
@@ -459,7 +466,7 @@ class _LoginScreenState extends State<LoginScreen> {
     }
 
     setState(() {
-      _isLoading = true;
+      _activeAction = 'email';
       _errorMessage = null;
     });
 
@@ -472,21 +479,22 @@ class _LoginScreenState extends State<LoginScreen> {
           fullName: _nameController.text.trim().isNotEmpty
               ? _nameController.text.trim()
               : null,
+          role: _selectedRole,
         );
         if (res.session == null && res.user != null) {
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
               const SnackBar(
                 content: Text(
-                  'Account created! Please check your email to verify before signing in.',
+                  'Account created! Verify the confirmation email before signing in.',
                 ),
-                backgroundColor: AppColors.emeraldGps,
+                backgroundColor: AppColors.emeraldDark,
                 behavior: SnackBarBehavior.floating,
               ),
             );
             setState(() => _isSignUp = false);
-            return;
           }
+          return;
         }
       } else {
         await SupabaseService().signInWithEmail(
@@ -494,77 +502,50 @@ class _LoginScreenState extends State<LoginScreen> {
           password: password,
         );
       }
-      if (mounted) {
-        await _proceedBasedOnRole();
-      }
+      if (mounted) await _proceedBasedOnRole();
     } catch (e) {
-      if (mounted) {
-        final msg = e.toString().replaceAll('Exception: ', '').replaceAll('AuthException: ', '');
-        _showError(msg);
-      }
+      if (mounted) _showError(_friendlyAuthError(e));
     } finally {
-      if (mounted) setState(() => _isLoading = false);
+      if (mounted) setState(() => _activeAction = null);
     }
   }
 
   Future<void> _handleGoogleSignIn() async {
+    if (_isLoading || _isDemoActionInProgress) return;
     setState(() {
-      _isLoading = true;
+      _activeAction = 'google';
       _errorMessage = null;
     });
     try {
       HapticFeedback.lightImpact();
-      if (!AppConfig.isGoogleAuthConfigured) {
-        await _performGoogleFallback();
-        return;
-      }
-
       final initiated = await SupabaseService().signInWithGoogle();
+      if (!mounted) return;
       if (!initiated) {
-        await _performGoogleFallback();
+        _showError(
+          'Could not open browser for Google Sign-In. Check network connectivity or use Email / Demo Mode.',
+        );
         return;
       }
       final session = Supabase.instance.client.auth.currentSession;
-      if (session != null && mounted) {
+      if (session != null) {
         await _proceedBasedOnRole();
-      }
-    } on AuthException catch (_) {
-      if (mounted) await _performGoogleFallback();
-    } catch (_) {
-      if (mounted) await _performGoogleFallback();
-    } finally {
-      if (mounted) setState(() => _isLoading = false);
-    }
-  }
-
-  Future<void> _performGoogleFallback() async {
-    setState(() => _isDemoActionInProgress = true);
-    try {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Google OAuth unconfigured. Continuing with Google Demo Account...'),
-          backgroundColor: AppColors.chassisText,
-          duration: Duration(seconds: 2),
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
-      await SupabaseService().signInWithGoogleFallback(role: _selectedRole);
-      if (!mounted) return;
-      if (_selectedRole == 'mechanic') {
-        Navigator.of(context).pushReplacement(
-          MaterialPageRoute(builder: (_) => const MechanicHomeScreen()),
-        );
       } else {
-        Navigator.of(context).pushReplacement(
-          MaterialPageRoute(builder: (_) => const EmergencyHomeScreen()),
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Complete Google Sign-In in the browser tab to return to ROADIX.'),
+            backgroundColor: AppColors.chassisText,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        _showError(
+          'Google Sign-In unavailable right now (${_friendlyAuthError(e)}). Try Email or Demo Mode.',
         );
       }
     } finally {
-      if (mounted) {
-        setState(() {
-          _isDemoActionInProgress = false;
-        });
-      }
+      if (mounted) setState(() => _activeAction = null);
     }
   }
 
@@ -573,9 +554,9 @@ class _LoginScreenState extends State<LoginScreen> {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(message),
-        backgroundColor: AppColors.caliperCrimson,
+        backgroundColor: AppColors.crimsonHover,
         behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
       ),
     );
   }
@@ -587,25 +568,24 @@ class _LoginScreenState extends State<LoginScreen> {
       body: SafeArea(
         child: Center(
           child: SingleChildScrollView(
-            padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 16.0),
+            padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 16.0),
             child: ConstrainedBox(
               constraints: const BoxConstraints(maxWidth: 420),
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  // Brand Header with Automotive Red Embellishment
                   Center(
                     child: Container(
-                      width: 64,
-                      height: 64,
+                      width: 68,
+                      height: 68,
                       decoration: BoxDecoration(
                         color: AppColors.cardWhite,
                         shape: BoxShape.circle,
                         border: Border.all(color: AppColors.slateBorder, width: 1.5),
                         boxShadow: [
                           BoxShadow(
-                            color: AppColors.caliperCrimson.withAlpha(25),
+                            color: AppColors.caliperCrimson.withAlpha(22),
                             blurRadius: 16,
                             offset: const Offset(0, 4),
                           ),
@@ -614,8 +594,8 @@ class _LoginScreenState extends State<LoginScreen> {
                       child: Center(
                         child: Image.asset(
                           'assets/images/logo.png',
-                          width: 36,
-                          height: 36,
+                          width: 38,
+                          height: 38,
                           fit: BoxFit.contain,
                           errorBuilder: (_, _, _) => const Icon(
                             Icons.car_crash_outlined,
@@ -639,86 +619,98 @@ class _LoginScreenState extends State<LoginScreen> {
                       ),
                     ),
                   ),
-                  const SizedBox(height: 4),
+                  const SizedBox(height: 6),
                   const Center(
                     child: Text(
                       'Rapid Highway Emergency Assistance • Bangladesh',
                       textAlign: TextAlign.center,
                       style: TextStyle(
                         color: AppColors.slateMuted,
-                        fontSize: 12,
+                        fontSize: 12.5,
                         fontWeight: FontWeight.w500,
                       ),
                     ),
                   ),
-                  const SizedBox(height: 24),
+                  const SizedBox(height: 22),
 
-                  // Guest SOS Quick Access Pill (Instant Highway Dispatch)
-                  InkWell(
-                    onTap: _isLoading ? null : _openGuestSosSheet,
-                    borderRadius: BorderRadius.circular(16),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                      decoration: BoxDecoration(
-                        color: AppColors.crimsonLight,
-                        borderRadius: BorderRadius.circular(16),
-                        border: Border.all(color: AppColors.crimsonBorder, width: 1.5),
-                        boxShadow: [
-                          BoxShadow(
-                            color: AppColors.caliperCrimson.withAlpha(15),
-                            blurRadius: 8,
-                            offset: const Offset(0, 2),
+                  // Guest SOS Quick Access Banner
+                  Semantics(
+                    button: true,
+                    label: 'Emergency breakdown? Continue as guest',
+                    child: InkWell(
+                      onTap: _isLoading ? null : _openGuestSosSheet,
+                      borderRadius: BorderRadius.circular(16),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 14,
+                        ),
+                        decoration: BoxDecoration(
+                          color: AppColors.crimsonLight,
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(
+                            color: AppColors.crimsonBorder,
+                            width: 1.5,
                           ),
-                        ],
-                      ),
-                      child: Row(
-                        children: [
-                          Container(
-                            padding: const EdgeInsets.all(6),
-                            decoration: const BoxDecoration(
-                              color: AppColors.caliperCrimson,
-                              shape: BoxShape.circle,
+                        ),
+                        child: Row(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.all(8),
+                              decoration: const BoxDecoration(
+                                color: AppColors.caliperCrimson,
+                                shape: BoxShape.circle,
+                              ),
+                              child: const Icon(
+                                Icons.flash_on,
+                                color: Colors.white,
+                                size: 18,
+                              ),
                             ),
-                            child: const Icon(Icons.flash_on, color: Colors.white, size: 16),
-                          ),
-                          const SizedBox(width: 12),
-                          const Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  'EMERGENCY BREAKDOWN?',
-                                  style: TextStyle(
-                                    color: AppColors.caliperCrimson,
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.w900,
-                                    letterSpacing: 0.8,
+                            const SizedBox(width: 12),
+                            const Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    'EMERGENCY BREAKDOWN?',
+                                    style: TextStyle(
+                                      color: AppColors.crimsonHover,
+                                      fontSize: 11.5,
+                                      fontWeight: FontWeight.w900,
+                                      letterSpacing: 0.7,
+                                    ),
                                   ),
-                                ),
-                                SizedBox(height: 2),
-                                Text(
-                                  'Continue as Guest • Instant Triage',
-                                  style: TextStyle(
-                                    color: AppColors.chassisText,
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.w600,
+                                  SizedBox(height: 2),
+                                  Text(
+                                    'Continue as Guest • Instant Triage',
+                                    style: TextStyle(
+                                      color: AppColors.chassisText,
+                                      fontSize: 12.5,
+                                      fontWeight: FontWeight.w600,
+                                    ),
                                   ),
-                                ),
-                              ],
+                                ],
+                              ),
                             ),
-                          ),
-                          const Icon(Icons.arrow_forward_ios, color: AppColors.caliperCrimson, size: 14),
-                        ],
+                            const Icon(
+                              Icons.arrow_forward_ios,
+                              color: AppColors.crimsonHover,
+                              size: 14,
+                            ),
+                          ],
+                        ),
                       ),
                     ),
                   ),
                   const SizedBox(height: 14),
 
-                  // Demo One-Tap Access Card
+                  // Explicit Demo One-Tap Access Card (strictly separated from Account Auth)
                   Container(
-                    padding: const EdgeInsets.all(12),
+                    key: const Key('demo_access_card'),
+                    padding: const EdgeInsets.all(14),
                     decoration: BoxDecoration(
-                      color: const Color(0xFFF8FAFC),
+                      color: AppColors.cardWhite,
                       borderRadius: BorderRadius.circular(16),
                       border: Border.all(color: AppColors.slateBorder),
                     ),
@@ -730,141 +722,84 @@ class _LoginScreenState extends State<LoginScreen> {
                             Container(
                               padding: const EdgeInsets.all(4),
                               decoration: BoxDecoration(
-                                color: AppColors.caliperCrimson.withAlpha(20),
+                                color: AppColors.crimsonLight,
                                 borderRadius: BorderRadius.circular(6),
                               ),
                               child: const Icon(
                                 Icons.bolt,
-                                color: AppColors.caliperCrimson,
+                                color: AppColors.crimsonHover,
                                 size: 14,
                               ),
                             ),
                             const SizedBox(width: 8),
-                            const Text(
-                              'DEMO ONE-TAP ACCESS',
-                              style: TextStyle(
-                                color: AppColors.chassisText,
-                                fontSize: 10.5,
-                                fontWeight: FontWeight.w900,
-                                letterSpacing: 0.8,
+                            const Expanded(
+                              child: Text(
+                                'DEMO ONE-TAP ACCESS',
+                                style: TextStyle(
+                                  color: AppColors.chassisText,
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w900,
+                                  letterSpacing: 0.7,
+                                ),
+                              ),
+                            ),
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 7,
+                                vertical: 3,
+                              ),
+                              decoration: BoxDecoration(
+                                color: AppColors.porcelainBg,
+                                borderRadius: BorderRadius.circular(999),
+                                border: Border.all(color: AppColors.slateBorder),
+                              ),
+                              child: const Text(
+                                'DEMO MODE',
+                                style: TextStyle(
+                                  color: AppColors.slateMuted,
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w800,
+                                ),
                               ),
                             ),
                           ],
                         ),
-                        const SizedBox(height: 4),
+                        const SizedBox(height: 6),
                         const Text(
-                          'Experience live flows instantly on test device or emulator without typing credentials.',
-                          style: TextStyle(color: AppColors.slateMuted, fontSize: 10.5),
+                          'Preview Motorist, Technician, or Guest flows immediately without credentials.',
+                          style: TextStyle(
+                            color: AppColors.slateMuted,
+                            fontSize: 11.5,
+                          ),
                         ),
                         const SizedBox(height: 10),
                         Row(
                           children: [
-                            Expanded(
-                              child: InkWell(
-                                onTap: _isLoading ? null : _loginAsDemoMotorist,
-                                borderRadius: BorderRadius.circular(10),
-                                child: Container(
-                                  padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
-                                  decoration: BoxDecoration(
-                                    color: AppColors.cardWhite,
-                                    borderRadius: BorderRadius.circular(10),
-                                    border: Border.all(color: AppColors.slateBorder),
-                                    boxShadow: [
-                                      BoxShadow(
-                                        color: Colors.black.withAlpha(4),
-                                        blurRadius: 2,
-                                        offset: const Offset(0, 1),
-                                      ),
-                                    ],
-                                  ),
-                                  child: Column(
-                                    children: const [
-                                      Icon(Icons.directions_car, color: AppColors.caliperCrimson, size: 18),
-                                      SizedBox(height: 3),
-                                      Text(
-                                        'Motorist',
-                                        style: TextStyle(
-                                          color: AppColors.chassisText,
-                                          fontSize: 11,
-                                          fontWeight: FontWeight.w800,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ),
+                            _buildDemoTile(
+                              tileKey: const Key('demo_motorist_btn'),
+                              label: 'Demo Motorist',
+                              icon: Icons.directions_car,
+                              iconColor: AppColors.caliperCrimson,
+                              isBusy: _activeAction == 'demo_motorist',
+                              onTap: _loginAsDemoMotorist,
                             ),
                             const SizedBox(width: 8),
-                            Expanded(
-                              child: InkWell(
-                                onTap: _isLoading ? null : _loginAsDemoTechnician,
-                                borderRadius: BorderRadius.circular(10),
-                                child: Container(
-                                  padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
-                                  decoration: BoxDecoration(
-                                    color: AppColors.cardWhite,
-                                    borderRadius: BorderRadius.circular(10),
-                                    border: Border.all(color: AppColors.slateBorder),
-                                    boxShadow: [
-                                      BoxShadow(
-                                        color: Colors.black.withAlpha(4),
-                                        blurRadius: 2,
-                                        offset: const Offset(0, 1),
-                                      ),
-                                    ],
-                                  ),
-                                  child: Column(
-                                    children: const [
-                                      Icon(Icons.engineering, color: Color(0xFF0F172A), size: 18),
-                                      SizedBox(height: 3),
-                                      Text(
-                                        'Technician',
-                                        style: TextStyle(
-                                          color: AppColors.chassisText,
-                                          fontSize: 11,
-                                          fontWeight: FontWeight.w800,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ),
+                            _buildDemoTile(
+                              tileKey: const Key('demo_technician_btn'),
+                              label: 'Demo Technician',
+                              icon: Icons.engineering,
+                              iconColor: AppColors.chassisText,
+                              isBusy: _activeAction == 'demo_technician',
+                              onTap: _loginAsDemoTechnician,
                             ),
                             const SizedBox(width: 8),
-                            Expanded(
-                              child: InkWell(
-                                onTap: _isLoading ? null : _loginAsGuest,
-                                borderRadius: BorderRadius.circular(10),
-                                child: Container(
-                                  padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
-                                  decoration: BoxDecoration(
-                                    color: AppColors.cardWhite,
-                                    borderRadius: BorderRadius.circular(10),
-                                    border: Border.all(color: AppColors.slateBorder),
-                                    boxShadow: [
-                                      BoxShadow(
-                                        color: Colors.black.withAlpha(4),
-                                        blurRadius: 2,
-                                        offset: const Offset(0, 1),
-                                      ),
-                                    ],
-                                  ),
-                                  child: Column(
-                                    children: const [
-                                      Icon(Icons.flash_on, color: Color(0xFFD97706), size: 18),
-                                      SizedBox(height: 3),
-                                      Text(
-                                        'Guest SOS',
-                                        style: TextStyle(
-                                          color: AppColors.chassisText,
-                                          fontSize: 11,
-                                          fontWeight: FontWeight.w800,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ),
+                            _buildDemoTile(
+                              tileKey: const Key('demo_guest_btn'),
+                              label: 'Guest SOS',
+                              icon: Icons.flash_on,
+                              iconColor: AppColors.amberDark,
+                              isBusy: _activeAction == 'demo_guest',
+                              onTap: _loginAsGuest,
                             ),
                           ],
                         ),
@@ -873,7 +808,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   ),
                   const SizedBox(height: 16),
 
-                  // Auth Card with Segmented Toggle (Phone OTP vs Email)
+                  // Live Account Auth Card (Mobile OTP vs Email Account)
                   Container(
                     padding: const EdgeInsets.all(20),
                     decoration: BoxDecoration(
@@ -882,7 +817,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       border: Border.all(color: AppColors.slateBorder),
                       boxShadow: [
                         BoxShadow(
-                          color: AppColors.chassisText.withAlpha(6),
+                          color: AppColors.chassisText.withAlpha(8),
                           blurRadius: 16,
                           offset: const Offset(0, 4),
                         ),
@@ -891,9 +826,8 @@ class _LoginScreenState extends State<LoginScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
-                        // Segmented Mode Switcher
                         Container(
-                          padding: const EdgeInsets.all(3),
+                          padding: const EdgeInsets.all(4),
                           decoration: BoxDecoration(
                             color: AppColors.porcelainBg,
                             borderRadius: BorderRadius.circular(12),
@@ -901,75 +835,27 @@ class _LoginScreenState extends State<LoginScreen> {
                           ),
                           child: Row(
                             children: [
-                              Expanded(
-                                child: InkWell(
-                                  onTap: () {
-                                    HapticFeedback.selectionClick();
-                                    setState(() => _usePhoneAuth = true);
-                                  },
-                                  borderRadius: BorderRadius.circular(9),
-                                  child: Container(
-                                    padding: const EdgeInsets.symmetric(vertical: 8),
-                                    decoration: BoxDecoration(
-                                      color: _usePhoneAuth ? AppColors.cardWhite : Colors.transparent,
-                                      borderRadius: BorderRadius.circular(9),
-                                      boxShadow: _usePhoneAuth
-                                          ? [
-                                              BoxShadow(
-                                                color: Colors.black.withAlpha(8),
-                                                blurRadius: 4,
-                                                offset: const Offset(0, 1),
-                                              ),
-                                            ]
-                                          : null,
-                                    ),
-                                    child: Center(
-                                      child: Text(
-                                        'Mobile OTP',
-                                        style: TextStyle(
-                                          color: _usePhoneAuth ? AppColors.chassisText : AppColors.slateMuted,
-                                          fontSize: 12,
-                                          fontWeight: _usePhoneAuth ? FontWeight.w800 : FontWeight.w600,
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                ),
+                              _buildAuthTab(
+                                label: 'Mobile OTP',
+                                selected: _usePhoneAuth,
+                                onTap: () {
+                                  HapticFeedback.selectionClick();
+                                  setState(() {
+                                    _usePhoneAuth = true;
+                                    _errorMessage = null;
+                                  });
+                                },
                               ),
-                              Expanded(
-                                child: InkWell(
-                                  onTap: () {
-                                    HapticFeedback.selectionClick();
-                                    setState(() => _usePhoneAuth = false);
-                                  },
-                                  borderRadius: BorderRadius.circular(9),
-                                  child: Container(
-                                    padding: const EdgeInsets.symmetric(vertical: 8),
-                                    decoration: BoxDecoration(
-                                      color: !_usePhoneAuth ? AppColors.cardWhite : Colors.transparent,
-                                      borderRadius: BorderRadius.circular(9),
-                                      boxShadow: !_usePhoneAuth
-                                          ? [
-                                              BoxShadow(
-                                                color: Colors.black.withAlpha(8),
-                                                blurRadius: 4,
-                                                offset: const Offset(0, 1),
-                                              ),
-                                            ]
-                                          : null,
-                                    ),
-                                    child: Center(
-                                      child: Text(
-                                        'Email Account',
-                                        style: TextStyle(
-                                          color: !_usePhoneAuth ? AppColors.chassisText : AppColors.slateMuted,
-                                          fontSize: 12,
-                                          fontWeight: !_usePhoneAuth ? FontWeight.w800 : FontWeight.w600,
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                ),
+                              _buildAuthTab(
+                                label: 'Email Account',
+                                selected: !_usePhoneAuth,
+                                onTap: () {
+                                  HapticFeedback.selectionClick();
+                                  setState(() {
+                                    _usePhoneAuth = false;
+                                    _errorMessage = null;
+                                  });
+                                },
                               ),
                             ],
                           ),
@@ -985,13 +871,22 @@ class _LoginScreenState extends State<LoginScreen> {
                               border: Border.all(color: AppColors.crimsonBorder),
                             ),
                             child: Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                const Icon(Icons.error_outline, color: AppColors.caliperCrimson, size: 16),
+                                const Icon(
+                                  Icons.error_outline,
+                                  color: AppColors.crimsonHover,
+                                  size: 16,
+                                ),
                                 const SizedBox(width: 8),
                                 Expanded(
                                   child: Text(
                                     _errorMessage!,
-                                    style: const TextStyle(color: AppColors.caliperCrimson, fontSize: 11),
+                                    style: const TextStyle(
+                                      color: AppColors.crimsonHover,
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w600,
+                                    ),
                                   ),
                                 ),
                               ],
@@ -1000,13 +895,14 @@ class _LoginScreenState extends State<LoginScreen> {
                           const SizedBox(height: 14),
                         ],
 
-                        // ===================================
-                        // TAB A: MOBILE NUMBER & SMS OTP
-                        // ===================================
                         if (_usePhoneAuth) ...[
                           const Text(
-                            'Enter your mobile number to sign in or register instantly.',
-                            style: TextStyle(color: AppColors.slateMuted, fontSize: 11.5, height: 1.3),
+                            'Enter your Bangladesh mobile number to sign in or register.',
+                            style: TextStyle(
+                              color: AppColors.slateMuted,
+                              fontSize: 12,
+                              height: 1.35,
+                            ),
                           ),
                           const SizedBox(height: 14),
                           TextField(
@@ -1018,47 +914,23 @@ class _LoginScreenState extends State<LoginScreen> {
                               fontWeight: FontWeight.w700,
                               fontFamily: 'monospace',
                             ),
-                            decoration: InputDecoration(
+                            decoration: const InputDecoration(
                               labelText: 'Mobile Number',
-                              labelStyle: const TextStyle(color: AppColors.slateMuted, fontSize: 12),
                               hintText: '017XXXXXXXX',
                               prefixText: '+880 ',
-                              prefixStyle: const TextStyle(
-                                color: AppColors.chassisText,
-                                fontWeight: FontWeight.bold,
-                                fontSize: 14,
-                              ),
-                              prefixIcon: const Icon(Icons.phone_android, color: AppColors.slateMuted, size: 20),
-                              filled: true,
-                              fillColor: AppColors.porcelainBg,
-                              contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                              border: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(12),
-                                borderSide: const BorderSide(color: AppColors.slateBorder),
-                              ),
-                              enabledBorder: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(12),
-                                borderSide: const BorderSide(color: AppColors.slateBorder),
-                              ),
-                              focusedBorder: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(12),
-                                borderSide: const BorderSide(color: AppColors.caliperCrimson, width: 1.5),
+                              prefixIcon: Icon(
+                                Icons.phone_android,
+                                color: AppColors.slateMuted,
+                                size: 20,
                               ),
                             ),
                           ),
-                          const SizedBox(height: 18),
+                          const SizedBox(height: 16),
                           SizedBox(
                             height: 48,
                             child: ElevatedButton(
                               onPressed: _isLoading ? null : _handlePhoneOtp,
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: AppColors.caliperCrimson,
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(12),
-                                ),
-                                elevation: 0,
-                              ),
-                              child: _isLoading
+                              child: _activeAction == 'otp'
                                   ? const SizedBox(
                                       width: 20,
                                       height: 20,
@@ -1067,33 +939,20 @@ class _LoginScreenState extends State<LoginScreen> {
                                         color: Colors.white,
                                       ),
                                     )
-                                  : FittedBox(
+                                  : const FittedBox(
                                       fit: BoxFit.scaleDown,
                                       child: Row(
                                         mainAxisAlignment: MainAxisAlignment.center,
-                                        children: const [
-                                          Text(
-                                            'SEND VERIFICATION CODE',
-                                            style: TextStyle(
-                                              color: Colors.white,
-                                              fontSize: 12.5,
-                                              fontWeight: FontWeight.w800,
-                                              letterSpacing: 0.5,
-                                            ),
-                                          ),
+                                        children: [
+                                          Text('SEND VERIFICATION CODE'),
                                           SizedBox(width: 6),
-                                          Icon(Icons.arrow_forward, color: Colors.white, size: 16),
+                                          Icon(Icons.arrow_forward, size: 16),
                                         ],
                                       ),
                                     ),
                             ),
                           ),
-                        ]
-
-                        // ===================================
-                        // TAB B: EMAIL & PASSWORD
-                        // ===================================
-                        else ...[
+                        ] else ...[
                           Text(
                             _isSignUp
                                 ? (_selectedRole == 'mechanic'
@@ -1102,11 +961,11 @@ class _LoginScreenState extends State<LoginScreen> {
                                 : 'Sign In with Email',
                             style: const TextStyle(
                               color: AppColors.chassisText,
-                              fontSize: 14,
+                              fontSize: 15,
                               fontWeight: FontWeight.w800,
                             ),
                           ),
-                          const SizedBox(height: 14),
+                          const SizedBox(height: 12),
                           if (_isSignUp) ...[
                             Container(
                               margin: const EdgeInsets.only(bottom: 12),
@@ -1118,125 +977,37 @@ class _LoginScreenState extends State<LoginScreen> {
                               ),
                               child: Row(
                                 children: [
-                                  Expanded(
-                                    child: GestureDetector(
-                                      onTap: () => setState(() => _selectedRole = 'motorist'),
-                                      child: Container(
-                                        padding: const EdgeInsets.symmetric(vertical: 8),
-                                        decoration: BoxDecoration(
-                                          color: _selectedRole == 'motorist'
-                                              ? AppColors.cardWhite
-                                              : Colors.transparent,
-                                          borderRadius: BorderRadius.circular(9),
-                                          boxShadow: _selectedRole == 'motorist'
-                                              ? [
-                                                  BoxShadow(
-                                                    color: AppColors.chassisText.withAlpha(10),
-                                                    blurRadius: 4,
-                                                    offset: const Offset(0, 1),
-                                                  ),
-                                                ]
-                                              : null,
-                                        ),
-                                        child: Row(
-                                          mainAxisAlignment: MainAxisAlignment.center,
-                                          children: [
-                                            Icon(
-                                              Icons.directions_car,
-                                              size: 15,
-                                              color: _selectedRole == 'motorist'
-                                                  ? AppColors.caliperCrimson
-                                                  : AppColors.slateMuted,
-                                            ),
-                                            const SizedBox(width: 5),
-                                            Text(
-                                              'Motorist',
-                                              style: TextStyle(
-                                                color: _selectedRole == 'motorist'
-                                                    ? AppColors.chassisText
-                                                    : AppColors.slateMuted,
-                                                fontSize: 12,
-                                                fontWeight: _selectedRole == 'motorist'
-                                                    ? FontWeight.w800
-                                                    : FontWeight.w600,
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-                                      ),
-                                    ),
+                                  _buildRoleChip(
+                                    chipKey: const Key('signup_role_motorist'),
+                                    label: 'Motorist',
+                                    icon: Icons.directions_car,
+                                    selected: _selectedRole == 'motorist',
+                                    onTap: () =>
+                                        setState(() => _selectedRole = 'motorist'),
                                   ),
-                                  Expanded(
-                                    child: GestureDetector(
-                                      onTap: () => setState(() => _selectedRole = 'mechanic'),
-                                      child: Container(
-                                        padding: const EdgeInsets.symmetric(vertical: 8),
-                                        decoration: BoxDecoration(
-                                          color: _selectedRole == 'mechanic'
-                                              ? AppColors.cardWhite
-                                              : Colors.transparent,
-                                          borderRadius: BorderRadius.circular(9),
-                                          boxShadow: _selectedRole == 'mechanic'
-                                              ? [
-                                                  BoxShadow(
-                                                    color: AppColors.chassisText.withAlpha(10),
-                                                    blurRadius: 4,
-                                                    offset: const Offset(0, 1),
-                                                  ),
-                                                ]
-                                              : null,
-                                        ),
-                                        child: Row(
-                                          mainAxisAlignment: MainAxisAlignment.center,
-                                          children: [
-                                            Icon(
-                                              Icons.build,
-                                              size: 14,
-                                              color: _selectedRole == 'mechanic'
-                                                  ? AppColors.caliperCrimson
-                                                  : AppColors.slateMuted,
-                                            ),
-                                            const SizedBox(width: 5),
-                                            Text(
-                                              'Technician',
-                                              style: TextStyle(
-                                                color: _selectedRole == 'mechanic'
-                                                    ? AppColors.chassisText
-                                                    : AppColors.slateMuted,
-                                                fontSize: 12,
-                                                fontWeight: _selectedRole == 'mechanic'
-                                                    ? FontWeight.w800
-                                                    : FontWeight.w600,
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-                                      ),
-                                    ),
+                                  _buildRoleChip(
+                                    chipKey: const Key('signup_role_technician'),
+                                    label: 'Technician',
+                                    icon: Icons.build,
+                                    selected: _selectedRole == 'mechanic',
+                                    onTap: () =>
+                                        setState(() => _selectedRole = 'mechanic'),
                                   ),
                                 ],
                               ),
                             ),
                             TextField(
                               controller: _nameController,
-                              style: const TextStyle(color: AppColors.chassisText, fontSize: 13.5),
-                              decoration: InputDecoration(
+                              style: const TextStyle(
+                                color: AppColors.chassisText,
+                                fontSize: 14,
+                              ),
+                              decoration: const InputDecoration(
                                 labelText: 'Full Name',
-                                labelStyle: const TextStyle(color: AppColors.slateMuted, fontSize: 12),
-                                prefixIcon: const Icon(Icons.person_outline, color: AppColors.slateMuted, size: 20),
-                                filled: true,
-                                fillColor: AppColors.porcelainBg,
-                                border: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(12),
-                                  borderSide: const BorderSide(color: AppColors.slateBorder),
-                                ),
-                                enabledBorder: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(12),
-                                  borderSide: const BorderSide(color: AppColors.slateBorder),
-                                ),
-                                focusedBorder: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(12),
-                                  borderSide: const BorderSide(color: AppColors.caliperCrimson, width: 1.5),
+                                prefixIcon: Icon(
+                                  Icons.person_outline,
+                                  color: AppColors.slateMuted,
+                                  size: 20,
                                 ),
                               ),
                             ),
@@ -1245,24 +1016,16 @@ class _LoginScreenState extends State<LoginScreen> {
                           TextField(
                             controller: _emailController,
                             keyboardType: TextInputType.emailAddress,
-                            style: const TextStyle(color: AppColors.chassisText, fontSize: 13.5),
-                            decoration: InputDecoration(
+                            style: const TextStyle(
+                              color: AppColors.chassisText,
+                              fontSize: 14,
+                            ),
+                            decoration: const InputDecoration(
                               labelText: 'Email Address',
-                              labelStyle: const TextStyle(color: AppColors.slateMuted, fontSize: 12),
-                              prefixIcon: const Icon(Icons.email_outlined, color: AppColors.slateMuted, size: 20),
-                              filled: true,
-                              fillColor: AppColors.porcelainBg,
-                              border: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(12),
-                                borderSide: const BorderSide(color: AppColors.slateBorder),
-                              ),
-                              enabledBorder: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(12),
-                                borderSide: const BorderSide(color: AppColors.slateBorder),
-                              ),
-                              focusedBorder: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(12),
-                                borderSide: const BorderSide(color: AppColors.caliperCrimson, width: 1.5),
+                              prefixIcon: Icon(
+                                Icons.email_outlined,
+                                color: AppColors.slateMuted,
+                                size: 20,
                               ),
                             ),
                           ),
@@ -1270,48 +1033,40 @@ class _LoginScreenState extends State<LoginScreen> {
                           TextField(
                             controller: _passwordController,
                             obscureText: _obscurePassword,
-                            style: const TextStyle(color: AppColors.chassisText, fontSize: 13.5),
+                            style: const TextStyle(
+                              color: AppColors.chassisText,
+                              fontSize: 14,
+                            ),
                             decoration: InputDecoration(
                               labelText: 'Password',
-                              labelStyle: const TextStyle(color: AppColors.slateMuted, fontSize: 12),
-                              prefixIcon: const Icon(Icons.lock_outline, color: AppColors.slateMuted, size: 20),
+                              prefixIcon: const Icon(
+                                Icons.lock_outline,
+                                color: AppColors.slateMuted,
+                                size: 20,
+                              ),
                               suffixIcon: IconButton(
+                                tooltip: _obscurePassword
+                                    ? 'Show password'
+                                    : 'Hide password',
                                 icon: Icon(
-                                  _obscurePassword ? Icons.visibility_off : Icons.visibility,
+                                  _obscurePassword
+                                      ? Icons.visibility_off
+                                      : Icons.visibility,
                                   color: AppColors.slateMuted,
-                                  size: 18,
+                                  size: 20,
                                 ),
-                                onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
-                              ),
-                              filled: true,
-                              fillColor: AppColors.porcelainBg,
-                              border: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(12),
-                                borderSide: const BorderSide(color: AppColors.slateBorder),
-                              ),
-                              enabledBorder: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(12),
-                                borderSide: const BorderSide(color: AppColors.slateBorder),
-                              ),
-                              focusedBorder: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(12),
-                                borderSide: const BorderSide(color: AppColors.caliperCrimson, width: 1.5),
+                                onPressed: () => setState(
+                                  () => _obscurePassword = !_obscurePassword,
+                                ),
                               ),
                             ),
                           ),
-                          const SizedBox(height: 18),
+                          const SizedBox(height: 16),
                           SizedBox(
                             height: 48,
                             child: ElevatedButton(
                               onPressed: _isLoading ? null : _handleEmailAuth,
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: AppColors.caliperCrimson,
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(12),
-                                ),
-                                elevation: 0,
-                              ),
-                              child: _isLoading
+                              child: _activeAction == 'email'
                                   ? const SizedBox(
                                       width: 20,
                                       height: 20,
@@ -1320,70 +1075,226 @@ class _LoginScreenState extends State<LoginScreen> {
                                         color: Colors.white,
                                       ),
                                     )
-                                  : Text(
-                                      _isSignUp ? 'CREATE ACCOUNT' : 'SIGN IN',
-                                      style: const TextStyle(
-                                        color: Colors.white,
-                                        fontSize: 13,
-                                        fontWeight: FontWeight.w800,
-                                        letterSpacing: 0.5,
-                                      ),
-                                    ),
+                                  : Text(_isSignUp ? 'CREATE ACCOUNT' : 'SIGN IN'),
                             ),
                           ),
-                          const SizedBox(height: 12),
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Text(
+                          const SizedBox(height: 8),
+                          Center(
+                            child: TextButton(
+                              onPressed: () => setState(() {
+                                _isSignUp = !_isSignUp;
+                                _errorMessage = null;
+                              }),
+                              child: Text(
                                 _isSignUp
-                                    ? 'Already have an account? '
-                                    : 'Need a new account? ',
-                                style: const TextStyle(color: AppColors.slateMuted, fontSize: 12),
+                                    ? 'Already have an account? Sign In'
+                                    : 'Need a new account? Sign Up',
                               ),
-                              GestureDetector(
-                                onTap: () => setState(() => _isSignUp = !_isSignUp),
-                                child: Text(
-                                  _isSignUp ? 'Sign In' : 'Sign Up',
-                                  style: const TextStyle(
-                                    color: AppColors.caliperCrimson,
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.w700,
-                                  ),
-                                ),
-                              ),
-                            ],
+                            ),
                           ),
                         ],
                       ],
                     ),
                   ),
-                  const SizedBox(height: 18),
+                  const SizedBox(height: 16),
 
-                  // Premium Authentic Google Sign-In Button
                   SizedBox(
                     height: 50,
                     child: OutlinedButton.icon(
                       onPressed: _isLoading ? null : _handleGoogleSignIn,
-                      icon: const BrandLogo(brand: 'google', size: 22),
+                      icon: _activeAction == 'google'
+                          ? const SizedBox(
+                              width: 18,
+                              height: 18,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const BrandLogo(brand: 'google', size: 22),
                       label: const Text(
                         'Continue with Google',
                         style: TextStyle(
                           color: AppColors.chassisText,
                           fontSize: 13.5,
                           fontWeight: FontWeight.w800,
-                          letterSpacing: 0.2,
                         ),
                       ),
                       style: OutlinedButton.styleFrom(
-                        side: const BorderSide(color: AppColors.slateBorder, width: 1.2),
+                        backgroundColor: AppColors.cardWhite,
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(14),
                         ),
-                        backgroundColor: AppColors.cardWhite,
-                        elevation: 1,
-                        shadowColor: Colors.black.withAlpha(20),
                       ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDemoTile({
+    required Key tileKey,
+    required String label,
+    required IconData icon,
+    required Color iconColor,
+    required bool isBusy,
+    required VoidCallback onTap,
+  }) {
+    return Expanded(
+      child: Semantics(
+        button: true,
+        label: label,
+        child: InkWell(
+          key: tileKey,
+          onTap: _isLoading ? null : onTap,
+          borderRadius: BorderRadius.circular(10),
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(minHeight: 54),
+            child: Container(
+              padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
+              decoration: BoxDecoration(
+                color: AppColors.porcelainBg,
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: AppColors.slateBorder),
+              ),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  if (isBusy)
+                    SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: iconColor,
+                      ),
+                    )
+                  else
+                    Icon(icon, color: iconColor, size: 18),
+                  const SizedBox(height: 4),
+                  FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Text(
+                      label,
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(
+                        color: AppColors.chassisText,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildAuthTab({
+    required String label,
+    required bool selected,
+    required VoidCallback onTap,
+  }) {
+    return Expanded(
+      child: Semantics(
+        button: true,
+        selected: selected,
+        label: label,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(9),
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(minHeight: 48),
+            child: Container(
+              alignment: Alignment.center,
+              padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 6),
+              decoration: BoxDecoration(
+                color: selected ? AppColors.cardWhite : Colors.transparent,
+                borderRadius: BorderRadius.circular(9),
+                boxShadow: selected
+                    ? [
+                        BoxShadow(
+                          color: Colors.black.withAlpha(8),
+                          blurRadius: 4,
+                          offset: const Offset(0, 1),
+                        ),
+                      ]
+                    : null,
+              ),
+              child: Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  color: selected ? AppColors.chassisText : AppColors.slateMuted,
+                  fontSize: 12.5,
+                  fontWeight: selected ? FontWeight.w800 : FontWeight.w600,
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildRoleChip({
+    required Key chipKey,
+    required String label,
+    required IconData icon,
+    required bool selected,
+    required VoidCallback onTap,
+  }) {
+    return Expanded(
+      child: Semantics(
+        button: true,
+        selected: selected,
+        label: '$label role',
+        child: InkWell(
+          key: chipKey,
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(9),
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(minHeight: 44),
+            child: Container(
+              padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 6),
+              decoration: BoxDecoration(
+                color: selected ? AppColors.cardWhite : Colors.transparent,
+                borderRadius: BorderRadius.circular(9),
+                boxShadow: selected
+                    ? [
+                        BoxShadow(
+                          color: AppColors.chassisText.withAlpha(10),
+                          blurRadius: 4,
+                          offset: const Offset(0, 1),
+                        ),
+                      ]
+                    : null,
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(
+                    icon,
+                    size: 16,
+                    color: selected
+                        ? AppColors.caliperCrimson
+                        : AppColors.slateMuted,
+                  ),
+                  const SizedBox(width: 6),
+                  Text(
+                    label,
+                    style: TextStyle(
+                      color: selected
+                          ? AppColors.chassisText
+                          : AppColors.slateMuted,
+                      fontSize: 12.5,
+                      fontWeight: selected ? FontWeight.w800 : FontWeight.w600,
                     ),
                   ),
                 ],

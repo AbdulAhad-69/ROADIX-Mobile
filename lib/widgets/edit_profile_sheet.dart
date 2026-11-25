@@ -1,30 +1,40 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:image_picker/image_picker.dart';
+import '../services/supabase_service.dart';
 import '../theme/app_colors.dart';
+import 'roadix_avatar.dart';
 
 class EditProfileSheet extends StatefulWidget {
   final String currentName;
   final String currentPhone;
   final String? currentAvatarUrl;
-  final Function(String newName, String newPhone)? onProfileSaved;
-  final Function(String newName, String newPhone, String? newAvatarUrl)? onSave;
-
-  /// Curated authentic driver and motorist profile presets
-  static const List<String> avatarPresets = [
-    'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150',
-    'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150',
-    'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150',
-    'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150',
-    'https://images.unsplash.com/photo-1519085360753-af0119f7cbe7?w=150',
-  ];
+  final FutureOr<void> Function(String newName, String newPhone, String? newAvatarUrl)?
+      onSave;
+  final FutureOr<void> Function(String newName, String newPhone)?
+      onProfileSaved;
+  final Future<String> Function(Uint8List bytes, String ext)? onUploadPhoto;
+  final Future<XFile?> Function(ImageSource source)? pickImageOverride;
 
   const EditProfileSheet({
     super.key,
     required this.currentName,
     required this.currentPhone,
     this.currentAvatarUrl,
-    this.onProfileSaved,
     this.onSave,
+    this.onProfileSaved,
+    this.onUploadPhoto,
+    this.pickImageOverride,
   });
+
+  static const List<String> avatarPresets = [
+    'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150',
+    'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150',
+    'https://images.unsplash.com/photo-1517841905240-472988babdf9?w=150',
+    'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150',
+    'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150',
+  ];
 
   @override
   State<EditProfileSheet> createState() => _EditProfileSheetState();
@@ -34,15 +44,26 @@ class _EditProfileSheetState extends State<EditProfileSheet> {
   late TextEditingController _nameController;
   late TextEditingController _phoneController;
   late TextEditingController _avatarUrlController;
+  final ImagePicker _picker = ImagePicker();
+
   String? _selectedAvatarUrl;
+  Uint8List? _localPreviewBytes;
+  bool _isUploadingPhoto = false;
+  bool _isSaving = false;
+  String? _statusMessage;
+  String? _errorMessage;
 
   @override
   void initState() {
     super.initState();
-    _selectedAvatarUrl = widget.currentAvatarUrl;
     _nameController = TextEditingController(text: widget.currentName);
     _phoneController = TextEditingController(text: widget.currentPhone);
-    _avatarUrlController = TextEditingController(text: widget.currentAvatarUrl ?? '');
+    _selectedAvatarUrl = widget.currentAvatarUrl;
+    final displayUrl = (_selectedAvatarUrl != null &&
+            !_selectedAvatarUrl!.startsWith('data:'))
+        ? _selectedAvatarUrl!
+        : '';
+    _avatarUrlController = TextEditingController(text: displayUrl);
   }
 
   @override
@@ -53,35 +74,162 @@ class _EditProfileSheetState extends State<EditProfileSheet> {
     super.dispose();
   }
 
-  void _save() {
+  Future<void> _pickAndUploadAvatar(ImageSource source) async {
+    if (_isUploadingPhoto || _isSaving) return;
+    HapticFeedback.selectionClick();
+    setState(() {
+      _errorMessage = null;
+      _statusMessage = null;
+    });
+
+    try {
+      final picked = widget.pickImageOverride != null
+          ? await widget.pickImageOverride!(source)
+          : await _picker.pickImage(
+              source: source,
+              maxWidth: 720,
+              maxHeight: 720,
+              imageQuality: 84,
+            );
+      if (picked == null) return;
+
+      final bytes = await picked.readAsBytes();
+      final candidate = picked.name.isNotEmpty ? picked.name : picked.path;
+      final nameParts = candidate.split('.');
+      final ext = nameParts.length > 1
+          ? nameParts.last.toLowerCase()
+          : ((picked.mimeType?.toLowerCase().contains('png') ?? false)
+              ? 'png'
+              : 'jpg');
+
+      if (mounted) {
+        setState(() {
+          _localPreviewBytes = bytes;
+          _isUploadingPhoto = true;
+          _statusMessage = 'Uploading profile photo...';
+        });
+      }
+
+      final uploadedUrl = widget.onUploadPhoto != null
+          ? await widget.onUploadPhoto!(bytes, ext)
+          : await SupabaseService().uploadProfileAvatar(
+              bytes,
+              fileExtension: ext,
+            );
+
+      if (!mounted) return;
+      setState(() {
+        _isUploadingPhoto = false;
+        _selectedAvatarUrl = uploadedUrl;
+        if (!uploadedUrl.startsWith('data:')) {
+          _avatarUrlController.text = uploadedUrl;
+        }
+        _statusMessage = 'Photo uploaded cleanly.';
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _isUploadingPhoto = false;
+        _statusMessage = null;
+        _errorMessage = e
+            .toString()
+            .replaceAll('Exception: ', '')
+            .replaceAll('StateError: ', '');
+      });
+    }
+  }
+
+  void _showPhotoSourceChooser() {
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: AppColors.cardWhite,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (sheetCtx) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const Text(
+                'Upload Profile Photo',
+                style: TextStyle(
+                  color: AppColors.chassisText,
+                  fontSize: 16,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              const SizedBox(height: 12),
+              ListTile(
+                leading: const Icon(
+                  Icons.photo_library_outlined,
+                  color: AppColors.caliperCrimson,
+                ),
+                title: const Text('Choose from Gallery'),
+                onTap: () {
+                  Navigator.pop(sheetCtx);
+                  _pickAndUploadAvatar(ImageSource.gallery);
+                },
+              ),
+              ListTile(
+                leading: const Icon(
+                  Icons.camera_alt_outlined,
+                  color: AppColors.chassisText,
+                ),
+                title: const Text('Take a Photo'),
+                onTap: () {
+                  Navigator.pop(sheetCtx);
+                  _pickAndUploadAvatar(ImageSource.camera);
+                },
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _save() async {
+    if (_isSaving || _isUploadingPhoto) return;
     final name = _nameController.text.trim();
     final phone = _phoneController.text.trim();
-    final customUrl = _avatarUrlController.text.trim();
-    final effectiveAvatar = customUrl.isNotEmpty ? customUrl : _selectedAvatarUrl;
+    final urlText = _avatarUrlController.text.trim();
+    final effectiveAvatar =
+        urlText.isNotEmpty ? urlText : _selectedAvatarUrl;
 
-    if (name.isNotEmpty) {
+    if (name.isEmpty) {
+      setState(() => _errorMessage = 'Please enter your name.');
+      return;
+    }
+
+    setState(() {
+      _isSaving = true;
+      _errorMessage = null;
+    });
+
+    try {
       if (widget.onSave != null) {
-        widget.onSave!(name, phone, effectiveAvatar);
+        await widget.onSave!(name, phone, effectiveAvatar);
+      } else if (widget.onProfileSaved != null) {
+        await widget.onProfileSaved!(name, phone);
       }
-      if (widget.onProfileSaved != null) {
-        widget.onProfileSaved!(name, phone);
-      }
-      Navigator.pop(context);
+      if (mounted) Navigator.pop(context);
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _isSaving = false;
+        _errorMessage = e.toString().replaceAll('Exception: ', '');
+      });
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final nameText = _nameController.text.trim();
-    final initialLetter = nameText.isNotEmpty ? nameText[0].toUpperCase() : 'M';
-    final hasAvatar = _selectedAvatarUrl != null && _selectedAvatarUrl!.isNotEmpty;
-
     return Padding(
       padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
       child: Container(
-        constraints: BoxConstraints(
-          maxHeight: MediaQuery.of(context).size.height * 0.85,
-        ),
         padding: const EdgeInsets.fromLTRB(20, 14, 20, 24),
         decoration: const BoxDecoration(
           color: AppColors.cardWhite,
@@ -113,139 +261,199 @@ class _EditProfileSheetState extends State<EditProfileSheet> {
               ),
               const SizedBox(height: 4),
               const Text(
-                'Update your account identity, profile photo, and emergency phone',
-                style: TextStyle(color: AppColors.slateMuted, fontSize: 11),
+                'Choose a curated avatar, upload a photo, or update your contact phone',
+                style: TextStyle(color: AppColors.slateMuted, fontSize: 12),
               ),
               const SizedBox(height: 16),
 
-              // Profile Avatar Section
+              // Profile Avatar Preview + Camera Badge
               Center(
-                child: Stack(
-                  alignment: Alignment.bottomRight,
-                  children: [
-                    CircleAvatar(
-                      radius: 36,
-                      backgroundColor: AppColors.crimsonLight,
-                      backgroundImage: hasAvatar
-                          ? (_selectedAvatarUrl!.startsWith('http')
-                              ? NetworkImage(_selectedAvatarUrl!)
-                              : AssetImage(_selectedAvatarUrl!) as ImageProvider)
-                          : null,
-                      onBackgroundImageError: hasAvatar
-                          ? (e, s) {
-                              // Gracefully handle image load failure
-                            }
-                          : null,
-                      child: !hasAvatar
-                          ? Text(
-                              initialLetter,
-                              style: const TextStyle(
-                                color: AppColors.caliperCrimson,
-                                fontSize: 26,
-                                fontWeight: FontWeight.w900,
+                child: Semantics(
+                  button: true,
+                  label: 'Change profile picture',
+                  child: GestureDetector(
+                    onTap: _isUploadingPhoto ? null : _showPhotoSourceChooser,
+                    child: Stack(
+                      alignment: Alignment.bottomRight,
+                      children: [
+                        RoadixAvatar(
+                          displayName: _nameController.text.isNotEmpty
+                              ? _nameController.text
+                              : widget.currentName,
+                          avatarUrl: _selectedAvatarUrl,
+                          localBytes: _localPreviewBytes,
+                          radius: 38,
+                        ),
+                        if (_isUploadingPhoto)
+                          const Positioned.fill(
+                            child: Center(
+                              child: SizedBox(
+                                width: 24,
+                                height: 24,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2.5,
+                                  color: AppColors.caliperCrimson,
+                                ),
                               ),
-                            )
-                          : null,
+                            ),
+                          ),
+                        Container(
+                          padding: const EdgeInsets.all(6),
+                          decoration: BoxDecoration(
+                            color: AppColors.caliperCrimson,
+                            shape: BoxShape.circle,
+                            border: Border.all(color: Colors.white, width: 2),
+                          ),
+                          child: const Icon(
+                            Icons.camera_alt,
+                            color: Colors.white,
+                            size: 14,
+                          ),
+                        ),
+                      ],
                     ),
-                    Container(
-                      padding: const EdgeInsets.all(4),
-                      decoration: const BoxDecoration(
-                        color: AppColors.caliperCrimson,
-                        shape: BoxShape.circle,
-                      ),
-                      child: const Icon(
-                        Icons.camera_alt,
-                        color: Colors.white,
-                        size: 14,
-                      ),
-                    ),
-                  ],
+                  ),
                 ),
               ),
-              const SizedBox(height: 14),
 
+              if (_statusMessage != null) ...[
+                const SizedBox(height: 10),
+                Center(
+                  child: Text(
+                    _statusMessage!,
+                    style: const TextStyle(
+                      color: AppColors.emeraldDark,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+              ],
+
+              if (_errorMessage != null) ...[
+                const SizedBox(height: 10),
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: AppColors.crimsonLight,
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: AppColors.crimsonBorder),
+                  ),
+                  child: Text(
+                    _errorMessage!,
+                    style: const TextStyle(
+                      color: AppColors.crimsonHover,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              ],
+
+              const SizedBox(height: 14),
               const Text(
                 'CHOOSE AVATAR PRESET',
                 style: TextStyle(
                   color: AppColors.slateMuted,
-                  fontSize: 9.5,
+                  fontSize: 10.5,
                   fontWeight: FontWeight.w800,
-                  letterSpacing: 0.8,
+                  letterSpacing: 0.7,
                 ),
               ),
               const SizedBox(height: 8),
 
-              // Preset Avatars Row
+              // Preset Avatars Strip (keeps InkWell indices first for compatibility)
               SingleChildScrollView(
                 scrollDirection: Axis.horizontal,
                 child: Row(
                   children: [
-                    // Reset to Default (Initials)
-                    InkWell(
-                      onTap: () {
-                        setState(() {
-                          _selectedAvatarUrl = null;
-                          _avatarUrlController.clear();
-                        });
-                      },
-                      borderRadius: BorderRadius.circular(22),
-                      child: Container(
-                        width: 44,
-                        height: 44,
-                        margin: const EdgeInsets.only(right: 10),
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          color: AppColors.porcelainBg,
-                          border: Border.all(
-                            color: _selectedAvatarUrl == null
-                                ? AppColors.caliperCrimson
-                                : AppColors.slateBorder,
-                            width: _selectedAvatarUrl == null ? 2.5 : 1,
+                    Semantics(
+                      button: true,
+                      label: 'Reset to default monogram avatar',
+                      child: InkWell(
+                        onTap: () {
+                          setState(() {
+                            _localPreviewBytes = null;
+                            _selectedAvatarUrl = null;
+                            _avatarUrlController.clear();
+                            _statusMessage = null;
+                          });
+                        },
+                        borderRadius: BorderRadius.circular(24),
+                        child: Container(
+                          width: 48,
+                          height: 48,
+                          margin: const EdgeInsets.only(right: 10),
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: AppColors.porcelainBg,
+                            border: Border.all(
+                              color: (_selectedAvatarUrl == null &&
+                                      _localPreviewBytes == null)
+                                  ? AppColors.caliperCrimson
+                                  : AppColors.slateBorder,
+                              width: (_selectedAvatarUrl == null &&
+                                      _localPreviewBytes == null)
+                                  ? 2.5
+                                  : 1,
+                            ),
                           ),
-                        ),
-                        child: Center(
-                          child: Icon(
-                            Icons.person_outline,
-                            size: 20,
-                            color: _selectedAvatarUrl == null
-                                ? AppColors.caliperCrimson
-                                : AppColors.slateMuted,
+                          child: Center(
+                            child: Icon(
+                              Icons.person_outline,
+                              size: 20,
+                              color: (_selectedAvatarUrl == null &&
+                                      _localPreviewBytes == null)
+                                  ? AppColors.caliperCrimson
+                                  : AppColors.slateMuted,
+                            ),
                           ),
                         ),
                       ),
                     ),
-                    // Presets
-                    ...EditProfileSheet.avatarPresets.map((presetUrl) {
+                    ...EditProfileSheet.avatarPresets.asMap().entries.map((entry) {
+                      final idx = entry.key;
+                      final presetUrl = entry.value;
                       final isSelected = _selectedAvatarUrl == presetUrl;
-                      return InkWell(
-                        onTap: () {
-                          setState(() {
-                            _selectedAvatarUrl = presetUrl;
-                            _avatarUrlController.text = presetUrl;
-                          });
-                        },
-                        borderRadius: BorderRadius.circular(22),
-                        child: Container(
-                          width: 44,
-                          height: 44,
-                          margin: const EdgeInsets.only(right: 10),
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            border: Border.all(
-                              color: isSelected
-                                  ? AppColors.caliperCrimson
-                                  : AppColors.slateBorder,
-                              width: isSelected ? 2.5 : 1,
+                      return Semantics(
+                        button: true,
+                        selected: isSelected,
+                        label: 'Avatar preset ${idx + 1}',
+                        child: InkWell(
+                          key: Key('avatar_preset_$idx'),
+                          onTap: () {
+                            setState(() {
+                              _localPreviewBytes = null;
+                              _selectedAvatarUrl = presetUrl;
+                              _avatarUrlController.text = presetUrl;
+                              _statusMessage = null;
+                            });
+                          },
+                          borderRadius: BorderRadius.circular(24),
+                          child: Container(
+                            width: 48,
+                            height: 48,
+                            margin: const EdgeInsets.only(right: 10),
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              border: Border.all(
+                                color: isSelected
+                                    ? AppColors.caliperCrimson
+                                    : AppColors.slateBorder,
+                                width: isSelected ? 2.5 : 1,
+                              ),
                             ),
-                          ),
-                          child: ClipOval(
-                            child: Image.network(
-                              presetUrl,
-                              fit: BoxFit.cover,
-                              errorBuilder: (context, error, stackTrace) => const Icon(
-                                Icons.person,
-                                color: AppColors.slateMuted,
-                                size: 20,
+                            child: ClipOval(
+                              child: Image.network(
+                                presetUrl,
+                                fit: BoxFit.cover,
+                                errorBuilder: (context, error, stackTrace) =>
+                                    const Icon(
+                                  Icons.person,
+                                  color: AppColors.slateMuted,
+                                  size: 20,
+                                ),
                               ),
                             ),
                           ),
@@ -255,15 +463,58 @@ class _EditProfileSheetState extends State<EditProfileSheet> {
                   ],
                 ),
               ),
-              const SizedBox(height: 14),
 
+              const SizedBox(height: 14),
+              const Text(
+                'UPLOAD YOUR OWN PHOTO',
+                style: TextStyle(
+                  color: AppColors.slateMuted,
+                  fontSize: 10.5,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: 0.7,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  Expanded(
+                    child: SizedBox(
+                      height: 48,
+                      child: OutlinedButton.icon(
+                        key: const Key('upload_avatar_gallery_btn'),
+                        onPressed: _isUploadingPhoto
+                            ? null
+                            : () => _pickAndUploadAvatar(ImageSource.gallery),
+                        icon: const Icon(Icons.photo_library_outlined, size: 18),
+                        label: const Text('Gallery'),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: SizedBox(
+                      height: 48,
+                      child: OutlinedButton.icon(
+                        key: const Key('upload_avatar_camera_btn'),
+                        onPressed: _isUploadingPhoto
+                            ? null
+                            : () => _pickAndUploadAvatar(ImageSource.camera),
+                        icon: const Icon(Icons.camera_alt_outlined, size: 18),
+                        label: const Text('Camera'),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+
+              const SizedBox(height: 14),
               const Text(
                 'OR AVATAR IMAGE URL',
                 style: TextStyle(
                   color: AppColors.slateMuted,
-                  fontSize: 9.5,
+                  fontSize: 10.5,
                   fontWeight: FontWeight.w800,
-                  letterSpacing: 0.8,
+                  letterSpacing: 0.7,
                 ),
               ),
               const SizedBox(height: 6),
@@ -271,41 +522,31 @@ class _EditProfileSheetState extends State<EditProfileSheet> {
                 controller: _avatarUrlController,
                 style: const TextStyle(
                   color: AppColors.chassisText,
-                  fontSize: 12,
+                  fontSize: 13,
                   fontWeight: FontWeight.w500,
                 ),
-                decoration: InputDecoration(
+                decoration: const InputDecoration(
                   hintText: 'https://example.com/avatar.jpg',
-                  hintStyle: const TextStyle(color: AppColors.slateMuted, fontSize: 11),
-                  filled: true,
-                  fillColor: AppColors.porcelainBg,
                   isDense: true,
-                  prefixIcon: const Icon(Icons.link, size: 18, color: AppColors.slateMuted),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(10),
-                    borderSide: const BorderSide(color: AppColors.slateBorder),
-                  ),
-                  enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(10),
-                    borderSide: const BorderSide(color: AppColors.slateBorder),
-                  ),
+                  prefixIcon: Icon(Icons.link, size: 18, color: AppColors.slateMuted),
                 ),
                 onChanged: (val) {
                   setState(() {
-                    _selectedAvatarUrl = val.trim().isNotEmpty ? val.trim() : null;
+                    _localPreviewBytes = null;
+                    _selectedAvatarUrl =
+                        val.trim().isNotEmpty ? val.trim() : null;
                   });
                 },
               ),
 
               const SizedBox(height: 14),
-
               const Text(
                 'MOTORIST NAME',
                 style: TextStyle(
                   color: AppColors.slateMuted,
-                  fontSize: 9.5,
+                  fontSize: 10.5,
                   fontWeight: FontWeight.w800,
-                  letterSpacing: 0.8,
+                  letterSpacing: 0.7,
                 ),
               ),
               const SizedBox(height: 6),
@@ -313,79 +554,63 @@ class _EditProfileSheetState extends State<EditProfileSheet> {
                 controller: _nameController,
                 style: const TextStyle(
                   color: AppColors.chassisText,
-                  fontSize: 13,
+                  fontSize: 14,
                   fontWeight: FontWeight.w600,
                 ),
-                decoration: InputDecoration(
-                  filled: true,
-                  fillColor: AppColors.porcelainBg,
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(10),
-                    borderSide: const BorderSide(color: AppColors.slateBorder),
-                  ),
-                  enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(10),
-                    borderSide: const BorderSide(color: AppColors.slateBorder),
+                decoration: const InputDecoration(
+                  prefixIcon: Icon(
+                    Icons.person_outline,
+                    size: 18,
+                    color: AppColors.slateMuted,
                   ),
                 ),
-                onChanged: (_) => setState(() {}),
               ),
 
               const SizedBox(height: 14),
-
               const Text(
                 'PHONE NUMBER',
                 style: TextStyle(
                   color: AppColors.slateMuted,
-                  fontSize: 9.5,
+                  fontSize: 10.5,
                   fontWeight: FontWeight.w800,
-                  letterSpacing: 0.8,
+                  letterSpacing: 0.7,
                 ),
               ),
               const SizedBox(height: 6),
               TextField(
                 controller: _phoneController,
+                keyboardType: TextInputType.phone,
                 style: const TextStyle(
                   color: AppColors.chassisText,
-                  fontSize: 13,
-                  fontFamily: 'monospace',
+                  fontSize: 14,
                   fontWeight: FontWeight.w600,
+                  fontFamily: 'monospace',
                 ),
-                decoration: InputDecoration(
-                  filled: true,
-                  fillColor: AppColors.porcelainBg,
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(10),
-                    borderSide: const BorderSide(color: AppColors.slateBorder),
-                  ),
-                  enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(10),
-                    borderSide: const BorderSide(color: AppColors.slateBorder),
+                decoration: const InputDecoration(
+                  prefixIcon: Icon(
+                    Icons.phone_outlined,
+                    size: 18,
+                    color: AppColors.slateMuted,
                   ),
                 ),
               ),
 
-              const SizedBox(height: 20),
-
+              const SizedBox(height: 22),
               SizedBox(
                 width: double.infinity,
                 height: 48,
                 child: ElevatedButton(
-                  onPressed: _save,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.caliperCrimson,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                  ),
-                  child: const Text(
-                    'SAVE CHANGES',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.w800,
-                      letterSpacing: 0.5,
-                    ),
-                  ),
+                  onPressed: (_isSaving || _isUploadingPhoto) ? null : _save,
+                  child: _isSaving
+                      ? const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Colors.white,
+                          ),
+                        )
+                      : const Text('SAVE CHANGES'),
                 ),
               ),
             ],

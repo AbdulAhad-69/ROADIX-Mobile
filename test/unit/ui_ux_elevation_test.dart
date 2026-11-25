@@ -310,7 +310,7 @@ void main() {
       );
       await tester.pump();
       expect(tester.takeException(), isNull);
-      expect(find.text('Emergency Facilities'), findsOneWidget);
+      expect(find.text('Find Roadside Service'), findsOneWidget);
 
       // 6. EditProfileSheet
       await tester.pumpWidget(

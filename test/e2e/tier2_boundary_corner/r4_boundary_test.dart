@@ -9,6 +9,7 @@ import 'package:roadix_mobile/screens/login_screen.dart';
 import 'package:roadix_mobile/screens/mechanic_home_screen.dart';
 import 'package:roadix_mobile/screens/profile_screen.dart';
 import 'package:roadix_mobile/screens/vehicle_select_screen.dart';
+import 'package:roadix_mobile/services/demo_session.dart';
 import 'package:roadix_mobile/services/supabase_service.dart';
 import 'package:roadix_mobile/widgets/edit_profile_sheet.dart';
 import '../helpers/e2e_finders.dart';
@@ -139,6 +140,8 @@ void main() {
     });
 
     test('T2.14.5: Rapid successive profile updates correctly persists the latest state', () async {
+      DemoSession.startDemo(demoRole: 'motorist');
+      addTearDown(DemoSession.clear);
       final names = ['Name A', 'Name B', 'Name C'];
       for (final name in names) {
         await SupabaseService().updateProfile(
@@ -240,13 +243,9 @@ void main() {
       );
       await tester.pump();
 
-      final techDemo = find.descendant(
-        of: find.byType(InkWell),
-        matching: find.text('Technician'),
-      );
-      expect(techDemo, findsWidgets);
+      expect(E2EFinders.mechanicDemoButton, findsOneWidget);
 
-      await tester.tap(techDemo.first);
+      await tester.tap(E2EFinders.mechanicDemoButton);
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 200));
 
@@ -307,11 +306,7 @@ void main() {
       await tester.pump();
 
       // Cycle 1: Motorist Demo Login -> EmergencyHome -> Profile Tab -> Logout
-      final motoristDemo = find.descendant(
-        of: find.byType(InkWell),
-        matching: find.text('Motorist'),
-      );
-      await tester.tap(motoristDemo.first);
+      await tester.tap(E2EFinders.motoristDemoButton);
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 200));
       expect(find.byType(EmergencyHomeScreen), findsOneWidget);
@@ -337,11 +332,7 @@ void main() {
       expect(find.byType(LoginScreen), findsOneWidget);
 
       // Cycle 2: Technician Demo Login -> MechanicHomeScreen -> Logout Icon in AppBar
-      final techDemo = find.descendant(
-        of: find.byType(InkWell),
-        matching: find.text('Technician'),
-      );
-      await tester.tap(techDemo.first);
+      await tester.tap(E2EFinders.mechanicDemoButton);
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 200));
       expect(find.byType(MechanicHomeScreen), findsOneWidget);
@@ -376,15 +367,15 @@ void main() {
       expect(find.text('GUEST SOS DISPATCH'), findsOneWidget);
 
       // Skip phone entry directly
-      final skipButton = find.text('Skip phone entry (Proceed directly)');
+      final skipButton = find.text('Skip phone entry (Proceed in Guest Demo)');
       expect(skipButton, findsOneWidget);
       await tester.tap(skipButton);
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 300));
 
-      // Guest sheet closes cleanly
+      // Guest sheet closes cleanly and proceeds to EmergencyHomeScreen
       expect(find.text('GUEST SOS DISPATCH'), findsNothing);
-      expect(find.byType(LoginScreen), findsOneWidget);
+      expect(find.byType(EmergencyHomeScreen), findsOneWidget);
 
       await E2ETestHarness.cleanUp(tester);
     });

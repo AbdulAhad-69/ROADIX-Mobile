@@ -54,16 +54,28 @@ class _WalletEditorSheetState extends State<WalletEditorSheet> {
   Future<void> _selectPrimary(int index) async {
     HapticFeedback.selectionClick();
     final selectedId = _currentWallets[index]['id']?.toString();
+    final previousStates = _currentWallets.map((w) => w['isPrimary']).toList();
     setState(() {
       for (int i = 0; i < _currentWallets.length; i++) {
         _currentWallets[i]['isPrimary'] = (i == index);
       }
+      _errorMessage = null;
     });
 
-    if (widget.onSetPrimaryWallet != null && selectedId != null) {
-      await widget.onSetPrimaryWallet!(selectedId);
-    } else {
-      widget.onWalletsChanged?.call(_currentWallets);
+    try {
+      if (widget.onSetPrimaryWallet != null && selectedId != null) {
+        await widget.onSetPrimaryWallet!(selectedId);
+      } else {
+        widget.onWalletsChanged?.call(_currentWallets);
+      }
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        for (int i = 0; i < _currentWallets.length; i++) {
+          _currentWallets[i]['isPrimary'] = previousStates[i];
+        }
+        _errorMessage = 'Could not update primary wallet: $e';
+      });
     }
   }
 
@@ -74,12 +86,21 @@ class _WalletEditorSheetState extends State<WalletEditorSheet> {
 
     setState(() {
       _currentWallets.removeAt(index);
+      _errorMessage = null;
     });
 
-    if (widget.onDeleteWallet != null && walletId != null) {
-      await widget.onDeleteWallet!(walletId);
-    } else {
-      widget.onWalletsChanged?.call(_currentWallets);
+    try {
+      if (widget.onDeleteWallet != null && walletId != null) {
+        await widget.onDeleteWallet!(walletId);
+      } else {
+        widget.onWalletsChanged?.call(_currentWallets);
+      }
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _currentWallets.insert(index, wallet);
+        _errorMessage = 'Could not remove wallet: $e';
+      });
     }
   }
 
@@ -87,7 +108,8 @@ class _WalletEditorSheetState extends State<WalletEditorSheet> {
     final num = _numberController.text.trim();
     if (num.length < 11) {
       setState(() {
-        _errorMessage = 'Please enter an 11-digit mobile wallet number (e.g. 017XXXXXXXX)';
+        _errorMessage =
+            'Please enter an 11-digit mobile wallet number (e.g. 017XXXXXXXX)';
       });
       return;
     }
@@ -98,22 +120,37 @@ class _WalletEditorSheetState extends State<WalletEditorSheet> {
     });
 
     HapticFeedback.lightImpact();
-
-    if (widget.onAddWallet != null) {
-      await widget.onAddWallet!(_newProvider, num);
-    }
-
-    setState(() {
-      _currentWallets.add({
-        'provider': _newProvider,
-        'number': num,
-        'isPrimary': _currentWallets.isEmpty,
+    try {
+      if (widget.onAddWallet != null) {
+        await widget.onAddWallet!(_newProvider, num);
+        if (!mounted) return;
+        setState(() {
+          _currentWallets.add({
+            'provider': _newProvider,
+            'number': num,
+            'isPrimary': _currentWallets.isEmpty,
+          });
+          _isAdding = false;
+        });
+      } else {
+        setState(() {
+          _currentWallets.add({
+            'provider': _newProvider,
+            'number': num,
+            'isPrimary': _currentWallets.isEmpty,
+          });
+          _isAdding = false;
+        });
+        widget.onWalletsChanged?.call(_currentWallets);
+      }
+      _numberController.clear();
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _isAdding = false;
+        _errorMessage = 'Could not link wallet: $e';
       });
-      _isAdding = false;
-    });
-
-    _numberController.clear();
-    widget.onWalletsChanged?.call(_currentWallets);
+    }
   }
 
   @override

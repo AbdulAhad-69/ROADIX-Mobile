@@ -7,7 +7,7 @@
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleDisplayName</key>
-	<string>Roadix Mobile</string>
+	<string>ROADIX</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>
@@ -28,6 +28,28 @@
 	<string>ROADIX needs your location to dispatch nearby mechanics to your exact breakdown location.</string>
 	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
 	<string>ROADIX needs your location to track mechanic arrival and roadside emergency progress.</string>
+	<key>NSCameraUsageDescription</key>
+	<string>ROADIX uses your camera so you can take a profile picture or photo of vehicle faults.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>ROADIX accesses your photo library so you can upload a profile picture or fault photo.</string>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>com.roadix.roadix_mobile</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>io.supabase.roadix</string>
+			</array>
+		</dict>
+	</array>
+	<key>LSApplicationQueriesSchemes</key>
+	<array>
+		<string>tel</string>
+		<string>sms</string>
+		<string>https</string>
+		<string>comgooglemaps</string>
+	</array>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
 	<key>UIApplicationSceneManifest</key>

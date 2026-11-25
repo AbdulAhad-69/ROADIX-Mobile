@@ -1,8 +1,16 @@
 import 'dart:async';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:maplibre_gl/maplibre_gl.dart';
+import 'package:url_launcher/url_launcher.dart';
+import '../services/demo_session.dart';
+import '../services/geocoding_service.dart';
 import '../services/supabase_service.dart';
+import '../src/core/config/app_config.dart';
+import '../src/core/router/app_router.dart';
+import '../src/core/utils/geometry_utils.dart';
 import '../src/core/utils/phone_utils.dart';
 import '../theme/app_colors.dart';
 import 'emergency_home_screen.dart';
@@ -120,15 +128,14 @@ class _MechanicHomeScreenState extends State<MechanicHomeScreen> {
         if (!mounted) return;
         final active = offers.where((o) => o['status'] == 'offered').toList();
         if (active.isNotEmpty) {
-          _setIncomingOffer(active.first);
+          // Hydrate nested service_requests details when Realtime fires.
+          _pollForOffersAndRescues();
         } else if (_activeOffer != null) {
           setState(() => _activeOffer = null);
           _offerTimer?.cancel();
         }
       },
-      onError: (e) {
-        // Stream connection glitch handled gracefully; fallback polling will continue
-      },
+      onError: (_) {},
     );
   }
 
@@ -545,20 +552,26 @@ class _MechanicHomeScreenState extends State<MechanicHomeScreen> {
           ],
         ),
         actions: [
-          TextButton.icon(
-            onPressed: () {
-              Navigator.of(context).pushReplacement(
-                MaterialPageRoute(builder: (_) => const EmergencyHomeScreen()),
-              );
-            },
-            icon: const Icon(Icons.swap_horiz, size: 16, color: AppColors.slateMuted),
-            label: const Text(
-              'Motorist',
-              style: TextStyle(color: AppColors.slateMuted, fontSize: 11, fontWeight: FontWeight.bold),
+          if (DemoSession.isActive ||
+              (!AppConfig.isProduction && kDebugMode && !_db.isAuthenticated))
+            TextButton.icon(
+              onPressed: () {
+                Navigator.of(context).pushReplacement(
+                  MaterialPageRoute(builder: (_) => const EmergencyHomeScreen()),
+                );
+              },
+              icon: const Icon(Icons.swap_horiz, size: 16, color: AppColors.slateMuted),
+              label: const Text(
+                'Motorist',
+                style: TextStyle(
+                  color: AppColors.slateMuted,
+                  fontSize: 11,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
             ),
-          ),
           IconButton(
-            icon: const Icon(Icons.logout, color: AppColors.caliperCrimson, size: 20),
+            icon: const Icon(Icons.logout, color: AppColors.crimsonHover, size: 20),
             tooltip: 'Sign Out',
             onPressed: () async {
               try {
@@ -567,9 +580,10 @@ class _MechanicHomeScreenState extends State<MechanicHomeScreen> {
                 debugPrint('Mechanic HomeScreen signOut error: $e');
               } finally {
                 if (context.mounted) {
-                  Navigator.of(context).pushAndRemoveUntil(
-                    MaterialPageRoute(builder: (_) => const LoginScreen()),
-                    (route) => false,
+                  navigateRoot(
+                    context,
+                    route: AppRoutes.login,
+                    fallbackWidget: const LoginScreen(),
                   );
                 }
               }
@@ -583,28 +597,21 @@ class _MechanicHomeScreenState extends State<MechanicHomeScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Fast-Track Verification for Demo & Testing
+            // Fast-Track Verification ONLY in non-production Demo/Debug; live accounts show Admin review status.
             if (!_isVerified) ...[
               Container(
                 padding: const EdgeInsets.all(14),
                 decoration: BoxDecoration(
-                  color: const Color(0xFFFFFBEB),
+                  color: AppColors.amberLight,
                   borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: const Color(0xFFFCD34D), width: 1.5),
-                  boxShadow: [
-                    BoxShadow(
-                      color: const Color(0xFFD97706).withAlpha(15),
-                      blurRadius: 8,
-                      offset: const Offset(0, 2),
-                    ),
-                  ],
+                  border: Border.all(color: AppColors.amberBorder, width: 1.5),
                 ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Row(
                       children: const [
-                        Icon(Icons.gavel_rounded, color: Color(0xFFB45309), size: 20),
+                        Icon(Icons.gavel_rounded, color: AppColors.amberDark, size: 20),
                         SizedBox(width: 8),
                         Expanded(
                           child: Text(
@@ -612,8 +619,8 @@ class _MechanicHomeScreenState extends State<MechanicHomeScreen> {
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: TextStyle(
-                              color: Color(0xFF92400E),
-                              fontSize: 13,
+                              color: AppColors.amberDark,
+                              fontSize: 13.5,
                               fontWeight: FontWeight.w900,
                             ),
                           ),
@@ -621,39 +628,33 @@ class _MechanicHomeScreenState extends State<MechanicHomeScreen> {
                       ],
                     ),
                     const SizedBox(height: 6),
-                    const Text(
-                      'In production, government NID & Trade License are approved via the Web Admin dashboard. For development and emulator testing, activate instant verification below to receive live dispatches.',
-                      style: TextStyle(
-                        color: Color(0xFF78350F),
-                        fontSize: 11.5,
+                    Text(
+                      (!AppConfig.isProduction && kDebugMode && DemoSession.isActive)
+                          ? 'In production, NID & Trade License are reviewed by an administrator. For Demo evaluation, activate verification below.'
+                          : 'Your NID & Trade License are under administrator review. Duty dispatch unlocks automatically once approved.',
+                      style: const TextStyle(
+                        color: AppColors.amberDark,
+                        fontSize: 12,
                         height: 1.35,
                       ),
                     ),
-                    const SizedBox(height: 12),
-                    SizedBox(
-                      width: double.infinity,
-                      height: 40,
-                      child: ElevatedButton.icon(
-                        onPressed: _simulateAdminVerification,
-                        icon: const Icon(Icons.verified, color: Colors.white, size: 16),
-                        label: const Text(
-                          'SIMULATE ADMIN VERIFICATION (DEMO)',
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontSize: 11,
-                            fontWeight: FontWeight.w800,
-                            letterSpacing: 0.5,
-                          ),
-                        ),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFFD97706),
-                          elevation: 1,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(10),
+                    if (!AppConfig.isProduction &&
+                        kDebugMode &&
+                        (DemoSession.isActive || !_db.isAuthenticated)) ...[
+                      const SizedBox(height: 12),
+                      SizedBox(
+                        width: double.infinity,
+                        height: 44,
+                        child: ElevatedButton.icon(
+                          onPressed: _simulateAdminVerification,
+                          icon: const Icon(Icons.verified, color: Colors.white, size: 16),
+                          label: const Text('SIMULATE ADMIN VERIFICATION (DEMO)'),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFFB45309),
                           ),
                         ),
                       ),
-                    ),
+                    ],
                   ],
                 ),
               ),
@@ -1063,10 +1064,100 @@ class _MechanicHomeScreenState extends State<MechanicHomeScreen> {
             'Vehicle: $vehicleType • Plate: $plate',
             style: const TextStyle(color: AppColors.slateMuted, fontSize: 11),
           ),
-          const SizedBox(height: 4),
+          const SizedBox(height: 6),
           Text(
             'Location: $address',
-            style: const TextStyle(color: AppColors.chassisText, fontSize: 11, fontWeight: FontWeight.w600),
+            style: const TextStyle(color: AppColors.chassisText, fontSize: 12, fontWeight: FontWeight.w600),
+          ),
+          Builder(
+            builder: (context) {
+              final targetCoords =
+                  GeometryUtils.parsePostgisPoint(rescue['breakdown_location']);
+              if (targetCoords == null) return const SizedBox.shrink();
+              final destLat = targetCoords.$1;
+              final destLng = targetCoords.$2;
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  const SizedBox(height: 12),
+                  Container(
+                    height: 160,
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: AppColors.slateBorder),
+                    ),
+                    clipBehavior: Clip.antiAlias,
+                    child: MapLibreMap(
+                      styleString: AppConfig.mapStyleUrl,
+                      compassEnabled: true,
+                      initialCameraPosition: CameraPosition(
+                        target: LatLng(destLat, destLng),
+                        zoom: 14.5,
+                      ),
+                      onStyleLoadedCallback: () {},
+                      onMapCreated: (ctrl) async {
+                        try {
+                          await ctrl.addCircle(
+                            CircleOptions(
+                              geometry: LatLng(destLat, destLng),
+                              circleRadius: 8,
+                              circleColor: '#DC2626',
+                              circleStrokeWidth: 3,
+                              circleStrokeColor: '#FFFFFF',
+                            ),
+                          );
+                          if (_lastKnownMechanicLat != null &&
+                              _lastKnownMechanicLng != null) {
+                            await ctrl.addCircle(
+                              CircleOptions(
+                                geometry: LatLng(
+                                  _lastKnownMechanicLat!,
+                                  _lastKnownMechanicLng!,
+                                ),
+                                circleRadius: 7,
+                                circleColor: '#047857',
+                                circleStrokeWidth: 2.5,
+                                circleStrokeColor: '#FFFFFF',
+                              ),
+                            );
+                            final route = await GeocodingService.fetchDrivingRoute(
+                              fromLat: _lastKnownMechanicLat!,
+                              fromLng: _lastKnownMechanicLng!,
+                              toLat: destLat,
+                              toLng: destLng,
+                            );
+                            await ctrl.addLine(
+                              LineOptions(
+                                geometry: route.points,
+                                lineColor: '#B91C1C',
+                                lineWidth: 4.0,
+                              ),
+                            );
+                          }
+                        } catch (_) {}
+                      },
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  SizedBox(
+                    height: 42,
+                    child: OutlinedButton.icon(
+                      onPressed: () async {
+                        final uri = GeocodingService.buildGoogleMapsDirectionsUri(
+                          destLat: destLat,
+                          destLng: destLng,
+                          originLat: _lastKnownMechanicLat,
+                          originLng: _lastKnownMechanicLng,
+                        );
+                        await launchUrl(uri, mode: LaunchMode.externalApplication);
+                      },
+                      icon: const Icon(Icons.directions, size: 17),
+                      label: const Text('Navigate in Google Maps'),
+                    ),
+                  ),
+                ],
+              );
+            },
           ),
           if (motoristPhone.isNotEmpty) ...[
             const SizedBox(height: 12),
@@ -1152,12 +1243,12 @@ class _MechanicHomeScreenState extends State<MechanicHomeScreen> {
       case 'en_route':
         return SizedBox(
           width: double.infinity,
-          height: 46,
+          height: 48,
           child: ElevatedButton.icon(
-            onPressed: () => _advanceRescueStatus('diagnosing'),
+            onPressed: () => _advanceRescueStatus('arrived'),
             icon: const Icon(Icons.place, color: Colors.white, size: 18),
             label: const Text('MARK ARRIVED ON SCENE', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-            style: ElevatedButton.styleFrom(backgroundColor: AppColors.emeraldGps),
+            style: ElevatedButton.styleFrom(backgroundColor: AppColors.emeraldDark),
           ),
         );
       case 'arrived':

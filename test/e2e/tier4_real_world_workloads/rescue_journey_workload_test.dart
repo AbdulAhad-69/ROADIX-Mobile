@@ -8,6 +8,7 @@ import 'package:roadix_mobile/screens/login_screen.dart';
 import 'package:roadix_mobile/screens/profile_screen.dart';
 import 'package:roadix_mobile/screens/sos_screen.dart';
 import 'package:roadix_mobile/screens/vehicle_select_screen.dart';
+import 'package:roadix_mobile/services/demo_session.dart';
 import 'package:roadix_mobile/widgets/edit_profile_sheet.dart';
 import 'package:roadix_mobile/widgets/wallet_editor_sheet.dart';
 import '../helpers/e2e_finders.dart';
@@ -502,6 +503,9 @@ void main() {
     testWidgets(
         'Scenario 5: Digital Garage & Multi-Wallet Lifecycle (R2.1, R2.3, R3.6, R4.1, R4.2)',
         (WidgetTester tester) async {
+      DemoSession.startDemo(demoRole: 'motorist');
+      addTearDown(DemoSession.clear);
+
       // 1. Mount ProfileScreen
       await tester.pumpWidget(
         E2ETestHarness.wrapWithApp(
@@ -517,8 +521,8 @@ void main() {
 
       // 2. Inspect Digital Garage vehicles list (verify primary vehicle rendered)
       expect(E2EFinders.digitalGarageHeader, findsOneWidget);
-      expect(find.textContaining('Toyota Premio'), findsOneWidget);
-      expect(find.textContaining('Dhaka Metro GA-11-2034'), findsOneWidget);
+      expect(find.textContaining('Toyota Corolla Axio'), findsOneWidget);
+      expect(find.textContaining('DHAKA METRO GA-11-2034'), findsOneWidget);
       expect(find.text('PRIMARY'), findsWidgets);
 
       // 3. Inspect Linked Wallets section (verify bKash brand logo)

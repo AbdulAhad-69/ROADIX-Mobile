@@ -8,6 +8,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:maplibre_gl/maplibre_gl.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:roadix_mobile/services/demo_session.dart';
 import 'package:roadix_mobile/src/core/config/app_config.dart';
 
 /// Hermetic E2E Test Harness for ROADIX Mobile
@@ -297,6 +298,7 @@ class E2ETestHarness {
     _secureStorage.clear();
     launchedUrls.clear();
     _geocodingOverrides.clear();
+    DemoSession.clear();
     gpsQueryCount = 0;
     mockProfile = {
       'id': 'demo-motorist',
@@ -516,18 +518,34 @@ class _MockHttpClientRequest implements HttpClientRequest {
     if (uri.host.contains('nominatim.openstreetmap.org')) {
       final lat = double.tryParse(uri.queryParameters['lat'] ?? '') ?? 0.0;
       final lon = double.tryParse(uri.queryParameters['lon'] ?? '') ?? 0.0;
+      final coordKey = '${lat.toStringAsFixed(4)},${lon.toStringAsFixed(4)}';
 
-      String display;
-      if ((lat - 22.3569).abs() < 0.2 && (lon - 91.8215).abs() < 0.2) {
-        display = 'Agrabad, Chittagong, Bangladesh';
+      String? display;
+      if (E2ETestHarness._geocodingOverrides.containsKey(coordKey)) {
+        display = E2ETestHarness._geocodingOverrides[coordKey]!;
+      } else if ((lat - 22.3569).abs() < 0.2 && (lon - 91.8215).abs() < 0.2) {
+        display = 'Agrabad Commercial Area, Chittagong, Bangladesh';
       } else if ((lat - 24.8949).abs() < 0.2 && (lon - 91.8687).abs() < 0.2) {
         display = 'Zindabazar, Sylhet, Bangladesh';
-      } else {
+      } else if ((lat - 22.8456).abs() < 0.2 && (lon - 89.5403).abs() < 0.2) {
+        display = 'Shibbari More, Khulna, Bangladesh';
+      } else if ((lat - 24.3636).abs() < 0.2 && (lon - 88.6241).abs() < 0.2) {
+        display = 'Saheb Bazar, Rajshahi, Bangladesh';
+      } else if ((lat - 23.81).abs() < 0.25 && (lon - 90.40).abs() < 0.25) {
         display = 'Uttara Sector 11, Dhaka, Bangladesh';
+      }
+
+      if (display == null) {
+        return _MockHttpClientResponse(utf8.encode('{}'), 404);
       }
 
       final jsonBody = jsonEncode({'display_name': display});
       return _MockHttpClientResponse(utf8.encode(jsonBody), 200);
+    }
+
+    // 2b. OSRM route queries fail cleanly to offline Haversine fallback in tests
+    if (uri.host.contains('project-osrm.org')) {
+      return _MockHttpClientResponse(utf8.encode('{}'), 404);
     }
 
     // 3. Supabase Auth API simulation

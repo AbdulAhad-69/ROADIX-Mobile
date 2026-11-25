@@ -1,85 +1,81 @@
-import 'dart:io';
-
-/// Application Configuration
+/// Compile-time application configuration injected via
+/// `--dart-define` or `--dart-define-from-file=.env`.
 ///
-/// Dynamically reads environment variables from `.env` or compile-time
-/// `--dart-define` / `--dart-define-from-file=.env` parameters.
+/// Server secrets (SSLCommerz store password, Supabase service-role key,
+/// Cloudinary API secrets) are intentionally excluded from client bundles and
+/// remain strictly inside Supabase Edge Function secrets.
 class AppConfig {
   const AppConfig._();
 
-  static final Map<String, String> _fileEnv = {};
+  static const String _expoSupabaseUrl =
+      String.fromEnvironment('EXPO_PUBLIC_SUPABASE_URL');
+  static const String _roadixSupabaseUrl =
+      String.fromEnvironment('ROADIX_SUPABASE_URL');
+  static const String _stdSupabaseUrl = String.fromEnvironment('SUPABASE_URL');
+  static const String _defaultSupabaseUrl =
+      'https://rgzmoqpkugpcqfryrjkj.supabase.co';
 
-  /// Loads configuration from the local `.env` file if accessible
-  static Future<void> initialize() async {
-    try {
-      final file = File('.env');
-      if (await file.exists()) {
-        final lines = await file.readAsLines();
-        for (final line in lines) {
-          final trimmed = line.trim();
-          if (trimmed.isEmpty || trimmed.startsWith('#')) continue;
-          final idx = trimmed.indexOf('=');
-          if (idx > 0) {
-            final key = trimmed.substring(0, idx).trim();
-            final val = trimmed.substring(idx + 1).trim();
-            _fileEnv[key] = val;
-          }
-        }
-      }
-    } catch (_) {}
+  static const String _expoSupabaseAnonKey =
+      String.fromEnvironment('EXPO_PUBLIC_SUPABASE_ANON_KEY');
+  static const String _roadixSupabaseAnonKey =
+      String.fromEnvironment('ROADIX_SUPABASE_ANON_KEY');
+  static const String _stdSupabaseAnonKey =
+      String.fromEnvironment('SUPABASE_ANON_KEY');
+  static const String _defaultSupabaseAnonKey =
+      'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJnem1vcXBrdWdwY3FmcnlyamtqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTE5MDg0MjAsImV4cCI6MjEwNzQ4NDQyMH0.7uNmiq7vQPnnSqqOFmlcSFuouSq68gt_xRny2xKYmxI';
+
+  static const String _expoGeoapifyKey =
+      String.fromEnvironment('EXPO_PUBLIC_GEOAPIFY_API_KEY');
+  static const String _stdGeoapifyKey =
+      String.fromEnvironment('GEOAPIFY_API_KEY');
+  static const String _mapStyleOverride =
+      String.fromEnvironment('MAP_STYLE_URL');
+
+  static const String _cloudinaryCloudEnv =
+      String.fromEnvironment('CLOUDINARY_CLOUD_NAME');
+  static const String _googleWebClientIdEnv =
+      String.fromEnvironment('EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID');
+  static const String _googleAndroidClientIdEnv =
+      String.fromEnvironment('EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID');
+
+  static String _firstNonEmpty(List<String> candidates) {
+    for (final value in candidates) {
+      final trimmed = value.trim();
+      if (trimmed.isNotEmpty) return trimmed;
+    }
+    return '';
   }
 
-  /// Supabase project URL
-  static String get supabaseUrl {
-    if (_fileEnv.containsKey('EXPO_PUBLIC_SUPABASE_URL')) {
-      return _fileEnv['EXPO_PUBLIC_SUPABASE_URL']!;
-    }
-    if (_fileEnv.containsKey('ROADIX_SUPABASE_URL')) {
-      return _fileEnv['ROADIX_SUPABASE_URL']!;
-    }
-    return const String.fromEnvironment(
-      'EXPO_PUBLIC_SUPABASE_URL',
-      defaultValue: String.fromEnvironment(
-        'ROADIX_SUPABASE_URL',
-        defaultValue: 'https://rgzmoqpkugpcqfryrjkj.supabase.co',
-      ),
-    );
-  }
+  /// Retained as a safe no-op for startup and unit test lifecycle hooks.
+  static Future<void> initialize() async {}
 
-  /// Supabase public anonymous API key
-  static String get supabaseAnonKey {
-    if (_fileEnv.containsKey('EXPO_PUBLIC_SUPABASE_ANON_KEY')) {
-      return _fileEnv['EXPO_PUBLIC_SUPABASE_ANON_KEY']!;
-    }
-    if (_fileEnv.containsKey('ROADIX_SUPABASE_ANON_KEY')) {
-      return _fileEnv['ROADIX_SUPABASE_ANON_KEY']!;
-    }
-    return const String.fromEnvironment(
-      'EXPO_PUBLIC_SUPABASE_ANON_KEY',
-      defaultValue: String.fromEnvironment(
-        'ROADIX_SUPABASE_ANON_KEY',
-        defaultValue:
-            'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJnem1vcXBrdWdwY3FmcnlyamtqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTE5MDg0MjAsImV4cCI6MjEwNzQ4NDQyMH0.7uNmiq7vQPnnSqqOFmlcSFuouSq68gt_xRny2xKYmxI',
-      ),
-    );
-  }
+  /// Public Supabase project URL.
+  static String get supabaseUrl => _firstNonEmpty([
+        _expoSupabaseUrl,
+        _roadixSupabaseUrl,
+        _stdSupabaseUrl,
+        _defaultSupabaseUrl,
+      ]);
 
-  /// Geoapify API key for map tiles, routing, and ETA
-  static String get geoapifyApiKey {
-    if (_fileEnv.containsKey('EXPO_PUBLIC_GEOAPIFY_API_KEY')) {
-      return _fileEnv['EXPO_PUBLIC_GEOAPIFY_API_KEY']!;
-    }
-    if (_fileEnv.containsKey('GEOAPIFY_API_KEY')) {
-      return _fileEnv['GEOAPIFY_API_KEY']!;
-    }
-    return const String.fromEnvironment(
-      'EXPO_PUBLIC_GEOAPIFY_API_KEY',
-      defaultValue: 'a27219f443524a94981907686734d6bb',
-    );
-  }
+  /// Public Supabase anonymous key (row-level protected).
+  static String get supabaseAnonKey => _firstNonEmpty([
+        _expoSupabaseAnonKey,
+        _roadixSupabaseAnonKey,
+        _stdSupabaseAnonKey,
+        _defaultSupabaseAnonKey,
+      ]);
 
-  /// Vector tile style URL (Geoapify OSM Bright Smooth style matching Showroom Porcelain)
+  /// Optional Geoapify API key injected at build time; empty when omitted.
+  static String get geoapifyApiKey => _firstNonEmpty([
+        _expoGeoapifyKey,
+        _stdGeoapifyKey,
+      ]);
+
+  /// Vector tile style URL (custom override -> Geoapify if injected -> free OpenFreeMap Liberty).
   static String get mapStyleUrl {
+    if (_mapStyleOverride.trim().isNotEmpty) {
+      return _mapStyleOverride.trim();
+    }
     final key = geoapifyApiKey;
     if (key.isNotEmpty) {
       return 'https://maps.geoapify.com/v1/styles/osm-bright-smooth/style.json?apiKey=$key';
@@ -87,106 +83,54 @@ class AppConfig {
     return 'https://tiles.openfreemap.org/styles/liberty';
   }
 
-  /// Application title
+  /// Application title.
   static const String appTitle = 'ROADIX';
 
-  /// Initial mechanic search radius in kilometers
+  /// Supabase OAuth deep-link callback registered in AndroidManifest & Info.plist.
+  static const String oauthRedirectUrl = 'io.supabase.roadix://login-callback';
+
+  /// Initial mechanic search radius in kilometers.
   static const double initialSearchRadiusKm = 5.0;
 
-  /// Expansion search radius step in kilometers
+  /// Expansion search radius step in kilometers.
   static const double expansionRadiusKm = 2.5;
 
-  /// Dispatch acceptance timeout in seconds
+  /// Dispatch acceptance timeout in seconds.
   static const int dispatchTimeoutSeconds = 45;
 
-  /// Emergency hotline number for Bangladesh
+  /// Emergency hotline number for Bangladesh.
   static const String emergencyHotline = '999';
 
-  /// SSLCommerz Sandbox Store ID
-  static String get sslcommerzStoreId {
-    if (_fileEnv.containsKey('SSLCOMMERZ_STORE_ID')) {
-      return _fileEnv['SSLCOMMERZ_STORE_ID']!;
-    }
-    return const String.fromEnvironment(
-      'SSLCOMMERZ_STORE_ID',
-      defaultValue: 'roadi6aff1acc0bd78',
-    );
-  }
+  /// Whether SSLCommerz runs in Sandbox mode (credentials stay server-side).
+  static const bool sslcommerzIsSandbox = bool.fromEnvironment(
+    'SSLCOMMERZ_IS_SANDBOX',
+    defaultValue: true,
+  );
 
-  /// SSLCommerz Sandbox Store Password
-  static String get sslcommerzStorePassword {
-    if (_fileEnv.containsKey('SSLCOMMERZ_STORE_PASSWD')) {
-      return _fileEnv['SSLCOMMERZ_STORE_PASSWD']!;
-    }
-    return const String.fromEnvironment(
-      'SSLCOMMERZ_STORE_PASSWD',
-      defaultValue: '1MAu3twifTBj',
-    );
-  }
-
-  /// Whether SSLCommerz is running in Sandbox mode
-  static bool get sslcommerzIsSandbox {
-    if (_fileEnv.containsKey('SSLCOMMERZ_IS_SANDBOX')) {
-      return _fileEnv['SSLCOMMERZ_IS_SANDBOX']!.toLowerCase() == 'true';
-    }
-    return const bool.fromEnvironment(
-      'SSLCOMMERZ_IS_SANDBOX',
-      defaultValue: true,
-    );
-  }
-
-  /// SSLCommerz Session Initiation URL
+  /// SSLCommerz Gateway Endpoint URL (for Edge Function / status verification).
   static String get sslcommerzSessionUrl => sslcommerzIsSandbox
       ? 'https://sandbox.sslcommerz.com/gwprocess/v4/api.php'
       : 'https://securepay.sslcommerz.com/gwprocess/v4/api.php';
 
-  /// Cloudinary Cloud Name for CDN Asset Delivery
-  static String get cloudinaryCloudName {
-    if (_fileEnv.containsKey('CLOUDINARY_CLOUD_NAME')) {
-      return _fileEnv['CLOUDINARY_CLOUD_NAME']!;
-    }
-    return const String.fromEnvironment(
-      'CLOUDINARY_CLOUD_NAME',
-      defaultValue: 'kefzjqi3',
-    );
-  }
+  /// Non-secret Cloudinary Cloud Name for public CDN asset formatting.
+  static String get cloudinaryCloudName => _firstNonEmpty([
+        _cloudinaryCloudEnv,
+        'kefzjqi3',
+      ]);
 
-  /// Google Web OAuth Client ID
-  static String get googleWebClientId {
-    if (_fileEnv.containsKey('EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID')) {
-      return _fileEnv['EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID']!;
-    }
-    return const String.fromEnvironment(
-      'EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID',
-      defaultValue: '',
-    );
-  }
+  /// Optional Google Web OAuth Client ID.
+  static String get googleWebClientId => _googleWebClientIdEnv.trim();
 
-  /// Google Android OAuth Client ID
-  static String get googleAndroidClientId {
-    if (_fileEnv.containsKey('EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID')) {
-      return _fileEnv['EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID']!;
-    }
-    return const String.fromEnvironment(
-      'EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID',
-      defaultValue: '',
-    );
-  }
+  /// Optional Google Android OAuth Client ID.
+  static String get googleAndroidClientId => _googleAndroidClientIdEnv.trim();
 
-  /// Indicates whether Google OAuth client credentials are configured
-  static bool get isGoogleAuthConfigured {
-    final web = googleWebClientId;
-    final android = googleAndroidClientId;
-    final isWebValid = web.isNotEmpty && !web.contains('your_google_');
-    final isAndroidValid = android.isNotEmpty && !android.contains('your_google_');
-    return isWebValid || isAndroidValid;
-  }
+  /// Google OAuth works via Supabase Auth PKCE/browser redirect whenever Supabase is configured.
+  static bool get isGoogleAuthConfigured => isConfigured;
 
-  /// Validates whether essential backend configuration is set
+  /// Validates whether essential backend configuration is set.
   static bool get isConfigured =>
       supabaseUrl.isNotEmpty && supabaseAnonKey.isNotEmpty;
 
-  /// Whether the application is running in production mode
+  /// Whether the application is running in production release mode.
   static const bool isProduction = bool.fromEnvironment('dart.vm.product');
 }
-

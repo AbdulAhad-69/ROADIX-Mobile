@@ -1,10 +1,11 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import '../theme/app_colors.dart';
 
 class VehicleEditorSheet extends StatefulWidget {
   final Map<String, String>? initialVehicle;
-  final Function(Map<String, String> vehicle) onSave;
-  final VoidCallback? onDelete;
+  final FutureOr<void> Function(Map<String, String> vehicle) onSave;
+  final FutureOr<void> Function()? onDelete;
 
   const VehicleEditorSheet({
     super.key,
@@ -67,7 +68,10 @@ class _VehicleEditorSheetState extends State<VehicleEditorSheet> {
     super.dispose();
   }
 
-  void _submit() {
+  bool _isSubmitting = false;
+
+  Future<void> _submit() async {
+    if (_isSubmitting) return;
     final model = _modelController.text.trim();
     final plate = _plateController.text.trim();
 
@@ -81,13 +85,26 @@ class _VehicleEditorSheetState extends State<VehicleEditorSheet> {
       return;
     }
 
-    widget.onSave({
-      'model': model,
-      'plate': plate,
-      'type': VehicleEditorSheet.normalizeToSrsCategory(_selectedType),
-      'fuel': _selectedFuel,
-    });
-    Navigator.pop(context);
+    setState(() => _isSubmitting = true);
+    try {
+      await widget.onSave({
+        'model': model,
+        'plate': plate,
+        'type': VehicleEditorSheet.normalizeToSrsCategory(_selectedType),
+        'fuel': _selectedFuel,
+      });
+      if (mounted) Navigator.pop(context);
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isSubmitting = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Could not save vehicle: $e'),
+            backgroundColor: AppColors.caliperCrimson,
+          ),
+        );
+      }
+    }
   }
 
   @override
@@ -133,10 +150,11 @@ class _VehicleEditorSheetState extends State<VehicleEditorSheet> {
                   ),
                   if (_isEditing && widget.onDelete != null)
                     IconButton(
+                      tooltip: 'Delete vehicle',
                       icon: const Icon(Icons.delete_outline, color: AppColors.caliperCrimson, size: 22),
-                      onPressed: () {
-                        widget.onDelete!();
-                        Navigator.pop(context);
+                      onPressed: () async {
+                        await widget.onDelete!();
+                        if (context.mounted) Navigator.pop(context);
                       },
                     ),
                 ],

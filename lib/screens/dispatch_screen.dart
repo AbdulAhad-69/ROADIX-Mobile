@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:maplibre_gl/maplibre_gl.dart';
 import 'package:url_launcher/url_launcher.dart';
+import '../services/geocoding_service.dart';
 import '../services/sslcommerz_service.dart';
 import '../services/supabase_service.dart';
 import '../src/core/config/app_config.dart';
@@ -64,9 +65,14 @@ class _DispatchScreenState extends State<DispatchScreen>
   Timer? _totalDispatchTimer;
   int _totalSearchSecondsElapsed = 0;
   int _activeOfferRetries = 0;
-  static const int maxTotalDispatchTimeoutSeconds = 90;
+  static const int maxTotalDispatchTimeoutSeconds = 180;
   bool _isDemoMode = false;
   bool _isAcceptingSimulation = false;
+  List<LatLng>? _routeGeometry;
+  double? _routeDistanceKm;
+  int? _routeDurationMins;
+  double? _lastRoutedMechLat;
+  double? _lastRoutedMechLng;
 
   static final List<Map<String, dynamic>> _demoCandidates = [
     {
@@ -231,11 +237,8 @@ class _DispatchScreenState extends State<DispatchScreen>
         await _dispatchNextCandidate();
       }
     } catch (e) {
-      if (e.toString().contains('Authentication required') ||
-          _supabaseService.currentUserId == null ||
-          e.toString().toLowerCase().contains('socket') ||
-          e.toString().toLowerCase().contains('clientexception') ||
-          e.toString().toLowerCase().contains('connection')) {
+      if (!_supabaseService.isAuthenticated ||
+          e.toString().contains('Authentication required')) {
         _startDemoRadarSimulation();
         return;
       }
@@ -257,16 +260,12 @@ class _DispatchScreenState extends State<DispatchScreen>
       if (_totalSearchSecondsElapsed >= maxTotalDispatchTimeoutSeconds) {
         timer.cancel();
         _stopTimers();
-        if (mounted && (_phase == DispatchPhase.searching || _phase == DispatchPhase.offered)) {
+        if (mounted &&
+            (_phase == DispatchPhase.searching ||
+                _phase == DispatchPhase.offered)) {
           setState(() {
             _phase = DispatchPhase.exhausted;
           });
-          if (_requestId != null) {
-            _supabaseService.cancelServiceRequest(
-              _requestId!,
-              reason: 'Dispatch search timed out (no provider responded within 90s)',
-            ).catchError((_) {});
-          }
         }
       }
     });
@@ -722,10 +721,32 @@ class _DispatchScreenState extends State<DispatchScreen>
           );
         }
 
-        final routeGeom = [
-          mechPos,
-          LatLng(widget.breakdownLat, widget.breakdownLng),
-        ];
+        final shouldFetchRoute = _routeGeometry == null ||
+            _lastRoutedMechLat == null ||
+            _lastRoutedMechLng == null ||
+            (mechPos.latitude - _lastRoutedMechLat!).abs() > 0.001 ||
+            (mechPos.longitude - _lastRoutedMechLng!).abs() > 0.001;
+
+        if (shouldFetchRoute) {
+          _lastRoutedMechLat = mechPos.latitude;
+          _lastRoutedMechLng = mechPos.longitude;
+          final routeResult = await GeocodingService.fetchDrivingRoute(
+            fromLat: mechPos.latitude,
+            fromLng: mechPos.longitude,
+            toLat: widget.breakdownLat,
+            toLng: widget.breakdownLng,
+          );
+          if (mounted) {
+            setState(() {
+              _routeGeometry = routeResult.points;
+              _routeDistanceKm = routeResult.distanceKm;
+              _routeDurationMins = routeResult.durationMinutes;
+            });
+          }
+        }
+
+        final routeGeom = _routeGeometry ??
+            [mechPos, LatLng(widget.breakdownLat, widget.breakdownLng)];
         if (_routeLine != null) {
           await ctrl.updateLine(
             _routeLine!,
@@ -735,9 +756,9 @@ class _DispatchScreenState extends State<DispatchScreen>
           _routeLine = await ctrl.addLine(
             LineOptions(
               geometry: routeGeom,
-              lineColor: '#DC2626',
-              lineWidth: 3.5,
-              lineOpacity: 0.85,
+              lineColor: '#B91C1C',
+              lineWidth: 4.5,
+              lineOpacity: 0.9,
             ),
           );
         }
@@ -873,19 +894,25 @@ class _DispatchScreenState extends State<DispatchScreen>
                   child: OutlinedButton(
                     onPressed: () async {
                       Navigator.pop(ctx);
-                      await _supabaseService.respondToQuotation(quotationId: quoteId, decision: 'rejected');
+                      if (!_isDemoMode) {
+                        await _supabaseService.respondToQuotation(
+                          quotationId: quoteId,
+                          decision: 'rejected',
+                        );
+                      }
+                      if (!mounted) return;
                       setState(() {
                         _activeQuotation = null;
                         _currentServiceStatus = 'diagnosing';
                       });
-                      if (mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text('Quotation rejected. Technician will revise the estimate.'),
-                            backgroundColor: AppColors.caliperCrimson,
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text(
+                            'Quotation rejected. Technician will revise the estimate.',
                           ),
-                        );
-                      }
+                          backgroundColor: AppColors.crimsonHover,
+                        ),
+                      );
                     },
                     style: OutlinedButton.styleFrom(
                       side: const BorderSide(color: AppColors.caliperCrimson),
@@ -2456,25 +2483,35 @@ class _DispatchScreenState extends State<DispatchScreen>
                         const SizedBox(width: 6),
                         Expanded(
                           child: Text(
-                            distanceKm != null
-                                ? 'ETA: ${GeometryUtils.formatEta(distanceKm)} • ${distanceKm.toStringAsFixed(1)} km away'
+                            (_routeDistanceKm ?? distanceKm) != null
+                                ? 'ETA: ~${_routeDurationMins ?? GeometryUtils.calculateEtaMinutes((_routeDistanceKm ?? distanceKm)!)} min • ${(_routeDistanceKm ?? distanceKm)!.toStringAsFixed(1)} km road'
                                 : 'Awaiting technician GPS signal...',
                             style: const TextStyle(
                               color: AppColors.chassisText,
-                              fontSize: 11,
+                              fontSize: 11.5,
                               fontWeight: FontWeight.w700,
                             ),
                             overflow: TextOverflow.ellipsis,
                           ),
                         ),
                         if (_mechanicLat != null)
-                          const Text(
-                            'LIVE GPS',
-                            style: TextStyle(
-                              color: AppColors.emeraldGps,
-                              fontSize: 9,
-                              fontWeight: FontWeight.w900,
-                              letterSpacing: 0.5,
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 6,
+                              vertical: 2,
+                            ),
+                            decoration: BoxDecoration(
+                              color: AppColors.emeraldLight,
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                            child: const Text(
+                              'LIVE GPS',
+                              style: TextStyle(
+                                color: AppColors.emeraldDark,
+                                fontSize: 9.5,
+                                fontWeight: FontWeight.w900,
+                                letterSpacing: 0.4,
+                              ),
                             ),
                           ),
                       ],

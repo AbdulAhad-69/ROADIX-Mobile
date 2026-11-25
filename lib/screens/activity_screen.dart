@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import '../services/demo_session.dart';
 import '../services/supabase_service.dart';
 import '../theme/app_colors.dart';
 import '../widgets/brand_logo.dart';
@@ -145,45 +146,77 @@ class _ActivityScreenState extends State<ActivityScreen> {
                   Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
-                        decoration: BoxDecoration(
-                          color: AppColors.bkashPink.withValues(alpha: 0.12),
-                          borderRadius: BorderRadius.circular(6),
-                          border: Border.all(color: AppColors.bkashCrimson.withValues(alpha: 0.4)),
-                        ),
-                        child: const Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            BrandLogo(brand: 'bkash', size: 13),
-                            SizedBox(width: 4),
-                            Text(
-                              'bKash',
-                              style: TextStyle(
-                                color: AppColors.bkashCrimson,
-                                fontSize: 9.5,
-                                fontWeight: FontWeight.w900,
-                              ),
+                      if ((item['paymentMethod'] as String? ?? 'Pending')
+                          .toLowerCase()
+                          .contains('bkash'))
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                          margin: const EdgeInsets.only(right: 6),
+                          decoration: BoxDecoration(
+                            color: AppColors.bkashPink.withValues(alpha: 0.12),
+                            borderRadius: BorderRadius.circular(6),
+                            border: Border.all(
+                              color: AppColors.bkashCrimson.withValues(alpha: 0.4),
                             ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(width: 6),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFECFDF5),
-                          borderRadius: BorderRadius.circular(6),
-                          border: Border.all(color: const Color(0xFFA7F3D0)),
-                        ),
-                        child: const Text(
-                          'PAID & SETTLED',
-                          style: TextStyle(
-                            color: AppColors.emeraldGps,
-                            fontSize: 9.5,
-                            fontWeight: FontWeight.w800,
+                          ),
+                          child: const Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              BrandLogo(brand: 'bkash', size: 13),
+                              SizedBox(width: 4),
+                              Text(
+                                'bKash',
+                                style: TextStyle(
+                                  color: AppColors.bkashCrimson,
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w900,
+                                ),
+                              ),
+                            ],
                           ),
                         ),
+                      Builder(
+                        builder: (context) {
+                          final statusText =
+                              (item['status'] as String? ?? 'Completed')
+                                  .toUpperCase();
+                          final isCompleted = statusText.contains('COMPLET') ||
+                              statusText.contains('PAID');
+                          final isCancelled = statusText.contains('CANCEL');
+                          return Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 3,
+                            ),
+                            decoration: BoxDecoration(
+                              color: isCancelled
+                                  ? AppColors.crimsonLight
+                                  : (isCompleted
+                                      ? AppColors.emeraldLight
+                                      : AppColors.amberLight),
+                              borderRadius: BorderRadius.circular(6),
+                              border: Border.all(
+                                color: isCancelled
+                                    ? AppColors.crimsonBorder
+                                    : (isCompleted
+                                        ? AppColors.emeraldBorder
+                                        : AppColors.amberBorder),
+                              ),
+                            ),
+                            child: Text(
+                              isCompleted ? 'PAID & SETTLED' : statusText,
+                              style: TextStyle(
+                                color: isCancelled
+                                    ? AppColors.crimsonHover
+                                    : (isCompleted
+                                        ? AppColors.emeraldDark
+                                        : AppColors.amberDark),
+                                fontSize: 10,
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                          );
+                        },
                       ),
                     ],
                   ),
@@ -198,8 +231,7 @@ class _ActivityScreenState extends State<ActivityScreen> {
               _buildReceiptRow('Timestamp', item['date'] as String? ?? 'Recently'),
               _buildReceiptRow(
                 'Payment Method',
-                'bKash MFS Secured',
-                trailing: const BrandLogo(brand: 'bkash', size: 15),
+                item['paymentMethod'] as String? ?? 'Cash / Digital MFS',
               ),
               const SizedBox(height: 12),
               const Divider(color: AppColors.slateBorder, height: 1),
@@ -332,7 +364,8 @@ class _ActivityScreenState extends State<ActivityScreen> {
     final List<Map<String, dynamic>> displayItems = _pastRescues.isNotEmpty
         ? _pastRescues.map((r) {
             final snapshot = r['vehicle_snapshot'] as Map<String, dynamic>?;
-            final created = r['created_at'] != null ? DateTime.tryParse(r['created_at']) : null;
+            final created =
+                r['created_at'] != null ? DateTime.tryParse(r['created_at']) : null;
             final dateStr = created != null
                 ? '${created.day}/${created.month}/${created.year} • ${created.hour}:${created.minute.toString().padLeft(2, '0')}'
                 : 'Recent';
@@ -351,28 +384,44 @@ class _ActivityScreenState extends State<ActivityScreen> {
             } else if (quotes is Map<String, dynamic>) {
               q = quotes;
             }
-            final double diagFee = (q?['diagnostic_fee'] as num?)?.toDouble() ?? 300.0;
-            final double laborFee = (q?['labor_fee'] as num?)?.toDouble() ?? 500.0;
+            final txs = r['transactions'];
+            Map<String, dynamic>? tx;
+            if (txs is List && txs.isNotEmpty) {
+              tx = txs.first as Map<String, dynamic>;
+            } else if (txs is Map<String, dynamic>) {
+              tx = txs;
+            }
+
+            final double diagFee = (q?['diagnostic_fee'] as num?)?.toDouble() ?? 0.0;
+            final double laborFee = (q?['labor_fee'] as num?)?.toDouble() ?? 0.0;
             final double partsFee = (q?['parts_fee'] as num?)?.toDouble() ?? 0.0;
-            final double totalAmount = (q?['total_amount'] as num?)?.toDouble() ?? (diagFee + laborFee + partsFee);
+            final double totalAmount = (q?['total_amount'] as num?)?.toDouble() ??
+                (tx?['amount'] as num?)?.toDouble() ??
+                (diagFee + laborFee + partsFee);
+
+            final rawId = r['id']?.toString() ?? 'RECORD';
+            final shortId = rawId.length >= 8 ? rawId.substring(0, 8) : rawId;
 
             return {
-              'serviceId': r['request_code'] ?? 'RDX-${r['id'].toString().substring(0, 8)}',
+              'serviceId': r['request_code'] ?? 'RDX-$shortId',
               'title': r['fault_type'] ?? 'Roadside Recovery',
               'location': r['breakdown_address'] ?? 'Dhaka Region',
               'date': dateStr,
               'techName': 'Dispatched Specialist',
-              'vehicle': '${snapshot?['vehicle_type'] ?? 'Passenger Car'} • ${snapshot?['plate'] ?? ''}',
+              'vehicle':
+                  '${snapshot?['vehicle_type'] ?? 'Passenger Car'} • ${snapshot?['plate'] ?? ''}',
               'amount': '৳ ${totalAmount.toStringAsFixed(0)}',
               'diagFee': '৳ ${diagFee.toStringAsFixed(0)}',
               'laborFee': '৳ ${laborFee.toStringAsFixed(0)}',
               'partsTotal': '৳ ${partsFee.toStringAsFixed(0)}',
+              'paymentMethod':
+                  tx?['payment_method']?.toString() ?? 'Cash / Verified Settlement',
               'status': r['status'] ?? 'Completed',
               'isSample': false,
               'icon': icon,
             };
           }).toList()
-        : _sampleFallbackHistory;
+        : (DemoSession.isActive ? _sampleFallbackHistory : const []);
 
     return Scaffold(
       backgroundColor: AppColors.porcelainBg,
@@ -643,103 +692,142 @@ class _ActivityScreenState extends State<ActivityScreen> {
                 ),
                 const SizedBox(height: 10),
 
-                // History List Items
-                ListView.separated(
-                  shrinkWrap: true,
-                  physics: const NeverScrollableScrollPhysics(),
-                  itemCount: displayItems.length,
-                  separatorBuilder: (_, _) => const SizedBox(height: 10),
-                  itemBuilder: (context, index) {
-                    final item = displayItems[index];
-                    return InkWell(
-                      onTap: () => _showReceiptModal(context, item),
-                      borderRadius: BorderRadius.circular(14),
-                      child: Container(
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: AppColors.cardWhite,
-                          borderRadius: BorderRadius.circular(14),
-                          border: Border.all(color: AppColors.slateBorder),
+                // History List Items or Honest Empty State
+                if (displayItems.isEmpty)
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(24),
+                    decoration: BoxDecoration(
+                      color: AppColors.cardWhite,
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: AppColors.slateBorder),
+                    ),
+                    child: Column(
+                      children: const [
+                        Icon(
+                          Icons.receipt_long_outlined,
+                          size: 36,
+                          color: AppColors.slateMuted,
                         ),
-                        child: Row(
-                          children: [
-                            Container(
-                              width: 38,
-                              height: 38,
-                              decoration: BoxDecoration(
-                                color: AppColors.porcelainBg,
-                                borderRadius: BorderRadius.circular(10),
-                                border: Border.all(color: AppColors.slateBorder),
-                              ),
-                              child: Icon(
-                                item['icon'] as IconData,
-                                color: AppColors.caliperCrimson,
-                                size: 18,
-                              ),
-                            ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    item['title'] as String,
-                                    style: const TextStyle(
-                                      color: AppColors.chassisText,
-                                      fontSize: 12.5,
-                                      fontWeight: FontWeight.w800,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 2),
-                                  Text(
-                                    '${item['location']} • ${item['date']}',
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: const TextStyle(
-                                      color: AppColors.slateMuted,
-                                      fontSize: 10,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            Column(
-                              crossAxisAlignment: CrossAxisAlignment.end,
-                              children: [
-                                Text(
-                                  item['amount'] as String,
-                                  style: const TextStyle(
-                                    color: AppColors.chassisText,
-                                    fontSize: 12.5,
-                                    fontWeight: FontWeight.w900,
-                                    fontFamily: 'monospace',
-                                  ),
+                        SizedBox(height: 10),
+                        Text(
+                          'No past rescues yet',
+                          style: TextStyle(
+                            color: AppColors.chassisText,
+                            fontSize: 15,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                        SizedBox(height: 4),
+                        Text(
+                          'Your completed dispatches and digital invoices will appear here once settled.',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            color: AppColors.slateMuted,
+                            fontSize: 12,
+                            height: 1.35,
+                          ),
+                        ),
+                      ],
+                    ),
+                  )
+                else
+                  ListView.separated(
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                    itemCount: displayItems.length,
+                    separatorBuilder: (_, _) => const SizedBox(height: 10),
+                    itemBuilder: (context, index) {
+                      final item = displayItems[index];
+                      return InkWell(
+                        onTap: () => _showReceiptModal(context, item),
+                        borderRadius: BorderRadius.circular(14),
+                        child: Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: AppColors.cardWhite,
+                            borderRadius: BorderRadius.circular(14),
+                            border: Border.all(color: AppColors.slateBorder),
+                          ),
+                          child: Row(
+                            children: [
+                              Container(
+                                width: 38,
+                                height: 38,
+                                decoration: BoxDecoration(
+                                  color: AppColors.porcelainBg,
+                                  borderRadius: BorderRadius.circular(10),
+                                  border: Border.all(color: AppColors.slateBorder),
                                 ),
-                                const SizedBox(height: 2),
-                                const Row(
-                                  mainAxisSize: MainAxisSize.min,
+                                child: Icon(
+                                  item['icon'] as IconData,
+                                  color: AppColors.crimsonHover,
+                                  size: 18,
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
-                                    BrandLogo(brand: 'bkash', size: 11),
-                                    SizedBox(width: 3),
                                     Text(
-                                      'Receipt ›',
-                                      style: TextStyle(
-                                        color: AppColors.caliperCrimson,
-                                        fontSize: 10,
-                                        fontWeight: FontWeight.w700,
+                                      item['title'] as String,
+                                      style: const TextStyle(
+                                        color: AppColors.chassisText,
+                                        fontSize: 13,
+                                        fontWeight: FontWeight.w800,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 2),
+                                    Text(
+                                      '${item['location']} • ${item['date']}',
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: const TextStyle(
+                                        color: AppColors.slateMuted,
+                                        fontSize: 11,
                                       ),
                                     ),
                                   ],
                                 ),
-                              ],
-                            ),
-                          ],
+                              ),
+                              const SizedBox(width: 8),
+                              Column(
+                                crossAxisAlignment: CrossAxisAlignment.end,
+                                children: [
+                                  Text(
+                                    item['amount'] as String,
+                                    style: const TextStyle(
+                                      color: AppColors.chassisText,
+                                      fontSize: 13.5,
+                                      fontWeight: FontWeight.w900,
+                                      fontFamily: 'monospace',
+                                    ),
+                                  ),
+                                  const SizedBox(height: 2),
+                                  const Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      BrandLogo(brand: 'bkash', size: 11),
+                                      SizedBox(width: 3),
+                                      Text(
+                                        'Receipt ›',
+                                        style: TextStyle(
+                                          color: AppColors.crimsonHover,
+                                          fontSize: 10.5,
+                                          fontWeight: FontWeight.w700,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
                         ),
-                      ),
-                    );
-                  },
-                ),
+                      );
+                    },
+                  ),
 
                 const SizedBox(height: 24),
               ],

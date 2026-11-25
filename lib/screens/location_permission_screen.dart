@@ -413,7 +413,7 @@ class _LocationPermissionScreenState extends State<LocationPermissionScreen> {
                               selectedFault: widget.selectedFault,
                               initialLat: 23.8759,
                               initialLng: 90.3795,
-                              accuracyMeters: 8,
+                              accuracyMeters: null,
                             ),
                           ),
                         );

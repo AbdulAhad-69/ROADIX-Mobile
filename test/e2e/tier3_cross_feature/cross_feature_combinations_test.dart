@@ -818,11 +818,7 @@ void main() {
       expect(find.byType(LoginScreen), findsOneWidget);
 
       // Re-login
-      final motoristDemo = find.descendant(
-        of: find.byType(InkWell),
-        matching: find.text('Motorist'),
-      );
-      await tester.tap(motoristDemo.first);
+      await tester.tap(E2EFinders.motoristDemoButton);
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 600));
       await tester.pump(const Duration(milliseconds: 100));
@@ -908,11 +904,7 @@ void main() {
       expect(find.byType(LoginScreen), findsOneWidget);
 
       // Tap Motorist demo button to log back in
-      final motoristDemo = find.descendant(
-        of: find.byType(InkWell),
-        matching: find.text('Motorist'),
-      );
-      await tester.tap(motoristDemo.first);
+      await tester.tap(E2EFinders.motoristDemoButton);
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 600));
       await tester.pump(const Duration(milliseconds: 100));
@@ -937,11 +929,7 @@ void main() {
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 100));
 
-      final motoristDemo = find.descendant(
-        of: find.byType(InkWell),
-        matching: find.text('Motorist'),
-      );
-      await tester.tap(motoristDemo.first);
+      await tester.tap(E2EFinders.motoristDemoButton);
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 600));
       await tester.pump(const Duration(milliseconds: 100));
@@ -960,11 +948,7 @@ void main() {
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 100));
 
-      final techDemo = find.descendant(
-        of: find.byType(InkWell),
-        matching: find.text('Technician'),
-      );
-      await tester.tap(techDemo.first);
+      await tester.tap(E2EFinders.mechanicDemoButton);
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 600));
       await tester.pump(const Duration(milliseconds: 100));
@@ -1056,11 +1040,7 @@ void main() {
       expect(find.byType(LoginScreen), findsOneWidget);
 
       // 4. Re-login as Motorist
-      final motoristDemo = find.descendant(
-        of: find.byType(InkWell),
-        matching: find.text('Motorist'),
-      );
-      await tester.tap(motoristDemo.first);
+      await tester.tap(E2EFinders.motoristDemoButton);
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 600));
       await tester.pump(const Duration(milliseconds: 100));

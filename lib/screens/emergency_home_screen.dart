@@ -1,15 +1,20 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:geolocator/geolocator.dart';
+import '../services/demo_session.dart';
 import '../services/geocoding_service.dart';
 import '../services/supabase_service.dart';
+import '../src/core/config/app_config.dart';
 import '../theme/app_colors.dart';
 import 'activity_screen.dart';
 import 'dispatch_screen.dart';
 import 'location_confirm_screen.dart';
+import 'location_permission_screen.dart';
 import 'mechanic_home_screen.dart';
 import 'profile_screen.dart';
 import 'sos_screen.dart';
+import '../widgets/roadix_avatar.dart';
 import '../widgets/search_bottom_sheet.dart';
 import '../widgets/notifications_bottom_sheet.dart';
 
@@ -35,6 +40,8 @@ class _EmergencyHomeScreenState extends State<EmergencyHomeScreen>
   String _currentLocationName = 'Dhaka Region';
   double _currentLat = 23.8759;
   double _currentLng = 90.3795;
+  int? _currentAccuracyMeters;
+  bool _hasLiveGpsLock = false;
   bool _isLoadingLocation = true;
 
   @override
@@ -54,6 +61,14 @@ class _EmergencyHomeScreenState extends State<EmergencyHomeScreen>
     _detectCurrentLocation();
   }
 
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (MediaQuery.disableAnimationsOf(context)) {
+      _pulseController.stop();
+    }
+  }
+
   Future<void> _loadUserProfile() async {
     try {
       final profile = await SupabaseService().getProfile();
@@ -69,17 +84,35 @@ class _EmergencyHomeScreenState extends State<EmergencyHomeScreen>
 
   Future<void> _detectCurrentLocation() async {
     try {
+      final serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      final permission = await Geolocator.checkPermission();
+      if (!serviceEnabled ||
+          permission == LocationPermission.denied ||
+          permission == LocationPermission.deniedForever) {
+        if (mounted) {
+          setState(() {
+            _hasLiveGpsLock = false;
+            _currentAccuracyMeters = null;
+            _currentLocationName = 'Dhaka Sector (Tap Change to Pin)';
+            _isLoadingLocation = false;
+          });
+        }
+        return;
+      }
       final pos = await Geolocator.getCurrentPosition(
         locationSettings: const LocationSettings(
           accuracy: LocationAccuracy.medium,
           timeLimit: Duration(seconds: 4),
         ),
       );
-      final addr = await GeocodingService.reverseGeocode(pos.latitude, pos.longitude);
+      final addr =
+          await GeocodingService.reverseGeocode(pos.latitude, pos.longitude);
       if (mounted) {
         setState(() {
           _currentLat = pos.latitude;
           _currentLng = pos.longitude;
+          _currentAccuracyMeters = pos.accuracy.round();
+          _hasLiveGpsLock = true;
           _currentLocationName = addr;
           _isLoadingLocation = false;
         });
@@ -87,7 +120,9 @@ class _EmergencyHomeScreenState extends State<EmergencyHomeScreen>
     } catch (_) {
       if (mounted) {
         setState(() {
-          _currentLocationName = 'Mirpur / Uttara Corridor, Dhaka';
+          _hasLiveGpsLock = false;
+          _currentAccuracyMeters = null;
+          _currentLocationName = 'Uttara / Dhaka Corridor (Estimated)';
           _isLoadingLocation = false;
         });
       }
@@ -116,9 +151,23 @@ class _EmergencyHomeScreenState extends State<EmergencyHomeScreen>
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (ctx) => SearchBottomSheet(
+        currentLat: _currentLat,
+        currentLng: _currentLng,
         onFacilitySelected: (facilityName, lat, lng) {
-          Navigator.pop(ctx);
-          _startEmergencyTriage(facilityName, customLat: lat, customLng: lng);
+          // SearchBottomSheet already pops itself before invoking this callback.
+          setState(() {
+            _currentLat = lat;
+            _currentLng = lng;
+            _currentLocationName = facilityName;
+            _hasLiveGpsLock = false;
+            _currentAccuracyMeters = null;
+          });
+          _startEmergencyTriage(
+            'General Breakdown',
+            customLat: lat,
+            customLng: lng,
+            accuracyMeters: null,
+          );
         },
       ),
     );
@@ -325,16 +374,49 @@ class _EmergencyHomeScreenState extends State<EmergencyHomeScreen>
     );
   }
 
-  Future<void> _startEmergencyTriage(String faultName, {double? customLat, double? customLng}) async {
+  Future<void> _startEmergencyTriage(
+    String faultName, {
+    double? customLat,
+    double? customLng,
+    int? accuracyMeters,
+  }) async {
     HapticFeedback.lightImpact();
+
+    if (customLat == null && customLng == null && !_hasLiveGpsLock) {
+      bool serviceEnabled = false;
+      LocationPermission permission = LocationPermission.denied;
+      try {
+        serviceEnabled = await Geolocator.isLocationServiceEnabled();
+        permission = await Geolocator.checkPermission();
+      } catch (_) {}
+
+      if (!mounted) return;
+      if (!serviceEnabled ||
+          permission == LocationPermission.denied ||
+          permission == LocationPermission.deniedForever) {
+        await Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (_) => LocationPermissionScreen(selectedFault: faultName),
+          ),
+        );
+        if (mounted) _checkActiveRescue();
+        return;
+      }
+    }
+
     final targetLat = customLat ?? _currentLat;
     final targetLng = customLng ?? _currentLng;
+    final effAccuracy =
+        customLat != null ? accuracyMeters : _currentAccuracyMeters;
+
+    if (!mounted) return;
     await Navigator.of(context).push(
       MaterialPageRoute(
         builder: (_) => LocationConfirmScreen(
           selectedFault: faultName,
           initialLat: targetLat,
           initialLng: targetLng,
+          accuracyMeters: effAccuracy,
         ),
       ),
     );
@@ -351,6 +433,7 @@ class _EmergencyHomeScreenState extends State<EmergencyHomeScreen>
           selectedFault: 'General Breakdown',
           initialLat: _currentLat,
           initialLng: _currentLng,
+          accuracyMeters: _currentAccuracyMeters,
           isSelectingLocationOnly: true,
         ),
       ),
@@ -359,7 +442,8 @@ class _EmergencyHomeScreenState extends State<EmergencyHomeScreen>
       setState(() {
         _currentLat = (result['lat'] as num?)?.toDouble() ?? _currentLat;
         _currentLng = (result['lng'] as num?)?.toDouble() ?? _currentLng;
-        _currentLocationName = result['address'] as String? ?? _currentLocationName;
+        _currentLocationName =
+            result['address'] as String? ?? _currentLocationName;
       });
     }
   }
@@ -417,27 +501,10 @@ class _EmergencyHomeScreenState extends State<EmergencyHomeScreen>
                                     ],
                                   ),
                                   child: Center(
-                                    child: CircleAvatar(
+                                    child: RoadixAvatar(
+                                      displayName: _userName,
+                                      avatarUrl: _avatarUrl,
                                       radius: 14,
-                                      backgroundColor: AppColors.crimsonLight,
-                                      backgroundImage: (_avatarUrl != null && _avatarUrl!.isNotEmpty)
-                                          ? (_avatarUrl!.startsWith('http')
-                                              ? NetworkImage(_avatarUrl!)
-                                              : AssetImage(_avatarUrl!) as ImageProvider)
-                                          : null,
-                                      onBackgroundImageError: (_avatarUrl != null && _avatarUrl!.isNotEmpty)
-                                          ? (e, s) {}
-                                          : null,
-                                      child: (_avatarUrl == null || _avatarUrl!.isEmpty)
-                                          ? Text(
-                                              _userName.isNotEmpty ? _userName[0].toUpperCase() : 'M',
-                                              style: const TextStyle(
-                                                color: AppColors.caliperCrimson,
-                                                fontWeight: FontWeight.w900,
-                                                fontSize: 14,
-                                              ),
-                                            )
-                                          : null,
                                     ),
                                   ),
                                 ),
@@ -493,59 +560,62 @@ class _EmergencyHomeScreenState extends State<EmergencyHomeScreen>
                     ),
                     const SizedBox(width: 4),
 
-                    // Top Right: Technician Console Mode Switch, Notifications & Search
+                    // Top Right: Demo/Debug Technician Console Switcher, Notifications & Search
                     Flexible(
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          // Technician Console Mode Switcher Pill
-                          Flexible(
-                            child: InkWell(
-                              onTap: () {
-                                HapticFeedback.selectionClick();
-                                Navigator.of(context).push(
-                                  MaterialPageRoute(
-                                    builder: (_) => const MechanicHomeScreen(),
-                                  ),
-                                );
-                              },
-                              borderRadius: BorderRadius.circular(14),
-                              child: Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4.5),
-                                decoration: BoxDecoration(
-                                  color: const Color(0xFF0F172A),
-                                  borderRadius: BorderRadius.circular(14),
-                                  boxShadow: [
-                                    BoxShadow(
-                                      color: Colors.black.withAlpha(20),
-                                      blurRadius: 4,
-                                      offset: const Offset(0, 1),
+                          if (DemoSession.isActive ||
+                              (!AppConfig.isProduction &&
+                                  kDebugMode &&
+                                  !SupabaseService().isAuthenticated)) ...[
+                            Flexible(
+                              child: InkWell(
+                                onTap: () {
+                                  HapticFeedback.selectionClick();
+                                  Navigator.of(context).push(
+                                    MaterialPageRoute(
+                                      builder: (_) => const MechanicHomeScreen(),
                                     ),
-                                  ],
-                                ),
-                                child: FittedBox(
-                                  fit: BoxFit.scaleDown,
-                                  child: Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: const [
-                                      Icon(Icons.engineering_outlined, color: Colors.white, size: 12),
-                                      SizedBox(width: 3),
-                                      Text(
-                                        'Tech Console',
-                                        style: TextStyle(
+                                  );
+                                },
+                                borderRadius: BorderRadius.circular(14),
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 8,
+                                    vertical: 5,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: AppColors.chassisText,
+                                    borderRadius: BorderRadius.circular(14),
+                                  ),
+                                  child: FittedBox(
+                                    fit: BoxFit.scaleDown,
+                                    child: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: const [
+                                        Icon(
+                                          Icons.engineering_outlined,
                                           color: Colors.white,
-                                          fontSize: 10,
-                                          fontWeight: FontWeight.w800,
-                                          letterSpacing: 0.1,
+                                          size: 13,
                                         ),
-                                      ),
-                                    ],
+                                        SizedBox(width: 4),
+                                        Text(
+                                          'Tech Console',
+                                          style: TextStyle(
+                                            color: Colors.white,
+                                            fontSize: 10.5,
+                                            fontWeight: FontWeight.w800,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
                                   ),
                                 ),
                               ),
                             ),
-                          ),
-                        const SizedBox(width: 4),
+                            const SizedBox(width: 4),
+                          ],
 
                         // Notification Bell
                         InkWell(
@@ -985,83 +1055,88 @@ class _EmergencyHomeScreenState extends State<EmergencyHomeScreen>
                         ),
                       ),
                       // Core High-Impact Action Button
-                      InkWell(
-                        onTap: _showSosConfirmationModal,
-                        borderRadius: BorderRadius.circular(68),
-                        child: Container(
-                          width: 136,
-                          height: 136,
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            gradient: const RadialGradient(
-                              center: Alignment(-0.25, -0.35),
-                              radius: 0.95,
-                              colors: [
-                                Color(0xFFFF5252),
-                                AppColors.caliperCrimson,
-                                Color(0xFF881337),
-                              ],
-                            ),
-                            border: Border.all(
-                              color: Colors.white.withAlpha(80),
-                              width: 2,
-                            ),
-                          ),
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              const Text(
-                                'SOS',
-                                style: TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 38,
-                                  fontWeight: FontWeight.w900,
-                                  letterSpacing: -0.5,
-                                  height: 1.0,
-                                  shadows: [
-                                    Shadow(
-                                      color: Colors.black45,
-                                      blurRadius: 8,
-                                      offset: Offset(0, 2),
-                                    ),
-                                  ],
-                                ),
+                      Semantics(
+                        button: true,
+                        label: 'Trigger Emergency SOS options',
+                        child: InkWell(
+                          onTap: _showSosConfirmationModal,
+                          borderRadius: BorderRadius.circular(68),
+                          child: Container(
+                            width: 136,
+                            height: 136,
+                            padding: const EdgeInsets.all(10),
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              gradient: const RadialGradient(
+                                center: Alignment(-0.25, -0.35),
+                                radius: 0.95,
+                                colors: [
+                                  Color(0xFFFF5252),
+                                  AppColors.caliperCrimson,
+                                  Color(0xFF881337),
+                                ],
                               ),
-                              const SizedBox(height: 5),
-                              Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 8,
-                                  vertical: 2.5,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: Colors.white.withAlpha(35),
-                                  borderRadius: BorderRadius.circular(10),
-                                ),
-                                child: FittedBox(
-                                  fit: BoxFit.scaleDown,
-                                  child: Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: const [
-                                      Icon(
-                                        Icons.touch_app,
-                                        color: Colors.white,
-                                        size: 10,
-                                      ),
-                                      SizedBox(width: 3),
-                                      Text(
-                                        'PRESS FOR HELP',
-                                        style: TextStyle(
-                                          color: Colors.white,
-                                          fontSize: 8.5,
-                                          fontWeight: FontWeight.w900,
-                                          letterSpacing: 1.2,
+                              border: Border.all(
+                                color: Colors.white.withAlpha(80),
+                                width: 2,
+                              ),
+                            ),
+                            child: FittedBox(
+                              fit: BoxFit.scaleDown,
+                              child: Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  const Text(
+                                    'SOS',
+                                    style: TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 38,
+                                      fontWeight: FontWeight.w900,
+                                      letterSpacing: -0.5,
+                                      height: 1.0,
+                                      shadows: [
+                                        Shadow(
+                                          color: Colors.black45,
+                                          blurRadius: 8,
+                                          offset: Offset(0, 2),
                                         ),
-                                      ),
-                                    ],
+                                      ],
+                                    ),
                                   ),
-                                ),
+                                  const SizedBox(height: 5),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 8,
+                                      vertical: 3,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: Colors.white.withAlpha(35),
+                                      borderRadius: BorderRadius.circular(10),
+                                    ),
+                                    child: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: const [
+                                        Icon(
+                                          Icons.touch_app,
+                                          color: Colors.white,
+                                          size: 10,
+                                        ),
+                                        SizedBox(width: 3),
+                                        Text(
+                                          'PRESS FOR HELP',
+                                          style: TextStyle(
+                                            color: Colors.white,
+                                            fontSize: 9,
+                                            fontWeight: FontWeight.w900,
+                                            letterSpacing: 1.0,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ],
                               ),
-                            ],
+                            ),
                           ),
                         ),
                       ),

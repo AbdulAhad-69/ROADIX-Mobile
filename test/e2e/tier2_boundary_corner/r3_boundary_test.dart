@@ -4,6 +4,7 @@ import 'package:roadix_mobile/screens/dispatch_screen.dart';
 import 'package:roadix_mobile/screens/emergency_home_screen.dart';
 import 'package:roadix_mobile/screens/fault_details_screen.dart';
 import 'package:roadix_mobile/screens/login_screen.dart';
+import 'package:roadix_mobile/screens/mechanic_home_screen.dart';
 import 'package:roadix_mobile/screens/profile_screen.dart';
 import 'package:roadix_mobile/screens/sos_screen.dart';
 import 'package:roadix_mobile/screens/vehicle_select_screen.dart';
@@ -638,7 +639,7 @@ void main() {
       await tester.pump();
 
       expect(
-        find.textContaining('Please enter a valid 11-digit Bangladesh phone'),
+        find.textContaining('Enter a valid 11-digit Bangladesh phone'),
         findsWidgets,
       );
 
@@ -668,14 +669,14 @@ void main() {
         await tester.pump();
 
         // Switch to Sign Up mode
-        await tester.tap(find.text('Sign Up'));
+        await tester.tap(find.textContaining('Sign Up'));
         await tester.pump();
 
         // Initial default: Motorist
         expect(find.text('Create Motorist Account'), findsOneWidget);
 
         // Tap Technician
-        await tester.tap(find.text('Technician').last);
+        await tester.tap(E2EFinders.mechanicRoleTab);
         await tester.pump();
 
         expect(find.text('Create Technician Account'), findsOneWidget);
@@ -722,22 +723,36 @@ void main() {
       await tester.pump();
 
       // 1. Motorist demo button
-      final motoristDemo = find.descendant(
-        of: find.byType(InkWell),
-        matching: find.text('Motorist'),
-      );
-      expect(motoristDemo, findsWidgets);
-
-      await tester.tap(motoristDemo.first);
+      expect(E2EFinders.motoristDemoButton, findsOneWidget);
+      await tester.tap(E2EFinders.motoristDemoButton);
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 200));
 
       expect(find.byType(EmergencyHomeScreen), findsOneWidget);
 
       await E2ETestHarness.cleanUp(tester);
+
+      // 2. Technician demo button
+      await tester.pumpWidget(
+        E2ETestHarness.wrapWithApp(
+          const LoginScreen(),
+          physicalSize: const Size(800, 1200),
+          tester: tester,
+        ),
+      );
+      await tester.pump();
+
+      expect(E2EFinders.mechanicDemoButton, findsOneWidget);
+      await tester.tap(E2EFinders.mechanicDemoButton);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 200));
+
+      expect(find.byType(MechanicHomeScreen), findsOneWidget);
+
+      await E2ETestHarness.cleanUp(tester);
     });
 
-    testWidgets('T2.12.5: Google Sign-In button handles simulated unconfigured OAuth by falling back to demo account without crash',
+    testWidgets('T2.12.5: Google Sign-In button invokes OAuth cleanly without silent demo impersonation or crash',
         (WidgetTester tester) async {
       await tester.pumpWidget(
         E2ETestHarness.wrapWithApp(
@@ -754,7 +769,7 @@ void main() {
       await tester.pump(const Duration(milliseconds: 200));
 
       expect(tester.takeException(), isNull);
-      expect(find.byType(EmergencyHomeScreen), findsOneWidget);
+      expect(find.byType(LoginScreen), findsOneWidget);
 
       await E2ETestHarness.cleanUp(tester);
     });

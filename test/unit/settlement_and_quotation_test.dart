@@ -167,11 +167,21 @@ void main() {
   });
 
   group('Milestone 5: Settlement & SSLCommerz Sandbox Gateway', () {
-    test('AppConfig loads SSLCommerz sandbox credentials from environment', () {
-      expect(AppConfig.sslcommerzStoreId, isNotEmpty);
-      expect(AppConfig.sslcommerzStorePassword, isNotEmpty);
+    test('AppConfig isolates SSLCommerz credentials server-side cleanly', () {
       expect(AppConfig.sslcommerzIsSandbox, isTrue);
       expect(AppConfig.sslcommerzSessionUrl, contains('sandbox.sslcommerz.com'));
+      expect(AppConfig.geoapifyApiKey, isA<String>());
+    });
+
+    test('SSLCommerzService.initiateSession degrades cleanly to fallback without active session', () async {
+      final result = await SSLCommerzService().initiateSession(
+        requestId: '00000000-0000-0000-0000-000000000001',
+        amount: 500.0,
+        customerName: 'Test Motorist',
+        customerPhone: '+8801711000001',
+      );
+      expect(result.transactionId, startsWith('SSLCZ-SANDBOX-'));
+      expect(result.isSimulatedFallback, isTrue);
     });
 
     test('SSLCommerz session result handles successful gateway response', () {
