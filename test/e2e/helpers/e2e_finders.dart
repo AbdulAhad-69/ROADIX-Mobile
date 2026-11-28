@@ -11,7 +11,7 @@ class E2EFinders {
   // R1: Map & Live Tracking Finders
   // =========================================================================
   static Finder get recenterButton => find.byIcon(Icons.my_location);
-  static Finder get gpsLockBadge => find.text('GPS LOCK');
+  static Finder get gpsLockBadge => find.text('GPS Lock');
   static Finder get breakdownMarker => find.text('BREAKDOWN POSITION');
   static Finder get confirmLocationButton =>
       find.widgetWithText(ElevatedButton, 'CONFIRM LOCATION');
@@ -33,7 +33,7 @@ class E2EFinders {
 
   static Finder get walletEditorSheet => find.byType(WalletEditorSheet);
   static Finder get addWalletButton => find.widgetWithText(ElevatedButton, 'Add');
-  static Finder get primaryBadge => find.text('Primary authorization');
+  static Finder get primaryBadge => find.textContaining('Primary');
   static Finder get deleteWalletIcon => find.byIcon(Icons.delete_outline);
 
   // =========================================================================
@@ -60,6 +60,7 @@ class E2EFinders {
   static Finder get sedanCard => find.text('Sedan / Hatch');
   static Finder get suvCard => find.text('SUV / Micro');
   static Finder get commercialCard => find.text('Commercial');
+  static Finder get licensePlateField => find.byType(TextField).first;
   static Finder get continueToFaultButton =>
       find.widgetWithText(ElevatedButton, 'CONTINUE TO FAULT DETAILS');
 
@@ -79,9 +80,10 @@ class E2EFinders {
   static Finder get mechanicRoleTab => find.byKey(const Key('signup_role_technician'));
   static Finder get motoristDemoButton => find.byKey(const Key('demo_motorist_btn'));
   static Finder get mechanicDemoButton => find.byKey(const Key('demo_technician_btn'));
+  static Finder get guestSosButton => find.byKey(const Key('demo_guest_btn'));
 
   // Profile Screen
-  static Finder get editProfileButton => find.byIcon(Icons.edit);
+  static Finder get editProfileButton => find.byIcon(Icons.edit_outlined);
   static Finder get logoutButton =>
       find.widgetWithText(TextButton, 'Log Out & Return to Login');
   static Finder get digitalGarageHeader => find.text('Digital Garage');

@@ -481,40 +481,37 @@ class _EmergencyHomeScreenState extends State<EmergencyHomeScreen>
                         borderRadius: BorderRadius.circular(12),
                         child: Padding(
                           padding: const EdgeInsets.symmetric(vertical: 2.0, horizontal: 2.0),
-                          child: FittedBox(
-                            fit: BoxFit.scaleDown,
-                            alignment: Alignment.centerLeft,
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Container(
-                                  width: 34,
-                                  height: 34,
-                                  decoration: BoxDecoration(
-                                    shape: BoxShape.circle,
-                                    color: AppColors.cardWhite,
-                                    border: Border.all(
-                                      color: AppColors.slateBorder,
-                                      width: 1.5,
-                                    ),
-                                    boxShadow: [
-                                      BoxShadow(
-                                        color: AppColors.chassisText.withAlpha(8),
-                                        blurRadius: 4,
-                                        offset: const Offset(0, 1),
-                                      ),
-                                    ],
+                          child: Row(
+                            children: [
+                              Container(
+                                width: 34,
+                                height: 34,
+                                decoration: BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  color: AppColors.cardWhite,
+                                  border: Border.all(
+                                    color: AppColors.slateBorder,
+                                    width: 1.5,
                                   ),
-                                  child: Center(
-                                    child: RoadixAvatar(
-                                      displayName: _userName,
-                                      avatarUrl: _avatarUrl,
-                                      radius: 14,
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: AppColors.chassisText.withAlpha(8),
+                                      blurRadius: 4,
+                                      offset: const Offset(0, 1),
                                     ),
+                                  ],
+                                ),
+                                child: Center(
+                                  child: RoadixAvatar(
+                                    displayName: _userName,
+                                    avatarUrl: _avatarUrl,
+                                    radius: 14,
                                   ),
                                 ),
-                                const SizedBox(width: 7),
-                                Column(
+                              ),
+                              const SizedBox(width: 7),
+                              Expanded(
+                                child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   mainAxisSize: MainAxisSize.min,
                                   children: [
@@ -557,8 +554,8 @@ class _EmergencyHomeScreenState extends State<EmergencyHomeScreen>
                                     ),
                                   ],
                                 ),
-                              ],
-                            ),
+                              ),
+                            ],
                           ),
                         ),
                       ),
@@ -652,16 +649,12 @@ class _EmergencyHomeScreenState extends State<EmergencyHomeScreen>
   }
 
   Widget _buildHomeContent() {
-    return LayoutBuilder(
-      builder: (context, constraints) => SingleChildScrollView(
-        physics: const AlwaysScrollableScrollPhysics(),
-        padding: const EdgeInsets.symmetric(horizontal: 20.0),
-        child: ConstrainedBox(
-          constraints: BoxConstraints(minHeight: constraints.maxHeight),
-          child: IntrinsicHeight(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
+    return SingleChildScrollView(
+      physics: const AlwaysScrollableScrollPhysics(),
+      padding: const EdgeInsets.symmetric(horizontal: 20.0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
           const SizedBox(height: 4),
 
           // Active Rescue Banner (Real-time in-flight recovery)
@@ -806,14 +799,18 @@ class _EmergencyHomeScreenState extends State<EmergencyHomeScreen>
                                         : AppColors.amberDark,
                                   ),
                                   const SizedBox(width: 5),
-                                  Text(
-                                    _hasLiveGpsLock && _currentAccuracyMeters != null
-                                        ? 'GPS Locked (±${_currentAccuracyMeters}m)'
-                                        : 'Tap Change to pin exact spot',
-                                    style: const TextStyle(
-                                      color: AppColors.slateMuted,
-                                      fontSize: 11.5,
-                                      fontWeight: FontWeight.w500,
+                                  Expanded(
+                                    child: Text(
+                                      _hasLiveGpsLock && _currentAccuracyMeters != null
+                                          ? 'GPS Locked (±${_currentAccuracyMeters}m)'
+                                          : 'Tap Change to pin exact spot',
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: const TextStyle(
+                                        color: AppColors.slateMuted,
+                                        fontSize: 11.5,
+                                        fontWeight: FontWeight.w500,
+                                      ),
                                     ),
                                   ),
                                 ],
@@ -869,7 +866,7 @@ class _EmergencyHomeScreenState extends State<EmergencyHomeScreen>
             ),
           ),
 
-          const Spacer(),
+          const SizedBox(height: 16),
 
           // Clean Architectural SOS Trigger (57efb64 heritage)
           Center(
@@ -902,34 +899,38 @@ class _EmergencyHomeScreenState extends State<EmergencyHomeScreen>
                           child: Container(
                             width: 140,
                             height: 140,
+                            padding: const EdgeInsets.all(14),
                             decoration: const BoxDecoration(
                               shape: BoxShape.circle,
                               color: AppColors.caliperCrimson,
                             ),
-                            child: const Column(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                Text(
-                                  'SOS',
-                                  style: TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 38,
-                                    fontWeight: FontWeight.w900,
-                                    letterSpacing: -0.5,
-                                    height: 1.0,
+                            child: const FittedBox(
+                              fit: BoxFit.scaleDown,
+                              child: Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Text(
+                                    'SOS',
+                                    style: TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 38,
+                                      fontWeight: FontWeight.w900,
+                                      letterSpacing: -0.5,
+                                      height: 1.0,
+                                    ),
                                   ),
-                                ),
-                                SizedBox(height: 4),
-                                Text(
-                                  'TAP FOR HELP',
-                                  style: TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.w800,
-                                    letterSpacing: 1.1,
+                                  SizedBox(height: 4),
+                                  Text(
+                                    'TAP FOR HELP',
+                                    style: TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w800,
+                                      letterSpacing: 1.1,
+                                    ),
                                   ),
-                                ),
-                              ],
+                                ],
+                              ),
                             ),
                           ),
                         ),
@@ -959,7 +960,7 @@ class _EmergencyHomeScreenState extends State<EmergencyHomeScreen>
             ),
           ),
 
-          const Spacer(),
+          const SizedBox(height: 16),
 
           // Balanced Breakdown Category Grid
           const Text(
@@ -1023,10 +1024,7 @@ class _EmergencyHomeScreenState extends State<EmergencyHomeScreen>
           const SizedBox(height: 16),
         ],
       ),
-    ),
-  ),
-),
-);
+    );
   }
 
   Widget _buildCategoryCard({

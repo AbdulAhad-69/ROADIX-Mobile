@@ -1819,7 +1819,7 @@ class _DispatchScreenState extends State<DispatchScreen>
                         valueColor: AlwaysStoppedAnimation<Color>(
                           _totalSearchSecondsElapsed > 75
                               ? AppColors.caliperCrimson
-                              : AppColors.emeraldGps,
+                              : AppColors.emeraldDark,
                         ),
                       ),
                     ),
@@ -2224,7 +2224,7 @@ class _DispatchScreenState extends State<DispatchScreen>
         color: AppColors.cardWhite,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
-          color: isPrimary ? AppColors.emeraldGps : AppColors.slateBorder,
+          color: isPrimary ? AppColors.emeraldDark : AppColors.slateBorder,
           width: isPrimary ? 1.5 : 1.0,
         ),
         boxShadow: [
@@ -2386,7 +2386,7 @@ class _DispatchScreenState extends State<DispatchScreen>
                 overflow: TextOverflow.ellipsis,
               ),
               style: ElevatedButton.styleFrom(
-                backgroundColor: isPrimary ? AppColors.emeraldGps : const Color(0xFF334155),
+                backgroundColor: isPrimary ? AppColors.emeraldDark : const Color(0xFF334155),
                 elevation: 1,
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(10),
@@ -3161,7 +3161,14 @@ class _DispatchScreenState extends State<DispatchScreen>
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        Text(label, style: const TextStyle(color: AppColors.slateMuted, fontSize: 11.5)),
+        Expanded(
+          child: Text(
+            label,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(color: AppColors.slateMuted, fontSize: 11.5),
+          ),
+        ),
         const SizedBox(width: 8),
         Flexible(
           child: Text(

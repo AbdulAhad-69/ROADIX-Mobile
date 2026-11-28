@@ -40,6 +40,15 @@ class _LocationConfirmScreenState extends State<LocationConfirmScreen> {
   Timer? _geocodeDebounce;
   int _geocodeSeq = 0;
 
+  static const List<({String label, double lat, double lng})> _quickZones = [
+    (label: 'Uttara', lat: 23.8759, lng: 90.3795),
+    (label: 'Gulshan 2', lat: 23.7925, lng: 90.4078),
+    (label: 'Mirpur 10', lat: 23.8069, lng: 90.3687),
+    (label: 'Kuril Flyover', lat: 23.8211, lng: 90.4227),
+    (label: 'Dhanmondi', lat: 23.7461, lng: 90.3742),
+    (label: 'Motijheel', lat: 23.7330, lng: 90.4172),
+  ];
+
   @override
   void initState() {
     super.initState();
@@ -524,7 +533,55 @@ class _LocationConfirmScreenState extends State<LocationConfirmScreen> {
                       ),
                     ],
                   ),
-                  const SizedBox(height: 14),
+                  const SizedBox(height: 10),
+                  SizedBox(
+                    height: 36,
+                    child: ListView.separated(
+                      scrollDirection: Axis.horizontal,
+                      itemCount: _quickZones.length,
+                      separatorBuilder: (_, _) => const SizedBox(width: 8),
+                      itemBuilder: (context, index) {
+                        final zone = _quickZones[index];
+                        final isSelected =
+                            (_currentCenter.latitude - zone.lat).abs() < 0.002 &&
+                                (_currentCenter.longitude - zone.lng).abs() < 0.002;
+                        return ActionChip(
+                          label: Text(
+                            zone.label,
+                            style: TextStyle(
+                              fontSize: 11.5,
+                              fontWeight: FontWeight.w700,
+                              color: isSelected
+                                  ? AppColors.crimsonHover
+                                  : AppColors.chassisText,
+                            ),
+                          ),
+                          backgroundColor: isSelected
+                              ? AppColors.crimsonLight
+                              : AppColors.porcelainBg,
+                          side: BorderSide(
+                            color: isSelected
+                                ? AppColors.caliperCrimson
+                                : AppColors.slateBorder,
+                          ),
+                          materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                          padding: const EdgeInsets.symmetric(horizontal: 6),
+                          onPressed: () {
+                            HapticFeedback.selectionClick();
+                            final pt = RoadixGeoPoint(zone.lat, zone.lng);
+                            setState(() {
+                              _currentCenter = pt;
+                              _isManualPin = true;
+                              _currentAccuracy = null;
+                            });
+                            _mapController?.animateCamera(pt, zoom: 16.0);
+                            _fetchAddress(pt.latitude, pt.longitude);
+                          },
+                        );
+                      },
+                    ),
+                  ),
+                  const SizedBox(height: 12),
                   SizedBox(
                     width: double.infinity,
                     height: 48,

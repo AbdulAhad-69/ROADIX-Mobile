@@ -4,13 +4,17 @@ import 'dart:io';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:roadix_mobile/screens/activity_screen.dart';
 import 'package:roadix_mobile/screens/sslcommerz_checkout_screen.dart';
 import 'package:roadix_mobile/services/cloudinary_service.dart';
+import 'package:roadix_mobile/services/demo_session.dart';
 import 'package:roadix_mobile/services/invoice_pdf_service.dart';
 import 'package:roadix_mobile/services/notifications_service.dart';
 import 'package:roadix_mobile/src/core/models/geo_point.dart';
+import 'package:roadix_mobile/widgets/notifications_bottom_sheet.dart';
 import 'package:roadix_mobile/widgets/roadix_map_view.dart';
 import 'package:roadix_mobile/widgets/roadix_pressable.dart';
+import 'package:roadix_mobile/widgets/search_bottom_sheet.dart';
 import '../e2e/helpers/test_app_harness.dart';
 
 class _MockCloudinaryClient extends Fake implements HttpClient {
@@ -296,6 +300,62 @@ void main() {
       await tester.tap(find.text('Tap Me'));
       await tester.pump();
       expect(tapped, isTrue);
+    });
+
+    testWidgets('SearchBottomSheet & NotificationsBottomSheet render live-backed UI', (tester) async {
+      await tester.pumpWidget(
+        E2ETestHarness.wrapWithApp(
+          Scaffold(
+            body: SearchBottomSheet(
+              currentLat: 23.8759,
+              currentLng: 90.3795,
+              onFacilitySelected: (_, _, _) {},
+            ),
+          ),
+          physicalSize: const Size(412, 915),
+          tester: tester,
+        ),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 200));
+      expect(find.text('Find Roadside Service'), findsOneWidget);
+
+      await tester.pumpWidget(
+        E2ETestHarness.wrapWithApp(
+          const Scaffold(body: NotificationsBottomSheet()),
+          physicalSize: const Size(412, 915),
+          tester: tester,
+        ),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 200));
+      expect(find.text('Notifications & Updates'), findsOneWidget);
+
+      await E2ETestHarness.cleanUp(tester);
+    });
+
+    testWidgets('ActivityScreen displays Download PDF Invoice CTA inside rescue receipt sheet', (tester) async {
+      DemoSession.startDemo(demoRole: 'motorist');
+      addTearDown(DemoSession.clear);
+
+      await tester.pumpWidget(
+        E2ETestHarness.wrapWithApp(
+          const ActivityScreen(),
+          physicalSize: const Size(412, 915),
+          tester: tester,
+        ),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 200));
+
+      final receiptBtn = find.text('View Receipt').first;
+      expect(receiptBtn, findsOneWidget);
+      await tester.tap(receiptBtn);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+
+      expect(find.text('DOWNLOAD PDF INVOICE'), findsOneWidget);
+      await E2ETestHarness.cleanUp(tester);
     });
   });
 }
